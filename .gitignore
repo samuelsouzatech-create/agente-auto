@@ -1,0 +1,20 @@
+# Ambiente virtual
+venv/
+
+# Segredos — NUNCA subir
+.env
+
+# Banco de dados local
+loja.db
+*.db
+
+# Banco de vetores do RAG (gerado pela ingestão)
+chroma_db/
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Arquivos de IDE / sistema
+.vscode/
+.DS_Store
