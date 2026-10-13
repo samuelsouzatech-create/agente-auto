@@ -1,17 +1,22 @@
 import os
+import shutil
 from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 
-# Carrega a chave da API do .env
 load_dotenv()
 
 PASTA_CONHECIMENTO = "conhecimento"
 PASTA_CHROMA = "chroma_db"
 
 def ingerir():
+    # 0. LIMPAR a base anterior, para não duplicar os pedaços a cada execução
+    if os.path.exists(PASTA_CHROMA):
+        shutil.rmtree(PASTA_CHROMA)
+        print(f"Base anterior em '{PASTA_CHROMA}' apagada (recriando do zero).")
+        
     # 1. LER os arquivos de texto (Python puro, sem langchain_community)
     documentos = []
     for nome_arquivo in os.listdir(PASTA_CONHECIMENTO):

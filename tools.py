@@ -1,8 +1,18 @@
-from langchain_core.tools import tool
+import os
+from dotenv import load_dotenv
+from typing import Annotated
+from langchain_core.tools import tool, InjectedToolArg
 from banco import conectar
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 
+# Garante que a chave do .env esteja carregada antes de qualquer uso da API
+load_dotenv()
+
+
+def formatar_brl(valor: float) -> str:
+    """Formata um número no padrão de moeda brasileiro. Ex: 98000.0 -> 98.000,00"""
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 @tool
@@ -53,12 +63,14 @@ def consultar_estoque(marca: str = "", modelo: str = "", cor: str = "",
     # Monta um texto limpo com os resultados para o agente ler
     linhas = []
     for c in carros:
+        km_formatado = f"{c['km']:,}".replace(",", ".")
         linhas.append(
             f"ID {c['id']}: {c['marca']} {c['modelo']} {c['ano']}, "
-            f"{c['cor']}, {c['cambio']}, {c['km']:,} km, "
-            f"R$ {c['preco']:,.2f}".replace(",", ".")
+            f"{c['cor']}, {c['cambio']}, {km_formatado} km, "
+            f"{formatar_brl(c['preco'])}"
         )
     return "Carros disponíveis:\n" + "\n".join(linhas)
+
 
 @tool
 def detalhes_veiculo(id_veiculo: int) -> str:
@@ -78,12 +90,13 @@ def detalhes_veiculo(id_veiculo: int) -> str:
     if not c:
         return "Carro não encontrado ou não está mais disponível."
 
+    km_formatado = f"{c['km']:,}".replace(",", ".")
     return (
         f"{c['marca']} {c['modelo']} {c['ano']}\n"
         f"Cor: {c['cor']}\n"
         f"Câmbio: {c['cambio']}\n"
-        f"Quilometragem: {c['km']:,} km\n".replace(",", ".")
-        + f"Preço: R$ {c['preco']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        f"Quilometragem: {km_formatado} km\n"
+        f"Preço: {formatar_brl(c['preco'])}"
     )
 
 
@@ -98,6 +111,8 @@ def simular_financiamento(valor_carro: float, entrada: float, parcelas: int) -> 
     - entrada: valor de entrada que o cliente pode dar
     - parcelas: número de parcelas (ex: 48)
     """
+    if parcelas < 1 or valor_carro <= 0:
+        return "Não consigo simular: informe um valor de carro válido e ao menos 1 parcela."
     if entrada >= valor_carro:
         return "A entrada cobre o valor total. Não é necessário financiamento."
 
@@ -110,13 +125,14 @@ def simular_financiamento(valor_carro: float, entrada: float, parcelas: int) -> 
 
     return (
         f"Estimativa (não é valor definitivo, depende de análise de crédito):\n"
-        f"Valor financiado: R$ {valor_financiado:,.2f}\n".replace(",", "X").replace(".", ",").replace("X", ".")
-        + f"{parcelas}x de aproximadamente R$ {parcela:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        f"Valor financiado: {formatar_brl(valor_financiado)}\n"
+        f"{parcelas}x de aproximadamente {formatar_brl(parcela)}"
     )
 
 
 @tool
-def registrar_troca(modelo: str, ano: int, km: int, estado: str) -> str:
+def registrar_troca(modelo: str, ano: int, km: int, estado: str,
+                    lead_id: Annotated[str, InjectedToolArg] = "") -> str:
     """Registra o carro que o cliente quer dar na troca. NÃO dê valor de
     avaliação — isso é feito por um vendedor presencialmente. Apenas colete
     e confirme os dados.
@@ -130,19 +146,21 @@ def registrar_troca(modelo: str, ano: int, km: int, estado: str) -> str:
     conexao = conectar()
     cursor = conexao.cursor()
     cursor.execute("""
-        INSERT INTO trocas (modelo, ano, km, estado)
-        VALUES (?, ?, ?, ?)
-    """, (modelo, ano, km, estado))
+        INSERT INTO trocas (lead_id, modelo, ano, km, estado)
+        VALUES (?, ?, ?, ?, ?)
+    """, (lead_id, modelo, ano, km, estado))
     conexao.commit()
     conexao.close()
+    km_formatado = f"{km:,}".replace(",", ".")
     return (
-        f"Troca registrada: {modelo} {ano}, {km:,} km, estado: {estado}. "
+        f"Troca registrada: {modelo} {ano}, {km_formatado} km, estado: {estado}. "
         "A avaliação com valor é feita presencialmente por um vendedor."
-    ).replace(",", ".")
+    )
 
 
 @tool
-def agendar_visita(nome_cliente: str, tipo: str, data_hora: str) -> str:
+def agendar_visita(nome_cliente: str, tipo: str, data_hora: str,
+                  lead_id: Annotated[str, InjectedToolArg] = "") -> str:
     """Agenda uma visita, test-drive ou ligação com vendedor.
 
     Parâmetros:
@@ -153,9 +171,9 @@ def agendar_visita(nome_cliente: str, tipo: str, data_hora: str) -> str:
     conexao = conectar()
     cursor = conexao.cursor()
     cursor.execute("""
-        INSERT INTO agendamentos (nome_cliente, tipo, data_hora)
-        VALUES (?, ?, ?)
-    """, (nome_cliente, tipo, data_hora))
+        INSERT INTO agendamentos (lead_id, nome_cliente, tipo, data_hora)
+        VALUES (?, ?, ?, ?)
+    """, (lead_id, nome_cliente, tipo, data_hora))
     conexao.commit()
     conexao.close()
     return f"Agendamento confirmado: {tipo} para {nome_cliente} em {data_hora}."
@@ -163,9 +181,11 @@ def agendar_visita(nome_cliente: str, tipo: str, data_hora: str) -> str:
 
 @tool
 def registrar_lead(nome: str, interesse: str, forma_pagamento: str = "",
-                   tem_troca: str = "", prazo: str = "") -> str:
+                   tem_troca: str = "", prazo: str = "",
+                   lead_id: Annotated[str, InjectedToolArg] = "") -> str:
     """Registra/atualiza os dados de qualificação do lead ao longo da conversa.
-    Use quando tiver coletado informações relevantes do cliente.
+    Use quando tiver coletado informações relevantes do cliente. Pode ser
+    chamada várias vezes na mesma conversa — os dados vão sendo completados.
 
     Parâmetros:
     - nome: nome do cliente
@@ -176,17 +196,38 @@ def registrar_lead(nome: str, interesse: str, forma_pagamento: str = "",
     """
     conexao = conectar()
     cursor = conexao.cursor()
-    cursor.execute("""
-        INSERT INTO leads (nome, interesse, forma_pagamento, tem_troca, prazo)
-        VALUES (?, ?, ?, ?, ?)
-    """, (nome, interesse, forma_pagamento, tem_troca, prazo))
+
+    # Verifica se já existe um lead para esta conversa
+    cursor.execute("SELECT id FROM leads WHERE lead_id = ?", (lead_id,))
+    existente = cursor.fetchone()
+
+    if existente:
+        # Já existe: ATUALIZA só os campos que vieram preenchidos
+        cursor.execute("""
+            UPDATE leads SET
+                nome = COALESCE(NULLIF(?, ''), nome),
+                interesse = COALESCE(NULLIF(?, ''), interesse),
+                forma_pagamento = COALESCE(NULLIF(?, ''), forma_pagamento),
+                tem_troca = COALESCE(NULLIF(?, ''), tem_troca),
+                prazo = COALESCE(NULLIF(?, ''), prazo),
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE lead_id = ?
+        """, (nome, interesse, forma_pagamento, tem_troca, prazo, lead_id))
+    else:
+        # Não existe: INSERE um novo
+        cursor.execute("""
+            INSERT INTO leads (lead_id, nome, interesse, forma_pagamento, tem_troca, prazo)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (lead_id, nome, interesse, forma_pagamento, tem_troca, prazo))
+
     conexao.commit()
     conexao.close()
-    return f"Lead registrado: {nome} — {interesse}."
+    return f"Lead registrado/atualizado: {nome} — {interesse}."
 
 
 @tool
-def acionar_handoff(motivo: str, resumo: str) -> str:
+def acionar_handoff(motivo: str, resumo: str,
+                   lead_id: Annotated[str, InjectedToolArg] = "") -> str:
     """Aciona a passagem da conversa para um vendedor humano (handoff).
     Use quando: o cliente pedir para falar com uma pessoa; pedir desconto
     ou negociar preço; pedir aprovação de crédito; houver reclamação;
@@ -199,9 +240,9 @@ def acionar_handoff(motivo: str, resumo: str) -> str:
     conexao = conectar()
     cursor = conexao.cursor()
     cursor.execute("""
-        INSERT INTO handoffs (motivo, resumo, estado)
-        VALUES (?, ?, 'aguardando_humano')
-    """, (motivo, resumo))
+        INSERT INTO handoffs (lead_id, motivo, resumo, estado)
+        VALUES (?, ?, ?, 'aguardando_humano')
+    """, (lead_id, motivo, resumo))
     conexao.commit()
     conexao.close()
     return (
@@ -209,12 +250,23 @@ def acionar_handoff(motivo: str, resumo: str) -> str:
         "o atendimento em instantes."
     )
 
-# Prepara o acesso ao conhecimento (Chroma) uma vez só, ao carregar o módulo
-_embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-_banco_conhecimento = Chroma(
-    persist_directory="chroma_db",
-    embedding_function=_embeddings,
-)
+
+# --- RAG: acesso ao conhecimento (inicialização preguiçosa) ---
+# Em vez de criar o Chroma no import (o que exigia a chave já carregada e
+# conectava mesmo sem uso), criamos só na primeira vez que a tool é chamada.
+_banco_conhecimento = None
+
+
+def _get_banco_conhecimento():
+    """Cria a conexão com o Chroma uma única vez, sob demanda (lazy)."""
+    global _banco_conhecimento
+    if _banco_conhecimento is None:
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+        _banco_conhecimento = Chroma(
+            persist_directory="chroma_db",
+            embedding_function=embeddings,
+        )
+    return _banco_conhecimento
 
 
 @tool
@@ -228,10 +280,12 @@ def buscar_conhecimento(pergunta: str) -> str:
     Parâmetros:
     - pergunta: a dúvida do cliente, em linguagem natural
     """
-    resultados = _banco_conhecimento.similarity_search(pergunta, k=3)
+    banco = _get_banco_conhecimento()
+    resultados = banco.similarity_search(pergunta, k=3)
     if not resultados:
         return "Não encontrei essa informação nas políticas da loja."
     trechos = [doc.page_content for doc in resultados]
     return "\n\n---\n\n".join(trechos)
+
 
 

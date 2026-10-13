@@ -1,25 +1,26 @@
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 from typing import Annotated, TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
+from langchain_core.messages import ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from tools import (
     consultar_estoque, detalhes_veiculo, simular_financiamento,
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff, buscar_conhecimento
 )
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import tools_condition
 
-
-# Carrega a chave do arquivo .env
+# Carrega a chave do arquivo .env (antes de tudo)
 load_dotenv()
 
 # --- O "cérebro": o modelo Gemini Flash ---
 llm = ChatGoogleGenerativeAI(
     model="gemini-3.1-flash-lite",
-    temperature=0.7,
+    temperature=0.2,
     timeout=30,
-    max_retries=1,
+    max_retries=3,
     thinking_budget=0,
 )
 
@@ -29,6 +30,12 @@ ferramentas = [
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff, buscar_conhecimento
 ]
 llm = llm.bind_tools(ferramentas)
+
+# Dicionário para o nó de ferramentas encontrar a tool pelo nome
+ferramentas_por_nome = {f.name: f for f in ferramentas}
+
+# Tools que recebem lead_id injetado (as de escrita)
+TOOLS_COM_LEAD_ID = {"registrar_troca", "agendar_visita", "registrar_lead", "acionar_handoff"}
 
 
 # --- A persona do agente (seção 3 do documento) ---
@@ -89,20 +96,40 @@ QUANDO USAR CADA FERRAMENTA
 # --- O estado da conversa (a "memória" de cada thread) ---
 class EstadoConversa(TypedDict):
     messages: Annotated[list, add_messages]
+    lead_id: str
 
 
 # --- O nó do agente: recebe o histórico e gera a resposta ---
 def no_agente(estado: EstadoConversa):
-    mensagens_com_sistema = [("system", PROMPT_SISTEMA)] + estado["messages"]
+    # Injeta a data/hora atual no prompt, para o agente entender "sábado", "amanhã" etc.
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M (%A)")
+    prompt_com_data = PROMPT_SISTEMA + f"\n\nDATA E HORA ATUAL: {agora}."
+    mensagens_com_sistema = [("system", prompt_com_data)] + estado["messages"]
     resposta = llm.invoke(mensagens_com_sistema)
     return {"messages": [resposta]}
 
 
-# --- Monta o grafo do LangGraph (agora com ciclo de ferramentas) ---
+# --- Nó de ferramentas próprio: executa as tools injetando o lead_id ---
+def no_ferramentas(estado: EstadoConversa):
+    ultima = estado["messages"][-1]
+    lead_id = estado.get("lead_id", "")
+    saidas = []
+    for chamada in ultima.tool_calls:
+        tool = ferramentas_por_nome[chamada["name"]]
+        args = dict(chamada["args"])
+        # Injeta o lead_id só nas tools que precisam (invisível ao modelo)
+        if chamada["name"] in TOOLS_COM_LEAD_ID:
+            args["lead_id"] = lead_id
+        resultado = tool.invoke(args)
+        saidas.append(ToolMessage(content=str(resultado), tool_call_id=chamada["id"]))
+    return {"messages": saidas}
+
+
+# --- Monta o grafo do LangGraph (ciclo de ferramentas) ---
 construtor = StateGraph(EstadoConversa)
 
 construtor.add_node("agente", no_agente)
-construtor.add_node("ferramentas", ToolNode(ferramentas))
+construtor.add_node("ferramentas", no_ferramentas)
 
 construtor.add_edge(START, "agente")
 construtor.add_conditional_edges("agente", tools_condition, {
@@ -111,5 +138,6 @@ construtor.add_conditional_edges("agente", tools_condition, {
 })
 construtor.add_edge("ferramentas", "agente")
 
-# Compila o grafo em algo executável
+# Compila o grafo. (Na Fase 2, passaremos um checkpointer aqui para persistência.)
 agente_grafo = construtor.compile()
+

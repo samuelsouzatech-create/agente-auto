@@ -23,19 +23,49 @@ Agente de atendimento e qualificação de leads para lojas de veículos, constru
 
 ## Como rodar
 
-1. Clone o repositório e entre na pasta.
+1. Clone o repositório e entre na pasta:
+
+   ```bash
+   git clone git@github.com:samuelsouzatech-create/agente-auto.git
+   cd agente-auto
+   ```
+
 2. Crie e ative um ambiente virtual:
-python -m venv venv venv\Scripts\activate
+
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate
+   ```
+
 3. Instale as dependências:
-pip install -r requirements.txt
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
 4. Crie um arquivo `.env` na raiz com sua chave do Google Gemini:
-GOOGLE_API_KEY=sua_chave_aqui
+
+   ```
+   GOOGLE_API_KEY=sua_chave_aqui
+   ```
+
 5. Crie o banco de dados com estoque de exemplo:
-python banco.py
+
+   ```bash
+   python banco.py
+   ```
+
 6. Gere a base de conhecimento (RAG):
-python ingestao_rag.py
+
+   ```bash
+   python ingestao_rag.py
+   ```
+
 7. Rode a interface de teste:
-streamlit run app.py
+
+   ```bash
+   streamlit run app.py
+   ```
 
 ## Arquitetura
 
@@ -44,3 +74,4 @@ O projeto segue o princípio de que o banco de dados próprio é a fonte da verd
 ## Status
 
 Protótipo em desenvolvimento (Fase 1 — Núcleo). Projeto de estudo e portfólio.
+

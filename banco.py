@@ -1,6 +1,5 @@
 import sqlite3
 
-# Nome do arquivo do banco. O SQLite cria ele sozinho se não existir.
 CAMINHO_BANCO = "loja.db"
 
 
@@ -35,19 +34,22 @@ def criar_tabelas():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id TEXT UNIQUE,
             loja_id INTEGER NOT NULL DEFAULT 1,
             nome TEXT,
             interesse TEXT,
             forma_pagamento TEXT,
             tem_troca TEXT,
             prazo TEXT,
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS trocas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id TEXT,
             loja_id INTEGER NOT NULL DEFAULT 1,
             modelo TEXT, ano INTEGER, km INTEGER, estado TEXT,
             criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -57,6 +59,7 @@ def criar_tabelas():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS agendamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id TEXT,
             loja_id INTEGER NOT NULL DEFAULT 1,
             nome_cliente TEXT, tipo TEXT, data_hora TEXT,
             status TEXT DEFAULT 'agendado',
@@ -67,6 +70,7 @@ def criar_tabelas():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS handoffs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id TEXT,
             loja_id INTEGER NOT NULL DEFAULT 1,
             motivo TEXT, resumo TEXT,
             estado TEXT DEFAULT 'aguardando_humano',
@@ -84,7 +88,6 @@ def popular_estoque_exemplo():
     conexao = conectar()
     cursor = conexao.cursor()
 
-    # Verifica se já tem carro, pra não duplicar toda vez que rodar
     cursor.execute("SELECT COUNT(*) FROM estoque")
     total = cursor.fetchone()[0]
 
@@ -113,7 +116,7 @@ def popular_estoque_exemplo():
     print(f"Inseridos {len(carros)} carros de exemplo.")
 
 
-# Quando você roda "python banco.py", ele cria tudo.
 if __name__ == "__main__":
     criar_tabelas()
     popular_estoque_exemplo()
+
