@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from typing import Annotated, TypedDict
 from langgraph.graph import StateGraph, START, END
@@ -36,6 +37,20 @@ ferramentas_por_nome = {f.name: f for f in ferramentas}
 
 # Tools que recebem lead_id injetado (as de escrita)
 TOOLS_COM_LEAD_ID = {"registrar_troca", "agendar_visita", "registrar_lead", "acionar_handoff"}
+
+# Tradução dos dias da semana para o português (strftime devolve em inglês)
+DIAS_SEMANA = {
+    "Monday": "segunda-feira",
+    "Tuesday": "terça-feira",
+    "Wednesday": "quarta-feira",
+    "Thursday": "quinta-feira",
+    "Friday": "sexta-feira",
+    "Saturday": "sábado",
+    "Sunday": "domingo",
+}
+
+# Fuso horário do Brasil (ajuste para a cidade da loja se precisar)
+FUSO_BRASIL = ZoneInfo("America/Recife")
 
 
 # --- A persona do agente (seção 3 do documento) ---
@@ -102,26 +117,54 @@ class EstadoConversa(TypedDict):
 # --- O nó do agente: recebe o histórico e gera a resposta ---
 def no_agente(estado: EstadoConversa):
     # Injeta a data/hora atual no prompt, para o agente entender "sábado", "amanhã" etc.
-    agora = datetime.now().strftime("%d/%m/%Y %H:%M (%A)")
-    prompt_com_data = PROMPT_SISTEMA + f"\n\nDATA E HORA ATUAL: {agora}."
+    # Usa o fuso do Brasil (não o do servidor) e traduz o dia da semana.
+    agora = datetime.now(FUSO_BRASIL)
+    dia_semana = DIAS_SEMANA.get(agora.strftime("%A"), agora.strftime("%A"))
+    data_formatada = agora.strftime("%d/%m/%Y %H:%M")
+    prompt_com_data = (
+        PROMPT_SISTEMA
+        + f"\n\nDATA E HORA ATUAL: {data_formatada} ({dia_semana})."
+    )
     mensagens_com_sistema = [("system", prompt_com_data)] + estado["messages"]
     resposta = llm.invoke(mensagens_com_sistema)
     return {"messages": [resposta]}
 
 
 # --- Nó de ferramentas próprio: executa as tools injetando o lead_id ---
+# Diferente do ToolNode padrão, este nó injeta o lead_id do estado nas tools
+# de escrita. Por isso ele precisa ter a MESMA proteção contra erros que o
+# ToolNode tinha de fábrica: se uma tool estourar, o agente recebe a mensagem
+# de erro como ToolMessage e segue a conversa, em vez de derrubar o turno todo.
 def no_ferramentas(estado: EstadoConversa):
     ultima = estado["messages"][-1]
     lead_id = estado.get("lead_id", "")
     saidas = []
     for chamada in ultima.tool_calls:
-        tool = ferramentas_por_nome[chamada["name"]]
-        args = dict(chamada["args"])
-        # Injeta o lead_id só nas tools que precisam (invisível ao modelo)
-        if chamada["name"] in TOOLS_COM_LEAD_ID:
-            args["lead_id"] = lead_id
-        resultado = tool.invoke(args)
-        saidas.append(ToolMessage(content=str(resultado), tool_call_id=chamada["id"]))
+        nome = chamada["name"]
+        try:
+            # A ferramenta pode não existir (o modelo pode inventar um nome)
+            tool = ferramentas_por_nome.get(nome)
+            if tool is None:
+                conteudo = f"Erro: ferramenta '{nome}' não existe."
+            else:
+                args = dict(chamada["args"])
+                # Injeta o lead_id só nas tools que precisam (invisível ao modelo)
+                if nome in TOOLS_COM_LEAD_ID:
+                    args["lead_id"] = lead_id
+                resultado = tool.invoke(args)
+                conteudo = str(resultado)
+        except Exception as e:
+            # Qualquer falha (banco, Chroma, argumento errado) vira ToolMessage,
+            # o agente lê o erro e responde ao cliente sem quebrar a aplicação.
+            conteudo = f"Erro ao executar a ferramenta '{nome}': {e}"
+
+        saidas.append(
+            ToolMessage(
+                content=conteudo,
+                tool_call_id=chamada["id"],
+                name=nome,  # o Gemini se comporta melhor com o nome da tool
+            )
+        )
     return {"messages": saidas}
 
 
@@ -140,4 +183,3 @@ construtor.add_edge("ferramentas", "agente")
 
 # Compila o grafo. (Na Fase 2, passaremos um checkpointer aqui para persistência.)
 agente_grafo = construtor.compile()
-

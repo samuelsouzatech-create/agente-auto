@@ -121,12 +121,20 @@ def test_registrar_troca_grava_com_lead_id(banco_temporario):
 
 
 def test_agendar_visita_grava(banco_temporario):
-    registrar = agendar_visita.invoke({
+    agendar_visita.invoke({
         "nome_cliente": "João", "tipo": "visita",
         "data_hora": "sábado 10h", "lead_id": "conversa-1"
     })
     assert contar_linhas(banco_temporario, "agendamentos") == 1
-
+    # Confere que os dados foram realmente gravados, não só a linha criada
+    conexao = sqlite3.connect(banco_temporario)
+    conexao.row_factory = sqlite3.Row
+    cursor = conexao.cursor()
+    cursor.execute("SELECT * FROM agendamentos WHERE lead_id = ?", ("conversa-1",))
+    linha = cursor.fetchone()
+    conexao.close()
+    assert linha["nome_cliente"] == "João"
+    assert linha["tipo"] == "visita"
 
 def test_acionar_handoff_grava_aguardando_humano(banco_temporario):
     acionar_handoff.invoke({

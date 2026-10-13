@@ -194,8 +194,17 @@ def registrar_lead(nome: str, interesse: str, forma_pagamento: str = "",
     - tem_troca: "sim" ou "não" (se souber)
     - prazo: urgência/quando quer resolver (se souber)
     """
+    # Guarda contra lead_id vazio: sem um identificador de conversa, o upsert
+    # por lead_id não funciona. Como a coluna é UNIQUE, um lead_id vazio faria
+    # todos os leads anônimos se fundirem numa linha só (o bug 2 de volta).
+    if not lead_id:
+        return "Não registrei o lead: falta o identificador da conversa."
+
     conexao = conectar()
     cursor = conexao.cursor()
+
+    # Verifica se já existe um lead para esta conversa
+
 
     # Verifica se já existe um lead para esta conversa
     cursor.execute("SELECT id FROM leads WHERE lead_id = ?", (lead_id,))
