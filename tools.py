@@ -162,6 +162,8 @@ def registrar_troca(modelo: str, ano: int, km: int, estado: str,
 def agendar_visita(nome_cliente: str, tipo: str, data_hora: str,
                   lead_id: Annotated[str, InjectedToolArg] = "") -> str:
     """Agenda uma visita, test-drive ou ligação com vendedor.
+    Se o cliente já tiver um agendamento desse tipo, ATUALIZA o horário
+    (o cliente pode remarcar). Não cria agendamentos duplicados.
 
     Parâmetros:
     - nome_cliente: nome de quem está agendando
@@ -170,13 +172,33 @@ def agendar_visita(nome_cliente: str, tipo: str, data_hora: str,
     """
     conexao = conectar()
     cursor = conexao.cursor()
-    cursor.execute("""
-        INSERT INTO agendamentos (lead_id, nome_cliente, tipo, data_hora)
-        VALUES (?, ?, ?, ?)
-    """, (lead_id, nome_cliente, tipo, data_hora))
+
+    # Upsert por lead + tipo: um cliente tem UM agendamento de cada tipo.
+    # Se já existe, atualiza o horário (cobre remarcação e confirmação dupla).
+    # Se não existe, cria. Assim nunca duplica.
+    if lead_id:
+        cursor.execute(
+            "SELECT id FROM agendamentos WHERE lead_id = ? AND tipo = ?",
+            (lead_id, tipo),
+        )
+        existente = cursor.fetchone()
+        if existente:
+            cursor.execute(
+                "UPDATE agendamentos SET nome_cliente = ?, data_hora = ?, status = 'agendado' WHERE id = ?",
+                (nome_cliente, data_hora, existente["id"]),
+            )
+            conexao.commit()
+            conexao.close()
+            return f"Agendamento atualizado: {tipo} para {nome_cliente} em {data_hora}."
+
+    cursor.execute(
+        "INSERT INTO agendamentos (lead_id, nome_cliente, tipo, data_hora) VALUES (?, ?, ?, ?)",
+        (lead_id, nome_cliente, tipo, data_hora),
+    )
     conexao.commit()
     conexao.close()
     return f"Agendamento confirmado: {tipo} para {nome_cliente} em {data_hora}."
+
 
 
 @tool

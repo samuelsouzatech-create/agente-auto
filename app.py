@@ -7,19 +7,25 @@ from agent import agente_grafo
 def extrair_texto(content):
     # Formato antigo: já é texto puro
     if isinstance(content, str):
-        return content
+        texto = content
     # Formato novo (gemini-3.x): lista de blocos
-    if isinstance(content, list):
+    elif isinstance(content, list):
         partes = []
         for bloco in content:
             if isinstance(bloco, dict):
-                texto = bloco.get("text") or bloco.get("Texto") or bloco.get("texto")
-                if texto:
-                    partes.append(texto)
+                t = bloco.get("text") or bloco.get("Texto") or bloco.get("texto")
+                if t:
+                    partes.append(t)
             elif isinstance(bloco, str):
                 partes.append(bloco)
-        return "\n".join(partes)
-    return str(content)
+        texto = "\n".join(partes)
+    else:
+        texto = str(content)
+
+    # Escapa o cifrão: o Streamlit trata "$" como início de fórmula matemática
+    # (LaTeX), o que embaralhava os preços ("R$ 20.000") e cortava o texto.
+    # Com "\$" ele mostra o cifrão literal.
+    return texto.replace("$", "\\$")
 
 
 st.set_page_config(page_title="Léo - Assistente da Loja", page_icon="🚗")
@@ -37,14 +43,14 @@ if "historico" not in st.session_state:
 # Mostra as mensagens já trocadas
 for msg in st.session_state.historico:
     if isinstance(msg, HumanMessage):
-        st.chat_message("user").write(msg.content)
+        st.chat_message("user").write(extrair_texto(msg.content))
     else:
         st.chat_message("assistant").write(extrair_texto(msg.content))
 
 # Caixa de digitação do usuário
 if entrada := st.chat_input("Digite sua mensagem..."):
     st.session_state.historico.append(HumanMessage(content=entrada))
-    st.chat_message("user").write(entrada)
+    st.chat_message("user").write(extrair_texto(entrada))
 
     with st.spinner("Léo está digitando..."):
         resultado = agente_grafo.invoke({
@@ -55,4 +61,3 @@ if entrada := st.chat_input("Digite sua mensagem..."):
 
     st.session_state.historico.append(resposta)
     st.rerun()
-
