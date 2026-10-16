@@ -1,27 +1,24 @@
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from dotenv import load_dotenv
 from typing import Annotated, TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from app.config import MODELO_LLM, TEMPERATURA, TIMEOUT, MAX_RETRIES
 from tools import (
     consultar_estoque, detalhes_veiculo, simular_financiamento,
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff, buscar_conhecimento
 )
 from langgraph.prebuilt import tools_condition
 
-# Carrega a chave do arquivo .env (antes de tudo)
-load_dotenv()
-
 # --- O "cérebro": o modelo Gemini Flash ---
 llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",
-    temperature=0.2,
-    timeout=30,
-    max_retries=3,
+    model=MODELO_LLM,
+    temperature=TEMPERATURA,
+    timeout=TIMEOUT,
+    max_retries=MAX_RETRIES,
     thinking_budget=0,
 )
 
