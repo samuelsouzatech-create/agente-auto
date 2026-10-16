@@ -1,7 +1,7 @@
 import uuid
 import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage
-from agent import agente_grafo
+from app.core.agent import agente_grafo
 from app.utils import extrair_texto
 
 

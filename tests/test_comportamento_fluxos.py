@@ -49,8 +49,9 @@ def importar_agente():
     from dotenv import load_dotenv
     load_dotenv()
     os.environ.setdefault("GOOGLE_API_KEY", "chave-falsa-so-para-importar")
-    import agent
+    import app.core.agent as agent
     return agent
+
  
  
 def extrair_texto(content):

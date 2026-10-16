@@ -53,7 +53,7 @@ def conversar(mensagem_cliente: str):
     """Envia UMA mensagem do cliente ao grafo e devolve a lista de mensagens
     resultante. Importa o grafo aqui dentro (não no topo) para não acionar o
     Gemini quando o pytest apenas COLETA os testes sem rodá-los."""
-    from agent import agente_grafo
+    from app.core.agent import agente_grafo
     from langchain_core.messages import HumanMessage
 
     resultado = agente_grafo.invoke({
