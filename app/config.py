@@ -15,3 +15,7 @@ MODELO_LLM = "gemini-3.1-flash-lite"
 TEMPERATURA = 0.2
 TIMEOUT = 30
 MAX_RETRIES = 3
+
+# Token de verificação do webhook do WhatsApp (uma senha que VOCÊ inventa
+# e cadastra na Meta; serve para a Meta provar que o webhook é seu).
+WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "leo-webhook-2026")
