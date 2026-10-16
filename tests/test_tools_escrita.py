@@ -142,3 +142,75 @@ def test_acionar_handoff_grava_aguardando_humano(banco_temporario):
         "resumo": "lead quente", "lead_id": "conversa-1"
     })
     assert contar_linhas(banco_temporario, "handoffs") == 1
+
+# --- Testes do upsert do agendar_visita (item 3 da revisão) ---
+
+def test_agendar_visita_remarcar_nao_duplica(banco_temporario):
+    # Mesmo lead, mesmo tipo, horário diferente = remarcação, NÃO duplicação.
+    agendar_visita.invoke({
+        "nome_cliente": "Marina", "tipo": "visita",
+        "data_hora": "sábado 10h", "lead_id": "conversa-rem"
+    })
+    agendar_visita.invoke({
+        "nome_cliente": "Marina", "tipo": "visita",
+        "data_hora": "sábado 11h", "lead_id": "conversa-rem"
+    })
+    # Deve existir UMA linha só...
+    assert contar_linhas(banco_temporario, "agendamentos") == 1
+    # ...e com o horário ATUALIZADO (o segundo).
+    conexao = sqlite3.connect(banco_temporario)
+    conexao.row_factory = sqlite3.Row
+    cursor = conexao.cursor()
+    cursor.execute("SELECT * FROM agendamentos WHERE lead_id = ?", ("conversa-rem",))
+    linha = cursor.fetchone()
+    conexao.close()
+    assert linha["data_hora"] == "sábado 11h"
+
+
+def test_agendar_visita_tipos_diferentes_sao_separados(banco_temporario):
+    # Mesmo lead, mas tipos diferentes = agendamentos separados (visita + ligação).
+    agendar_visita.invoke({
+        "nome_cliente": "Marina", "tipo": "visita",
+        "data_hora": "sábado 10h", "lead_id": "conversa-tipos"
+    })
+    agendar_visita.invoke({
+        "nome_cliente": "Marina", "tipo": "ligacao",
+        "data_hora": "segunda 14h", "lead_id": "conversa-tipos"
+    })
+    assert contar_linhas(banco_temporario, "agendamentos") == 2
+
+
+# --- Testes do upsert do acionar_handoff (item 4 da revisão) ---
+
+def test_acionar_handoff_nao_duplica_mesmo_lead(banco_temporario):
+    # Dois pedidos vermelhos do mesmo lead = UMA linha na fila do vendedor.
+    acionar_handoff.invoke({
+        "motivo": "cliente pediu desconto",
+        "resumo": "lead quente, quer Onix", "lead_id": "conversa-hand"
+    })
+    acionar_handoff.invoke({
+        "motivo": "cliente quer falar com vendedor",
+        "resumo": "lead quente, quer Onix, insistindo", "lead_id": "conversa-hand"
+    })
+    # Uma linha só...
+    assert contar_linhas(banco_temporario, "handoffs") == 1
+    # ...com o motivo/resumo ATUALIZADOS (os do segundo pedido).
+    conexao = sqlite3.connect(banco_temporario)
+    conexao.row_factory = sqlite3.Row
+    cursor = conexao.cursor()
+    cursor.execute("SELECT * FROM handoffs WHERE lead_id = ?", ("conversa-hand",))
+    linha = cursor.fetchone()
+    conexao.close()
+    assert linha["motivo"] == "cliente quer falar com vendedor"
+    assert linha["estado"] == "aguardando_humano"
+
+
+def test_acionar_handoff_leads_diferentes_sao_separados(banco_temporario):
+    acionar_handoff.invoke({
+        "motivo": "desconto", "resumo": "lead A", "lead_id": "lead-a"
+    })
+    acionar_handoff.invoke({
+        "motivo": "reclamação", "resumo": "lead B", "lead_id": "lead-b"
+    })
+    assert contar_linhas(banco_temporario, "handoffs") == 2
+

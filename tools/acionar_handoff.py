@@ -17,6 +17,28 @@ def acionar_handoff(motivo: str, resumo: str,
     """
     conexao = conectar()
     cursor = conexao.cursor()
+
+    # Upsert por lead: se já existe um handoff aguardando humano para este
+    # lead, atualiza motivo/resumo em vez de criar uma linha duplicada na
+    # fila do vendedor.
+    if lead_id:
+        cursor.execute(
+            "SELECT id FROM handoffs WHERE lead_id = ? AND estado = 'aguardando_humano'",
+            (lead_id,),
+        )
+        existente = cursor.fetchone()
+        if existente:
+            cursor.execute(
+                "UPDATE handoffs SET motivo = ?, resumo = ? WHERE id = ?",
+                (motivo, resumo, existente["id"]),
+            )
+            conexao.commit()
+            conexao.close()
+            return (
+                "Handoff atualizado. Avise o cliente que um vendedor vai "
+                "continuar o atendimento em instantes."
+            )
+
     cursor.execute("""
         INSERT INTO handoffs (lead_id, motivo, resumo, estado)
         VALUES (?, ?, ?, 'aguardando_humano')
