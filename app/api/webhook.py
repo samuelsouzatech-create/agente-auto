@@ -16,6 +16,26 @@ from app.api.enviar_whatsapp import enviar_texto_whatsapp
 
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
 
+# --- Deduplicação (Bloco 4) ---
+# A Meta reenvia a mesma mensagem às vezes. Guardamos os ids já processados
+# para não responder (nem gastar Gemini) duas vezes pela mesma mensagem.
+# Versão em memória: simples e boa para testes/piloto. No Bloco 5 (Redis)
+# essa mesma lógica passa a morar no Redis, para sobreviver a reinícios.
+_ids_processados: set[str] = set()
+_LIMITE_IDS = 1000  # evita a lista crescer para sempre na memória
+
+
+def ja_processada(id_mensagem: str) -> bool:
+    """Devolve True se esta mensagem já foi vista antes (duplicata).
+    Se for nova, registra o id e devolve False."""
+    if id_mensagem in _ids_processados:
+        return True
+    _ids_processados.add(id_mensagem)
+    # Poda simples: se passou do limite, esvazia metade para não vazar memória.
+    if len(_ids_processados) > _LIMITE_IDS:
+        for antigo in list(_ids_processados)[: _LIMITE_IDS // 2]:
+            _ids_processados.discard(antigo)
+    return False
 
 @app.get("/")
 def raiz():
@@ -36,7 +56,8 @@ def verificar_webhook(
 
 
 def extrair_mensagem(dados: dict):
-    """Cava o JSON da Meta e devolve (numero_cliente, texto) ou (None, None).
+    """Cava o JSON da Meta e devolve (id_mensagem, numero_cliente, texto)
+    ou (None, None, None).
 
     O pacote da Meta tem várias camadas:
     entry -> changes -> value -> messages -> [0] -> text -> body
@@ -46,31 +67,37 @@ def extrair_mensagem(dados: dict):
         valor = dados["entry"][0]["changes"][0]["value"]
         mensagens = valor.get("messages")
         if not mensagens:
-            return None, None  # não é mensagem (ex.: notificação de status)
+            return None, None, None  # não é mensagem (ex.: notificação de status)
         msg = mensagens[0]
+        id_mensagem = msg["id"]           # id único (wamid...) para deduplicar
         numero = msg["from"]              # número do cliente (vira o lead_id)
         texto = msg["text"]["body"]       # o que o cliente escreveu
-        return numero, texto
+        return id_mensagem, numero, texto
     except (KeyError, IndexError, TypeError):
-        return None, None
+        return None, None, None
+
 
 
 @app.post("/webhook")
 async def receber_mensagem(request: Request):
-    """Recebe o POST da Meta, extrai a mensagem, chama o cérebro do Léo
-    e (por enquanto) imprime a resposta no terminal. O envio de volta
-    pro WhatsApp entra no Movimento 5."""
+    """Recebe o POST da Meta, extrai a mensagem, deduplica, chama o cérebro
+    do Léo e envia a resposta de volta pro WhatsApp."""
     try:
         dados = await request.json()
     except Exception:
         # Corpo vazio ou não-JSON: confirma recebimento e ignora.
         return Response(status_code=200)
 
-    numero, texto = extrair_mensagem(dados)
+    id_mensagem, numero, texto = extrair_mensagem(dados)
 
     # Se não for uma mensagem de texto, responde 200 e ignora
     # (a Meta exige 200 rápido, senão fica reenviando).
     if not texto:
+        return Response(status_code=200)
+
+    # Deduplicação: se a Meta reenviou a mesma mensagem, ignora.
+    if ja_processada(id_mensagem):
+        print(f"[WhatsApp] Mensagem {id_mensagem} já processada. Ignorando duplicata.")
         return Response(status_code=200)
 
     print(f"\n[WhatsApp] Cliente {numero} disse: {texto}")
