@@ -12,6 +12,7 @@ from langchain_core.messages import HumanMessage
 from app.config import WHATSAPP_VERIFY_TOKEN
 from app.core.agent import agente_grafo
 from app.utils import extrair_texto
+from app.api.enviar_whatsapp import enviar_texto_whatsapp
 
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
 
@@ -83,5 +84,8 @@ async def receber_mensagem(request: Request):
 
     print(f"[WhatsApp] Léo responde: {resposta}\n")
 
-    # Por enquanto só confirmamos o recebimento. O envio real vem no Mov. 5.
+    # Movimento 5: envia a resposta de volta pro WhatsApp do cliente.
+    await enviar_texto_whatsapp(numero, resposta)
+
     return Response(status_code=200)
+
