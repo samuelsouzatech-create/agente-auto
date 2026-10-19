@@ -5,7 +5,9 @@ Usado pelo webhook no Movimento 5: depois que o Léo gera a resposta,
 esta função entrega essa resposta no WhatsApp do cliente.
 """
 import httpx
+import asyncio
 
+from app.humanizador import dividir_em_bolhas
 from app.config import (
     WHATSAPP_TOKEN,
     WHATSAPP_PHONE_NUMBER_ID,
@@ -56,3 +58,25 @@ async def enviar_texto_whatsapp(numero_cliente: str, texto: str) -> bool:
     except Exception as erro:
         print(f"[WhatsApp] ERRO de conexão ao enviar: {erro}")
         return False
+
+# Pausa entre bolhas, em segundos (PDF: 2 a 6 s). Começamos conservador.
+PAUSA_ENTRE_BOLHAS = 2
+
+
+async def enviar_resposta_humanizada(numero_cliente: str, texto: str) -> None:
+    """Divide a resposta em bolhas e envia uma a uma, com pausa entre elas.
+
+    Imita um atendente humano. O indicador de 'digitando' real (chamada à
+    Meta) será plugado aqui quando a conta Meta estiver ativa.
+    """
+    bolhas = dividir_em_bolhas(texto)
+
+    if not bolhas:
+        return
+
+    for i, bolha in enumerate(bolhas):
+        # (Futuro: acionar o indicador 'digitando' na Meta antes de cada bolha.)
+        await enviar_texto_whatsapp(numero_cliente, bolha)
+        # Pausa entre as bolhas, menos depois da última.
+        if i < len(bolhas) - 1:
+            await asyncio.sleep(PAUSA_ENTRE_BOLHAS)

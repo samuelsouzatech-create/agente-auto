@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage
 from app.config import WHATSAPP_VERIFY_TOKEN
 from app.core.agent import agente_grafo
 from app.utils import extrair_texto
-from app.api.enviar_whatsapp import enviar_texto_whatsapp
+from app.api.enviar_whatsapp import enviar_resposta_humanizada
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock, liberar_lock
 
@@ -102,8 +102,8 @@ async def processar_mensagem(numero: str, texto: str):
 
         print(f"[WhatsApp] Léo responde: {resposta}\n")
 
-        # Envia a resposta de volta pro WhatsApp do cliente.
-        await enviar_texto_whatsapp(numero, resposta)
+        # Envia a resposta humanizada (em bolhas, com pausa) pro WhatsApp.
+        await enviar_resposta_humanizada(numero, resposta)
     finally:
         # Libera o lock mesmo se der erro no meio (o finally sempre roda).
         await liberar_lock(numero)
