@@ -4,23 +4,24 @@ Servidor web (FastAPI) que hospeda o webhook do WhatsApp na Fase 2.
 Rotas:
 - GET  "/"         -> saúde ("tô vivo")
 - GET  "/webhook"  -> verificação do webhook (aperto de mão da Meta)
-- POST "/webhook"  -> recebe a mensagem do cliente e chama o cérebro do Léo
+- POST "/webhook"  -> recebe a mensagem, responde 200 rápido e processa
+                      em segundo plano (debounce + lock + Léo + envio)
 """
-from fastapi import FastAPI, Request, Response, Query
+from fastapi import FastAPI, Request, Response, Query, BackgroundTasks
 from langchain_core.messages import HumanMessage
 
 from app.config import WHATSAPP_VERIFY_TOKEN
 from app.core.agent import agente_grafo
 from app.utils import extrair_texto
 from app.api.enviar_whatsapp import enviar_texto_whatsapp
+from app.redis_debounce import acumular_e_esperar
+from app.redis_lock import adquirir_lock, liberar_lock
 
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
 
 # --- Deduplicação (Bloco 4) ---
 # A Meta reenvia a mesma mensagem às vezes. Guardamos os ids já processados
 # para não responder (nem gastar Gemini) duas vezes pela mesma mensagem.
-# Versão em memória: simples e boa para testes/piloto. No Bloco 5 (Redis)
-# essa mesma lógica passa a morar no Redis, para sobreviver a reinícios.
 _ids_processados: set[str] = set()
 _LIMITE_IDS = 1000  # evita a lista crescer para sempre na memória
 
@@ -31,11 +32,11 @@ def ja_processada(id_mensagem: str) -> bool:
     if id_mensagem in _ids_processados:
         return True
     _ids_processados.add(id_mensagem)
-    # Poda simples: se passou do limite, esvazia metade para não vazar memória.
     if len(_ids_processados) > _LIMITE_IDS:
         for antigo in list(_ids_processados)[: _LIMITE_IDS // 2]:
             _ids_processados.discard(antigo)
     return False
+
 
 @app.get("/")
 def raiz():
@@ -57,12 +58,7 @@ def verificar_webhook(
 
 def extrair_mensagem(dados: dict):
     """Cava o JSON da Meta e devolve (id_mensagem, numero_cliente, texto)
-    ou (None, None, None).
-
-    O pacote da Meta tem várias camadas:
-    entry -> changes -> value -> messages -> [0] -> text -> body
-    Nem todo POST é uma mensagem de texto (pode ser status de entrega, etc.),
-    por isso usamos try/except e devolvemos None quando não há texto."""
+    ou (None, None, None)."""
     try:
         valor = dados["entry"][0]["changes"][0]["value"]
         mensagens = valor.get("messages")
@@ -77,21 +73,54 @@ def extrair_mensagem(dados: dict):
         return None, None, None
 
 
+async def processar_mensagem(numero: str, texto: str):
+    """Trabalho pesado, rodado em segundo plano (depois do 200 à Meta).
+
+    1) Debounce: espera o cliente terminar a rajada de mensagens.
+    2) Lock: garante uma execução por vez por lead.
+    3) Chama o Léo e envia a resposta.
+    """
+    # 1) Debounce: acumula e espera o silêncio. Só a última da rajada segue.
+    texto_juntado = await acumular_e_esperar(numero, texto)
+    if texto_juntado is None:
+        return  # outra mensagem mais nova chegou; ela cuidará da rajada
+
+    # 2) Lock: se já há execução para este lead, desiste (evita duplicar).
+    if not await adquirir_lock(numero):
+        print(f"[WhatsApp] Lead {numero} já em processamento. Ignorando.")
+        return
+
+    try:
+        print(f"\n[WhatsApp] Cliente {numero} disse: {texto_juntado}")
+
+        # 3) Cérebro do Léo, usando o número como lead_id
+        resultado = agente_grafo.invoke({
+            "messages": [HumanMessage(content=texto_juntado)],
+            "lead_id": numero,
+        })
+        resposta = extrair_texto(resultado["messages"][-1].content)
+
+        print(f"[WhatsApp] Léo responde: {resposta}\n")
+
+        # Envia a resposta de volta pro WhatsApp do cliente.
+        await enviar_texto_whatsapp(numero, resposta)
+    finally:
+        # Libera o lock mesmo se der erro no meio (o finally sempre roda).
+        await liberar_lock(numero)
+
 
 @app.post("/webhook")
-async def receber_mensagem(request: Request):
-    """Recebe o POST da Meta, extrai a mensagem, deduplica, chama o cérebro
-    do Léo e envia a resposta de volta pro WhatsApp."""
+async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
+    """Recebe o POST da Meta, deduplica e AGENDA o processamento em segundo
+    plano, devolvendo 200 imediatamente (a Meta exige 200 rápido)."""
     try:
         dados = await request.json()
     except Exception:
-        # Corpo vazio ou não-JSON: confirma recebimento e ignora.
         return Response(status_code=200)
 
     id_mensagem, numero, texto = extrair_mensagem(dados)
 
-    # Se não for uma mensagem de texto, responde 200 e ignora
-    # (a Meta exige 200 rápido, senão fica reenviando).
+    # Se não for uma mensagem de texto, responde 200 e ignora.
     if not texto:
         return Response(status_code=200)
 
@@ -100,19 +129,6 @@ async def receber_mensagem(request: Request):
         print(f"[WhatsApp] Mensagem {id_mensagem} já processada. Ignorando duplicata.")
         return Response(status_code=200)
 
-    print(f"\n[WhatsApp] Cliente {numero} disse: {texto}")
-
-    # Joga no cérebro de sempre, usando o número como lead_id
-    resultado = agente_grafo.invoke({
-        "messages": [HumanMessage(content=texto)],
-        "lead_id": numero,
-    })
-    resposta = extrair_texto(resultado["messages"][-1].content)
-
-    print(f"[WhatsApp] Léo responde: {resposta}\n")
-
-    # Movimento 5: envia a resposta de volta pro WhatsApp do cliente.
-    await enviar_texto_whatsapp(numero, resposta)
-
+    # Agenda o trabalho pesado em segundo plano e responde 200 na hora.
+    tarefas.add_task(processar_mensagem, numero, texto)
     return Response(status_code=200)
-

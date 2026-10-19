@@ -7,3 +7,5 @@ chromadb
 python-dotenv
 streamlit
 pytest
+
+redis==8.1.0
