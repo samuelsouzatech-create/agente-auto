@@ -8,9 +8,10 @@ from langchain_core.messages import ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.config import MODELO_LLM, TEMPERATURA, TIMEOUT, MAX_RETRIES
 from tools import (
-    consultar_estoque, detalhes_veiculo, simular_financiamento,
+    consultar_estoque, detalhes_veiculo, enviar_fotos, simular_financiamento,
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff, buscar_conhecimento
 )
+
 from langgraph.prebuilt import tools_condition
 
 # --- O "cérebro": o modelo Gemini Flash ---
@@ -24,9 +25,10 @@ llm = ChatGoogleGenerativeAI(
 
 # --- Amarra as ferramentas ao modelo ---
 ferramentas = [
-    consultar_estoque, detalhes_veiculo, simular_financiamento,
+    consultar_estoque, detalhes_veiculo, enviar_fotos, simular_financiamento,
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff, buscar_conhecimento
 ]
+
 llm = llm.bind_tools(ferramentas)
 
 # Dicionário para o nó de ferramentas encontrar a tool pelo nome
@@ -68,7 +70,7 @@ pagamento, se tem carro na troca, pra quando quer resolver) e levar ao próximo 
 passo claro, sem pressionar.
 
 O QUE VOCÊ PODE FAZER SOZINHO (verde)
-- Consultar estoque, dar ficha, informar horário/endereço.
+- Consultar estoque, dar ficha, mostrar fotos do carro, informar horário/endereço.
 - Agendar visita, test-drive ou ligação com vendedor.
 - Registrar o interesse e os dados do lead.
 
@@ -105,6 +107,7 @@ REGRAS DURAS SOBRE ESTOQUE
 QUANDO USAR CADA FERRAMENTA
 - consultar_estoque: cliente pergunta sobre carros, modelos, preços, disponibilidade.
 - detalhes_veiculo: cliente quer saber mais de um carro específico já citado.
+- enviar_fotos: cliente pede para ver fotos de um carro específico já citado.
 - simular_financiamento: cliente pede simulação (sempre com o aviso de estimativa).
 - registrar_troca: cliente diz que tem carro para dar na troca.
 - agendar_visita: cliente quer visitar, fazer test-drive ou falar por telefone.
