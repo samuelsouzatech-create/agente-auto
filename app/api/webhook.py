@@ -16,6 +16,7 @@ from app.utils import extrair_texto
 from app.api.enviar_whatsapp import enviar_resposta_humanizada
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock, liberar_lock
+from app.api.receber_audio import transcrever_audio
 
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
 
@@ -57,29 +58,56 @@ def verificar_webhook(
 
 
 def extrair_mensagem(dados: dict):
-    """Cava o JSON da Meta e devolve (id_mensagem, numero_cliente, texto)
-    ou (None, None, None)."""
+    """Cava o JSON da Meta e devolve (id_mensagem, numero, texto, id_audio).
+
+    - Mensagem de TEXTO: texto preenchido, id_audio = None.
+    - Mensagem de ÁUDIO: texto = None, id_audio preenchido (o id do arquivo
+      de mídia na Meta; o áudio em si é baixado depois, com o token).
+    - Qualquer outra coisa (status, etc.): tudo None.
+    """
     try:
         valor = dados["entry"][0]["changes"][0]["value"]
         mensagens = valor.get("messages")
         if not mensagens:
-            return None, None, None  # não é mensagem (ex.: notificação de status)
+            return None, None, None, None  # não é mensagem (ex.: status)
         msg = mensagens[0]
         id_mensagem = msg["id"]           # id único (wamid...) para deduplicar
         numero = msg["from"]              # número do cliente (vira o lead_id)
-        texto = msg["text"]["body"]       # o que o cliente escreveu
-        return id_mensagem, numero, texto
+        tipo = msg.get("type")            # "text", "audio", "image"...
+
+        if tipo == "text":
+            texto = msg["text"]["body"]
+            return id_mensagem, numero, texto, None
+
+        if tipo == "audio":
+            id_audio = msg["audio"]["id"]  # id do arquivo de áudio na Meta
+            return id_mensagem, numero, None, id_audio
+
+        # Outros tipos (imagem, figurinha, etc.): ainda não tratados.
+        return id_mensagem, numero, None, None
     except (KeyError, IndexError, TypeError):
-        return None, None, None
+        return None, None, None, None
 
 
-async def processar_mensagem(numero: str, texto: str):
+async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
     """Trabalho pesado, rodado em segundo plano (depois do 200 à Meta).
 
+    0) Se veio áudio, transcreve primeiro (vira texto).
     1) Debounce: espera o cliente terminar a rajada de mensagens.
     2) Lock: garante uma execução por vez por lead.
     3) Chama o Léo e envia a resposta.
     """
+    # 0) Áudio: transcreve antes de qualquer coisa (seção 4.3 do PDF).
+    if id_audio:
+        print(f"[WhatsApp] Cliente {numero} mandou um áudio. Transcrevendo...")
+        texto = await transcrever_audio(id_audio)
+        if not texto:
+            # Sem token (modo local) ou falha na transcrição: não trava o fluxo.
+            print(f"[WhatsApp] Não foi possível transcrever o áudio de {numero}. "
+                  f"Nada a processar por enquanto.")
+            return
+        print(f"[WhatsApp] Áudio transcrito: {texto}")
+
     # 1) Debounce: acumula e espera o silêncio. Só a última da rajada segue.
     texto_juntado = await acumular_e_esperar(numero, texto)
     if texto_juntado is None:
@@ -118,10 +146,10 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
     except Exception:
         return Response(status_code=200)
 
-    id_mensagem, numero, texto = extrair_mensagem(dados)
+    id_mensagem, numero, texto, id_audio = extrair_mensagem(dados)
 
-    # Se não for uma mensagem de texto, responde 200 e ignora.
-    if not texto:
+    # Se não for texto NEM áudio (ex.: imagem, status), responde 200 e ignora.
+    if not texto and not id_audio:
         return Response(status_code=200)
 
     # Deduplicação: se a Meta reenviou a mesma mensagem, ignora.
@@ -130,5 +158,5 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
         return Response(status_code=200)
 
     # Agenda o trabalho pesado em segundo plano e responde 200 na hora.
-    tarefas.add_task(processar_mensagem, numero, texto)
+    tarefas.add_task(processar_mensagem, numero, texto, id_audio)
     return Response(status_code=200)
