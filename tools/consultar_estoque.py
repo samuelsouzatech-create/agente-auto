@@ -24,16 +24,16 @@ def consultar_estoque(marca: str = "", modelo: str = "", cor: str = "",
     parametros = []
 
     if marca:
-        sql += " AND marca LIKE ?"
+        sql += " AND sem_acento(marca) LIKE sem_acento(?)"
         parametros.append(f"%{marca}%")
     if modelo:
-        sql += " AND modelo LIKE ?"
+        sql += " AND sem_acento(modelo) LIKE sem_acento(?)"
         parametros.append(f"%{modelo}%")
     if cor:
-        sql += " AND cor LIKE ?"
+        sql += " AND sem_acento(cor) LIKE sem_acento(?)"
         parametros.append(f"%{cor}%")
     if cambio:
-        sql += " AND cambio LIKE ?"
+        sql += " AND sem_acento(cambio) LIKE sem_acento(?)"
         parametros.append(f"%{cambio}%")
     if preco_max and preco_max > 0:
         sql += " AND preco <= ?"

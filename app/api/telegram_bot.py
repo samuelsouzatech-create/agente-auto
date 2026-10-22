@@ -18,6 +18,7 @@ from app.utils import extrair_texto
 from app.humanizador import dividir_em_bolhas
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock, liberar_lock
+from app.api.receber_audio import transcrever_bytes
 
 # --- Deduplicação (igual à do WhatsApp) ---
 # O Telegram normalmente não reenvia, mas mantemos o padrão por segurança.
@@ -99,6 +100,47 @@ async def ao_receber_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await enviar_resposta_humanizada_telegram(update, resposta)
 
 
+async def ao_receber_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Chamada quando chega um ÁUDIO/voz no bot."""
+    chat_id = str(update.effective_chat.id)
+    id_mensagem = f"{chat_id}:{update.message.message_id}"
+
+    if ja_processada(id_mensagem):
+        return
+
+    print(f"[Telegram] Cliente {chat_id} mandou um áudio. Transcrevendo...")
+
+    # Telegram: pega o arquivo pelo file_id e baixa os bytes.
+    objeto_audio = update.message.voice or update.message.audio
+    if objeto_audio is None:
+        return
+
+    try:
+        arquivo = await context.bot.get_file(objeto_audio.file_id)
+        bytes_audio = bytes(await arquivo.download_as_bytearray())
+    except Exception as e:
+        print(f"[Telegram] Erro ao baixar áudio: {e}")
+        return
+
+    # A transcrição (Gemini) é síncrona, então roda numa thread pra não travar.
+    mime = getattr(objeto_audio, "mime_type", None) or "audio/ogg"
+    texto = await asyncio.to_thread(transcrever_bytes, bytes_audio, mime)
+
+    if not texto:
+        print(f"[Telegram] Não consegui transcrever o áudio de {chat_id}.")
+        await update.message.reply_text(
+            "Não consegui entender o áudio, pode mandar de novo ou escrever?"
+        )
+        return
+
+    print(f"[Telegram] Áudio transcrito: {texto}")
+
+    # Daqui pra frente é IGUAL ao texto: cai no mesmo cérebro do Léo.
+    resposta = await processar_texto(chat_id, texto)
+    if resposta:
+        await enviar_resposta_humanizada_telegram(update, resposta)
+
+
 def main() -> None:
     """Liga o bot e fica ouvindo mensagens (polling)."""
     if not TELEGRAM_TOKEN:
@@ -107,6 +149,7 @@ def main() -> None:
 
     app = Application.builder().token(TELEGRAM_TOKEN).concurrent_updates(True).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ao_receber_texto))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, ao_receber_audio))
 
     print("[Telegram] Bot no ar! Mande uma mensagem pra ele no celular.")
     print("[Telegram] (Ctrl+C aqui no terminal para parar.)")

@@ -1,13 +1,26 @@
 import sqlite3
+import unicodedata
 
 CAMINHO_BANCO = "loja.db"
 
 
+def _sem_acento(texto):
+    """Remove acentos de um texto, para buscas que ignoram acentuação.
+    Ex.: 'Doblò' -> 'Doblo', 'Civíc' -> 'Civic'. Usada dentro do SQLite."""
+    if texto is None:
+        return None
+    normalizado = unicodedata.normalize("NFD", str(texto))
+    return "".join(c for c in normalizado if unicodedata.category(c) != "Mn")
+
+
 def conectar():
     """Abre uma conexão com o banco. row_factory deixa a gente
-    acessar as colunas pelo nome (ex: carro['modelo']) em vez de por número."""
+    acessar as colunas pelo nome (ex: carro['modelo']) em vez de por número.
+    Também registra a função sem_acento para buscas que ignoram acentuação."""
     conexao = sqlite3.connect(CAMINHO_BANCO)
     conexao.row_factory = sqlite3.Row
+    # Ensina o SQLite a usar o sem_acento() dentro do SQL (1 argumento).
+    conexao.create_function("sem_acento", 1, _sem_acento)
     return conexao
 
 
