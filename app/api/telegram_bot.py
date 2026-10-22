@@ -18,6 +18,7 @@ from app.utils import extrair_texto
 from app.humanizador import dividir_em_bolhas
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock, liberar_lock
+from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_bytes
 
 # --- Deduplicação (igual à do WhatsApp) ---
@@ -40,12 +41,30 @@ def ja_processada(id_mensagem: str) -> bool:
 PAUSA_ENTRE_BOLHAS = 2
 
 
-async def enviar_resposta_humanizada_telegram(update: Update, texto: str) -> None:
-    """Divide a resposta em bolhas e envia uma a uma pelo Telegram,
-    com o indicador de 'digitando...' antes de cada bolha e pausa entre elas."""
+async def esperar_digitando(update: Update, segundos: float) -> None:
+    """Espera o tempo pedido mantendo o 'digitando...' aceso o tempo todo.
+    O indicador do Telegram dura ~5s, então reacionamos a cada 4s."""
+    restante = segundos
+    while restante > 0:
+        await update.message.chat.send_action("typing")
+        passo = min(4, restante)
+        await asyncio.sleep(passo)
+        restante -= passo
+
+
+async def enviar_resposta_humanizada_telegram(update: Update, texto: str,
+                                              atraso: float = 0) -> None:
+    """Divide a resposta em bolhas e envia uma a uma pelo Telegram.
+    Antes da primeira bolha, aplica o atraso adaptativo com 'digitando...'
+    aceso; entre as bolhas, mantém a pausa normal."""
     bolhas = dividir_em_bolhas(texto)
     if not bolhas:
         return
+
+    # Atraso adaptativo (rápido se o cliente está ativo, mais lento se sumiu),
+    # com "digitando..." aceso durante toda a espera.
+    if atraso > 0:
+        await esperar_digitando(update, atraso)
 
     for i, bolha in enumerate(bolhas):
         # Mostra "digitando..." no Telegram (recurso nativo, igual conversa real).
@@ -95,9 +114,12 @@ async def ao_receber_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if ja_processada(id_mensagem):
         return
 
+    # Calcula o atraso adaptativo com base em quanto tempo o cliente sumiu.
+    atraso = await calcular_atraso(chat_id)
+
     resposta = await processar_texto(chat_id, texto)
     if resposta:
-        await enviar_resposta_humanizada_telegram(update, resposta)
+        await enviar_resposta_humanizada_telegram(update, resposta, atraso)
 
 
 async def ao_receber_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -135,10 +157,13 @@ async def ao_receber_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     print(f"[Telegram] Áudio transcrito: {texto}")
 
+    # Atraso adaptativo também para áudio.
+    atraso = await calcular_atraso(chat_id)
+
     # Daqui pra frente é IGUAL ao texto: cai no mesmo cérebro do Léo.
     resposta = await processar_texto(chat_id, texto)
     if resposta:
-        await enviar_resposta_humanizada_telegram(update, resposta)
+        await enviar_resposta_humanizada_telegram(update, resposta, atraso)
 
 
 def main() -> None:

@@ -63,16 +63,24 @@ async def enviar_texto_whatsapp(numero_cliente: str, texto: str) -> bool:
 PAUSA_ENTRE_BOLHAS = 2
 
 
-async def enviar_resposta_humanizada(numero_cliente: str, texto: str) -> None:
+async def enviar_resposta_humanizada(numero_cliente: str, texto: str,
+                                     atraso: float = 0) -> None:
     """Divide a resposta em bolhas e envia uma a uma, com pausa entre elas.
 
-    Imita um atendente humano. O indicador de 'digitando' real (chamada à
-    Meta) será plugado aqui quando a conta Meta estiver ativa.
+    Antes da primeira bolha, aplica o atraso adaptativo (rápido se o cliente
+    está ativo, mais lento se sumiu e voltou). Imita um atendente humano.
+    O indicador de 'digitando' real (chamada à Meta) será plugado aqui
+    quando a conta Meta estiver ativa.
     """
     bolhas = dividir_em_bolhas(texto)
 
     if not bolhas:
         return
+
+    # Atraso adaptativo antes de começar a responder.
+    # (Futuro: manter o 'digitando' da Meta aceso durante esta espera.)
+    if atraso > 0:
+        await asyncio.sleep(atraso)
 
     for i, bolha in enumerate(bolhas):
         # (Futuro: acionar o indicador 'digitando' na Meta antes de cada bolha.)

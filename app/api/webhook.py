@@ -18,6 +18,7 @@ from app.utils import extrair_texto
 from app.api.enviar_whatsapp import enviar_resposta_humanizada
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock, liberar_lock
+from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_audio
 
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
@@ -114,6 +115,10 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
     texto_juntado = await acumular_e_esperar(numero, texto)
     if texto_juntado is None:
         return  # outra mensagem mais nova chegou; ela cuidará da rajada
+    # Calcula o atraso adaptativo (rápido se o cliente está ativo, mais lento
+    # se sumiu e voltou). Feito aqui, depois do debounce, roda uma vez por rajada.
+    atraso = await calcular_atraso(numero)
+
 
     # 2) Lock: se já há execução para este lead, desiste (evita duplicar).
     if not await adquirir_lock(numero):
@@ -139,8 +144,9 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
 
         print(f"[WhatsApp] Léo responde: {resposta}\n")
 
-        # Envia a resposta humanizada (em bolhas, com pausa) pro WhatsApp.
-        await enviar_resposta_humanizada(numero, resposta)
+        # Envia a resposta humanizada (em bolhas, com pausa) pro WhatsApp,
+        # aplicando o atraso adaptativo antes da primeira bolha.
+        await enviar_resposta_humanizada(numero, resposta, atraso)
     finally:
         # Libera o lock mesmo se der erro no meio (o finally sempre roda).
         await liberar_lock(numero)
