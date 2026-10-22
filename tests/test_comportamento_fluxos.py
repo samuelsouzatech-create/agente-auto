@@ -168,7 +168,8 @@ def conversar_em_turnos(falas, lead_id=None) -> Conversa:
     for fala in falas:
         historico.append(HumanMessage(content=fala))
         resultado = agent.agente_grafo.invoke(
-            {"messages": historico, "lead_id": lead_id}
+            {"messages": historico, "lead_id": lead_id},
+            {"configurable": {"thread_id": lead_id}},
         )
         conversa.novas_por_turno.append(resultado["messages"][len(historico):])
         final = resultado["messages"][-1]
@@ -506,4 +507,5 @@ def test_fluxo_troca_registra_e_nunca_avalia(banco_com_estoque):
     assert trocas[0]["km"] == 90000
     # Nenhum valor em reais pode aparecer: o agente NUNCA dá valor de avaliação.
     assert valores_em_reais(conversa.texto_do_agente) == set(), conversa.texto_do_agente
+    
     

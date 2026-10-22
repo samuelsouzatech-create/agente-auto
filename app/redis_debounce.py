@@ -17,8 +17,11 @@ import asyncio
 
 from app.redis_cliente import redis_cliente
 
-# Quanto tempo de silêncio esperar antes de processar (PDF: 3 a 5 segundos).
-DEBOUNCE_SEGUNDOS = 4
+# Quanto tempo de silêncio esperar antes de processar.
+# 7s = faixa recomendada para VENDAS (mercado sugere 5-8s; suporte usa ~15s).
+# O cliente de vendas quer agilidade, mas 7s agrupa bem a rajada de um humano
+# que digita pensando. Ajustar por loja no futuro (vira config).
+DEBOUNCE_SEGUNDOS = 8
 # Por quanto tempo o buffer sobrevive no Redis (segurança contra lixo).
 TTL_BUFFER = 120
 

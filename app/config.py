@@ -30,3 +30,8 @@ WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
 # Versão da API da Meta (Graph API). v21.0 é estável em 2026.
 WHATSAPP_API_VERSION = "v21.0"
 
+# --- Credenciais do Telegram (ficam no .env, nunca no código) ---
+# Token do bot criado no @BotFather. É uma senha: controla o bot inteiro.
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+
+

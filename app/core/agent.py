@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from typing import Annotated, TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
+from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.config import MODELO_LLM, TEMPERATURA, TIMEOUT, MAX_RETRIES
@@ -190,5 +191,10 @@ construtor.add_conditional_edges("agente", tools_condition, {
 })
 construtor.add_edge("ferramentas", "agente")
 
-# Compila o grafo. (Na Fase 2, passaremos um checkpointer aqui para persistência.)
-agente_grafo = construtor.compile()
+# Checkpointer: a "gaveta de memória" das conversas. O MemorySaver guarda o
+# histórico de cada conversa na memória do programa, identificada por um
+# thread_id. Assim o Léo lembra do que foi dito antes, dentro da mesma conversa.
+# (Em produção, trocaremos o MemorySaver por um que salva no banco, para a
+#  memória sobreviver a reinícios — sem mexer no resto do código.)
+memoria = MemorySaver()
+agente_grafo = construtor.compile(checkpointer=memoria)
