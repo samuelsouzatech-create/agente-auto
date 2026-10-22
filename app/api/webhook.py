@@ -7,6 +7,8 @@ Rotas:
 - POST "/webhook"  -> recebe a mensagem, responde 200 rápido e processa
                       em segundo plano (debounce + lock + Léo + envio)
 """
+import asyncio
+
 from fastapi import FastAPI, Request, Response, Query, BackgroundTasks
 from langchain_core.messages import HumanMessage
 
@@ -121,11 +123,18 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
     try:
         print(f"\n[WhatsApp] Cliente {numero} disse: {texto_juntado}")
 
-        # 3) Cérebro do Léo, usando o número como lead_id
-        resultado = agente_grafo.invoke({
-            "messages": [HumanMessage(content=texto_juntado)],
-            "lead_id": numero,
-        })
+        # 3) Cérebro do Léo, usando o número como lead_id.
+        # - thread_id dá memória por conversa (igual ao Telegram).
+        # - to_thread roda o invoke (síncrono) fora do loop async, pra não
+        #   travar o servidor enquanto o Gemini responde.
+        resultado = await asyncio.to_thread(
+            agente_grafo.invoke,
+            {
+                "messages": [HumanMessage(content=texto_juntado)],
+                "lead_id": numero,
+            },
+            {"configurable": {"thread_id": numero}},
+        )
         resposta = extrair_texto(resultado["messages"][-1].content)
 
         print(f"[WhatsApp] Léo responde: {resposta}\n")
