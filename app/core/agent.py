@@ -155,28 +155,39 @@ def no_ferramentas(estado: EstadoConversa):
             # A ferramenta pode não existir (o modelo pode inventar um nome)
             tool = ferramentas_por_nome.get(nome)
             if tool is None:
-                conteudo = f"Erro: ferramenta '{nome}' não existe."
-            else:
-                args = dict(chamada["args"])
-                # Injeta o lead_id só nas tools que precisam (invisível ao modelo)
-                if nome in TOOLS_COM_LEAD_ID:
-                    args["lead_id"] = lead_id
-                resultado = tool.invoke(args)
-                conteudo = str(resultado)
+                saidas.append(ToolMessage(
+                    content=f"Erro: ferramenta '{nome}' não existe.",
+                    tool_call_id=chamada["id"],
+                    name=nome,
+                ))
+                continue
+
+            # Injeta o lead_id só nas tools que precisam (invisível ao modelo).
+            chamada_ajustada = dict(chamada)
+            if nome in TOOLS_COM_LEAD_ID:
+                chamada_ajustada["args"] = dict(chamada["args"])
+                chamada_ajustada["args"]["lead_id"] = lead_id
+
+            # Invoca passando a tool call inteira. Para tools com
+            # response_format="content_and_artifact" (ex.: enviar_fotos), o
+            # retorno já é uma ToolMessage com content E artifact preenchidos.
+            # Para as tools normais, vem uma ToolMessage só com content.
+            mensagem = tool.invoke(chamada_ajustada)
+
+            # Garante o name preenchido (o Gemini se comporta melhor com ele).
+            mensagem.name = nome
+            saidas.append(mensagem)
+
         except Exception as e:
             # Qualquer falha (banco, Chroma, argumento errado) vira ToolMessage,
             # o agente lê o erro e responde ao cliente sem quebrar a aplicação.
-            conteudo = f"Erro ao executar a ferramenta '{nome}': {e}"
-
-        saidas.append(
-            ToolMessage(
-                content=conteudo,
+            saidas.append(ToolMessage(
+                content=f"Erro ao executar a ferramenta '{nome}': {e}",
                 tool_call_id=chamada["id"],
-                name=nome,  # o Gemini se comporta melhor com o nome da tool
-            )
-        )
-    return {"messages": saidas}
+                name=nome,
+            ))
 
+    return {"messages": saidas}
 
 # --- Monta o grafo do LangGraph (ciclo de ferramentas) ---
 construtor = StateGraph(EstadoConversa)

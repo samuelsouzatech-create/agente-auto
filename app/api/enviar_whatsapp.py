@@ -88,3 +88,44 @@ async def enviar_resposta_humanizada(numero_cliente: str, texto: str,
         # Pausa entre as bolhas, menos depois da última.
         if i < len(bolhas) - 1:
             await asyncio.sleep(PAUSA_ENTRE_BOLHAS)
+
+
+async def enviar_foto_whatsapp(numero_cliente: str, url_foto: str) -> bool:
+    """Envia UMA imagem para o cliente pelo WhatsApp, a partir de uma URL pública.
+    A Meta baixa a imagem da URL e entrega como foto (o cliente não vê o link).
+    Retorna True se a Meta aceitou, False se deu erro. Nunca levanta exceção.
+    """
+    if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
+        print("[WhatsApp] AVISO: token/phone id vazios. Envio de foto pulado "
+              "(ainda em modo local).")
+        return False
+
+    url = (
+        f"https://graph.facebook.com/{WHATSAPP_API_VERSION}"
+        f"/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    )
+    cabecalhos = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    corpo = {
+        "messaging_product": "whatsapp",
+        "to": numero_cliente,
+        "type": "image",
+        "image": {"link": url_foto},
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as cliente:
+            resposta = await cliente.post(url, headers=cabecalhos, json=corpo)
+
+        if resposta.status_code == 200:
+            print(f"[WhatsApp] Foto enviada para {numero_cliente}.")
+            return True
+        else:
+            print(f"[WhatsApp] ERRO ao enviar foto ({resposta.status_code}): "
+                  f"{resposta.text}")
+            return False
+    except Exception as erro:
+        print(f"[WhatsApp] ERRO de conexão ao enviar foto: {erro}")
+        return False

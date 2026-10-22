@@ -15,7 +15,7 @@ from langchain_core.messages import HumanMessage
 from app.config import WHATSAPP_VERIFY_TOKEN
 from app.core.agent import agente_grafo
 from app.utils import extrair_texto
-from app.api.enviar_whatsapp import enviar_resposta_humanizada
+from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock, liberar_lock
 from app.redis_atraso import calcular_atraso
@@ -91,6 +91,15 @@ def extrair_mensagem(dados: dict):
     except (KeyError, IndexError, TypeError):
         return None, None, None, None
 
+def extrair_fotos(resultado) -> list:
+    """Varre as mensagens do resultado do grafo e junta todas as URLs de fotos
+    que vieram em artifacts de ToolMessages (da tool enviar_fotos)."""
+    urls = []
+    for m in resultado["messages"]:
+        artifact = getattr(m, "artifact", None)
+        if isinstance(artifact, dict) and artifact.get("tipo") == "fotos":
+            urls.extend(artifact.get("urls", []))
+    return urls
 
 async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
     """Trabalho pesado, rodado em segundo plano (depois do 200 à Meta).
@@ -141,12 +150,20 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
             {"configurable": {"thread_id": numero}},
         )
         resposta = extrair_texto(resultado["messages"][-1].content)
+        fotos = extrair_fotos(resultado)
 
-        print(f"[WhatsApp] Léo responde: {resposta}\n")
+        print(f"[WhatsApp] Léo responde: {resposta}")
+        if fotos:
+            print(f"[WhatsApp] Enviando {len(fotos)} foto(s).")
+        print()
 
         # Envia a resposta humanizada (em bolhas, com pausa) pro WhatsApp,
         # aplicando o atraso adaptativo antes da primeira bolha.
         await enviar_resposta_humanizada(numero, resposta, atraso)
+
+        # Depois do texto, envia as fotos (se houver) como imagens.
+        for url in fotos:
+            await enviar_foto_whatsapp(numero, url)
     finally:
         # Libera o lock mesmo se der erro no meio (o finally sempre roda).
         await liberar_lock(numero)

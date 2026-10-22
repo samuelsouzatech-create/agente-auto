@@ -74,19 +74,29 @@ async def enviar_resposta_humanizada_telegram(update: Update, texto: str,
         if i < len(bolhas) - 1:
             await asyncio.sleep(PAUSA_ENTRE_BOLHAS)
 
+def extrair_fotos(resultado) -> list:
+    """Varre as mensagens do resultado do grafo e junta todas as URLs de fotos
+    que vieram em artifacts de ToolMessages (da tool enviar_fotos)."""
+    urls = []
+    for m in resultado["messages"]:
+        artifact = getattr(m, "artifact", None)
+        if isinstance(artifact, dict) and artifact.get("tipo") == "fotos":
+            urls.extend(artifact.get("urls", []))
+    return urls
 
-async def processar_texto(chat_id: str, texto: str) -> str | None:
-    """Trabalho pesado: debounce -> lock -> Léo. Devolve a resposta em texto
-    (ou None se a rajada foi assumida por outra mensagem / lock ocupado)."""
+async def processar_texto(chat_id: str, texto: str):
+    """Trabalho pesado: debounce -> lock -> Léo. Devolve uma dupla
+    (resposta_texto, lista_de_fotos). Devolve (None, []) se a rajada foi
+    assumida por outra mensagem / lock ocupado."""
     # 1) Debounce: acumula e espera o silêncio.
     texto_juntado = await acumular_e_esperar(chat_id, texto)
     if texto_juntado is None:
-        return None
+        return None, []
 
     # 2) Lock: uma execução por vez por lead.
     if not await adquirir_lock(chat_id):
         print(f"[Telegram] Lead {chat_id} já em processamento. Ignorando.")
-        return None
+        return None, []
 
     try:
         print(f"\n[Telegram] Cliente {chat_id} disse: {texto_juntado}")
@@ -99,8 +109,12 @@ async def processar_texto(chat_id: str, texto: str) -> str | None:
             {"configurable": {"thread_id": chat_id}},
         )
         resposta = extrair_texto(resultado["messages"][-1].content)
-        print(f"[Telegram] Léo responde: {resposta}\n")
-        return resposta
+        fotos = extrair_fotos(resultado)
+        print(f"[Telegram] Léo responde: {resposta}")
+        if fotos:
+            print(f"[Telegram] Enviando {len(fotos)} foto(s).")
+        print()
+        return resposta, fotos
     finally:
         await liberar_lock(chat_id)
 
@@ -117,9 +131,14 @@ async def ao_receber_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # Calcula o atraso adaptativo com base em quanto tempo o cliente sumiu.
     atraso = await calcular_atraso(chat_id)
 
-    resposta = await processar_texto(chat_id, texto)
+    resposta, fotos = await processar_texto(chat_id, texto)
     if resposta:
         await enviar_resposta_humanizada_telegram(update, resposta, atraso)
+    for url in fotos:
+        try:
+            await update.message.reply_photo(url)
+        except Exception as e:
+            print(f"[Telegram] Erro ao enviar foto {url}: {e}")
 
 
 async def ao_receber_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -161,9 +180,15 @@ async def ao_receber_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     atraso = await calcular_atraso(chat_id)
 
     # Daqui pra frente é IGUAL ao texto: cai no mesmo cérebro do Léo.
-    resposta = await processar_texto(chat_id, texto)
+    resposta, fotos = await processar_texto(chat_id, texto)
     if resposta:
         await enviar_resposta_humanizada_telegram(update, resposta, atraso)
+    for url in fotos:
+        try:
+            await update.message.reply_photo(url)
+        except Exception as e:
+            print(f"[Telegram] Erro ao enviar foto {url}: {e}")
+
 
 
 def main() -> None:

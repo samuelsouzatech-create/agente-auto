@@ -40,7 +40,8 @@ def criar_tabelas():
             cor TEXT NOT NULL,
             cambio TEXT NOT NULL,
             preco REAL NOT NULL,
-            status TEXT NOT NULL DEFAULT 'disponivel'
+            status TEXT NOT NULL DEFAULT 'disponivel',
+            fotos TEXT DEFAULT ''
         )
     """)
 
