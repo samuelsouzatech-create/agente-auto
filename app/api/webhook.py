@@ -20,6 +20,8 @@ from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock, liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_audio
+from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
+from tools import acionar_handoff
 
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
 
@@ -151,6 +153,20 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
         )
         resposta = extrair_texto(resultado["messages"][-1].content)
         fotos = extrair_fotos(resultado)
+
+        # --- Guarda de política (PDF 4.5): preço só pode vir de tool. ---
+        # Se o Léo citou um valor em R$ que nenhuma tool deste turno devolveu,
+        # é preço inventado: barra a resposta, não manda fotos e aciona handoff.
+        if resposta_tem_preco_inventado(resposta, resultado["messages"]):
+            print(f"[WhatsApp] GUARDA: preço inventado detectado. Acionando handoff.")
+            print(f"[WhatsApp] Resposta barrada: {resposta}")
+            acionar_handoff.func(
+                motivo="Guarda de política: valor em R$ sem origem em tool.",
+                resumo=f"Resposta barrada do Léo: {resposta}",
+                lead_id=numero,
+            )
+            resposta = MENSAGEM_SEGURA
+            fotos = []
 
         print(f"[WhatsApp] Léo responde: {resposta}")
         if fotos:

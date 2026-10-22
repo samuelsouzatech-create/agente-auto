@@ -20,6 +20,8 @@ from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock, liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_bytes
+from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
+from tools import acionar_handoff
 
 # --- Deduplicação (igual à do WhatsApp) ---
 # O Telegram normalmente não reenvia, mas mantemos o padrão por segurança.
@@ -110,6 +112,19 @@ async def processar_texto(chat_id: str, texto: str):
         )
         resposta = extrair_texto(resultado["messages"][-1].content)
         fotos = extrair_fotos(resultado)
+
+        # --- Guarda de política (PDF 4.5): preço só pode vir de tool. ---
+        if resposta_tem_preco_inventado(resposta, resultado["messages"]):
+            print(f"[Telegram] GUARDA: preço inventado detectado. Acionando handoff.")
+            print(f"[Telegram] Resposta barrada: {resposta}")
+            acionar_handoff.func(
+                motivo="Guarda de política: valor em R$ sem origem em tool.",
+                resumo=f"Resposta barrada do Léo: {resposta}",
+                lead_id=chat_id,
+            )
+            resposta = MENSAGEM_SEGURA
+            fotos = []
+
         print(f"[Telegram] Léo responde: {resposta}")
         if fotos:
             print(f"[Telegram] Enviando {len(fotos)} foto(s).")
