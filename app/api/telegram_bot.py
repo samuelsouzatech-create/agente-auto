@@ -21,6 +21,7 @@ from app.redis_lock import adquirir_lock_esperando, liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_bytes
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
+from app.mensagens import salvar_mensagem
 from tools import acionar_handoff
 
 # --- Deduplicação (igual à do WhatsApp) ---
@@ -104,6 +105,10 @@ async def processar_texto(chat_id: str, texto: str):
 
     try:
         print(f"\n[Telegram] Cliente {chat_id} disse: {texto_juntado}")
+
+        # Grava a mensagem do cliente no histórico (para o painel ler depois).
+        salvar_mensagem(chat_id, "cliente", texto_juntado, canal="telegram")
+
         resultado = await asyncio.to_thread(
             agente_grafo.invoke,
             {
@@ -131,6 +136,10 @@ async def processar_texto(chat_id: str, texto: str):
         if fotos:
             print(f"[Telegram] Enviando {len(fotos)} foto(s).")
         print()
+
+        # Grava a resposta do Léo no histórico (texto final, após a guarda).
+        salvar_mensagem(chat_id, "leo", resposta, canal="telegram")
+
         return resposta, fotos
     finally:
         await liberar_lock(chat_id, token_lock)

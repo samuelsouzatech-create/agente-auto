@@ -88,6 +88,23 @@ def criar_tabelas():
             loja_id INTEGER NOT NULL DEFAULT 1,
             motivo TEXT, resumo TEXT,
             estado TEXT DEFAULT 'aguardando_humano',
+            vendedor TEXT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            avisado_em TIMESTAMP,
+            assumido_em TIMESTAMP,
+            encerrado_em TIMESTAMP
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mensagens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id TEXT NOT NULL,
+            loja_id INTEGER NOT NULL DEFAULT 1,
+            canal TEXT,
+            direcao TEXT NOT NULL,
+            tipo TEXT DEFAULT 'texto',
+            conteudo TEXT,
             criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)

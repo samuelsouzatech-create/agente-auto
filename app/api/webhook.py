@@ -24,6 +24,7 @@ from app.redis_lock import adquirir_lock_esperando, liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_audio
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
+from app.mensagens import salvar_mensagem
 from tools import acionar_handoff
 
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
@@ -164,6 +165,9 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
     try:
         print(f"\n[WhatsApp] Cliente {numero} disse: {texto_juntado}")
 
+        # Grava a mensagem do cliente no histórico (para o painel ler depois).
+        salvar_mensagem(numero, "cliente", texto_juntado, canal="whatsapp")
+
         # 3) Cérebro do Léo, usando o número como lead_id.
         # - thread_id dá memória por conversa (igual ao Telegram).
         # - to_thread roda o invoke (síncrono) fora do loop async, pra não
@@ -197,6 +201,9 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
         if fotos:
             print(f"[WhatsApp] Enviando {len(fotos)} foto(s).")
         print()
+
+        # Grava a resposta do Léo no histórico (texto final, após a guarda).
+        salvar_mensagem(numero, "leo", resposta, canal="whatsapp")
 
         # Envia a resposta humanizada (em bolhas, com pausa) pro WhatsApp,
         # aplicando o atraso adaptativo antes da primeira bolha.
