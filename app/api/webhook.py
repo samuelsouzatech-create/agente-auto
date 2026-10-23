@@ -8,16 +8,19 @@ Rotas:
                       em segundo plano (debounce + lock + Léo + envio)
 """
 import asyncio
+import hashlib
+import hmac
+import json
 
 from fastapi import FastAPI, Request, Response, Query, BackgroundTasks
 from langchain_core.messages import HumanMessage
 
-from app.config import WHATSAPP_VERIFY_TOKEN
+from app.config import WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET
 from app.core.agent import agente_grafo
-from app.utils import extrair_texto
+from app.utils import extrair_texto, mensagens_do_turno
 from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
 from app.redis_debounce import acumular_e_esperar
-from app.redis_lock import adquirir_lock, liberar_lock
+from app.redis_lock import adquirir_lock_esperando, liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_audio
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
@@ -61,6 +64,25 @@ def verificar_webhook(
         return Response(content=hub_challenge, media_type="text/plain")
     return Response(content="Token de verificação inválido", status_code=403)
 
+def assinatura_valida(corpo: bytes, cabecalho: str, segredo: str) -> bool:
+    """Confere se o POST veio mesmo da Meta, comparando a assinatura enviada
+    no header 'X-Hub-Signature-256' com um HMAC-SHA256 que calculamos sobre o
+    corpo CRU da requisição, usando o App Secret como chave.
+
+    Falha FECHADA: sem App Secret configurado, rejeita tudo. Com chave vazia
+    qualquer pessoa consegue calcular uma assinatura que "bate".
+    """
+    if not segredo:
+        return False
+
+    if not cabecalho or not cabecalho.startswith("sha256="):
+        return False
+
+    enviado = cabecalho.split("=", 1)[1]
+    esperado = hmac.new(segredo.encode("utf-8"), corpo, hashlib.sha256).hexdigest()
+
+    # compare_digest evita comparação vulnerável a timing.
+    return hmac.compare_digest(enviado, esperado)
 
 def extrair_mensagem(dados: dict):
     """Cava o JSON da Meta e devolve (id_mensagem, numero, texto, id_audio).
@@ -94,10 +116,11 @@ def extrair_mensagem(dados: dict):
         return None, None, None, None
 
 def extrair_fotos(resultado) -> list:
-    """Varre as mensagens do resultado do grafo e junta todas as URLs de fotos
-    que vieram em artifacts de ToolMessages (da tool enviar_fotos)."""
+    """Junta as URLs de fotos dos artifacts de ToolMessages, mas SÓ do turno
+    atual (não reenvia fotos pedidas em turnos anteriores, que o MemorySaver
+    ainda guarda na lista de mensagens)."""
     urls = []
-    for m in resultado["messages"]:
+    for m in mensagens_do_turno(resultado):
         artifact = getattr(m, "artifact", None)
         if isinstance(artifact, dict) and artifact.get("tipo") == "fotos":
             urls.extend(artifact.get("urls", []))
@@ -131,9 +154,11 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
     atraso = await calcular_atraso(numero)
 
 
-    # 2) Lock: se já há execução para este lead, desiste (evita duplicar).
-    if not await adquirir_lock(numero):
-        print(f"[WhatsApp] Lead {numero} já em processamento. Ignorando.")
+    # 2) Lock: espera a vez em vez de desistir, para não perder a 2ª mensagem
+    #    do mesmo cliente que chegou enquanto a 1ª ainda respondia.
+    token_lock = await adquirir_lock_esperando(numero)
+    if token_lock is None:
+        print(f"[WhatsApp] Lead {numero}: lock ocupado tempo demais. Desistindo.")
         return
 
     try:
@@ -182,15 +207,25 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
             await enviar_foto_whatsapp(numero, url)
     finally:
         # Libera o lock mesmo se der erro no meio (o finally sempre roda).
-        await liberar_lock(numero)
-
+        # Passa o token para só apagar o lock se ele ainda for o nosso.
+        await liberar_lock(numero, token_lock)
 
 @app.post("/webhook")
 async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
-    """Recebe o POST da Meta, deduplica e AGENDA o processamento em segundo
-    plano, devolvendo 200 imediatamente (a Meta exige 200 rápido)."""
+    """Recebe o POST da Meta, valida a assinatura, deduplica e AGENDA o
+    processamento em segundo plano, devolvendo 200 imediatamente (a Meta
+    exige 200 rápido)."""
+    # Lê o corpo CRU primeiro: a assinatura é calculada sobre estes bytes
+    # exatos (request.json() reinterpretaria e não serviria para o HMAC).
+    corpo = await request.body()
+
+    # Valida que o POST veio mesmo da Meta.
+    if not assinatura_valida(corpo, request.headers.get("X-Hub-Signature-256"), WHATSAPP_APP_SECRET):
+        print("[WhatsApp] Assinatura inválida no POST. Rejeitado (403).")
+        return Response(status_code=403)
+
     try:
-        dados = await request.json()
+        dados = json.loads(corpo)
     except Exception:
         return Response(status_code=200)
 

@@ -14,10 +14,10 @@ from langchain_core.messages import HumanMessage
 
 from app.config import TELEGRAM_TOKEN
 from app.core.agent import agente_grafo
-from app.utils import extrair_texto
+from app.utils import extrair_texto, mensagens_do_turno
 from app.humanizador import dividir_em_bolhas
 from app.redis_debounce import acumular_e_esperar
-from app.redis_lock import adquirir_lock, liberar_lock
+from app.redis_lock import adquirir_lock_esperando, liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_bytes
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
@@ -77,10 +77,11 @@ async def enviar_resposta_humanizada_telegram(update: Update, texto: str,
             await asyncio.sleep(PAUSA_ENTRE_BOLHAS)
 
 def extrair_fotos(resultado) -> list:
-    """Varre as mensagens do resultado do grafo e junta todas as URLs de fotos
-    que vieram em artifacts de ToolMessages (da tool enviar_fotos)."""
+    """Junta as URLs de fotos dos artifacts de ToolMessages, mas SÓ do turno
+    atual (não reenvia fotos pedidas em turnos anteriores, que o MemorySaver
+    ainda guarda na lista de mensagens)."""
     urls = []
-    for m in resultado["messages"]:
+    for m in mensagens_do_turno(resultado):
         artifact = getattr(m, "artifact", None)
         if isinstance(artifact, dict) and artifact.get("tipo") == "fotos":
             urls.extend(artifact.get("urls", []))
@@ -95,9 +96,10 @@ async def processar_texto(chat_id: str, texto: str):
     if texto_juntado is None:
         return None, []
 
-    # 2) Lock: uma execução por vez por lead.
-    if not await adquirir_lock(chat_id):
-        print(f"[Telegram] Lead {chat_id} já em processamento. Ignorando.")
+    # 2) Lock: espera a vez em vez de desistir (não perde a 2ª mensagem).
+    token_lock = await adquirir_lock_esperando(chat_id)
+    if token_lock is None:
+        print(f"[Telegram] Lead {chat_id}: lock ocupado tempo demais. Desistindo.")
         return None, []
 
     try:
@@ -131,7 +133,7 @@ async def processar_texto(chat_id: str, texto: str):
         print()
         return resposta, fotos
     finally:
-        await liberar_lock(chat_id)
+        await liberar_lock(chat_id, token_lock)
 
 
 async def ao_receber_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

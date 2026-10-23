@@ -27,6 +27,11 @@ WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 # ID do número de teste da Meta (aquele que você copiou no painel).
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
 
+# Chave Secreta do App (App Secret), do painel da Meta. Serve para validar que
+# cada POST do webhook veio MESMO da Meta (assinatura X-Hub-Signature-256).
+# Se ficar vazio (modo local, sem conta Meta ativa), a validação é pulada.
+WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET", "")
+
 # Versão da API da Meta (Graph API). v21.0 é estável em 2026.
 WHATSAPP_API_VERSION = "v21.0"
 

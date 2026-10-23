@@ -21,3 +21,4 @@ __pycache__/
 .pytest_cache/
 tests/__pycache__/
 
+diagnostico_meta.py
