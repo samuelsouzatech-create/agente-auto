@@ -77,6 +77,8 @@ async def liberar_lock(lead_id: str, token: str | None = None) -> None:
         return
     try:
         await redis_cliente.eval(_LIBERAR_SE_DONO, 1, chave, token)
-    except Exception:
-        # Se o eval falhar por qualquer motivo, não derruba o fluxo.
-        pass
+    except Exception as erro:
+        # Não derruba o fluxo, mas NUNCA engole o erro em silêncio: uma falha
+        # aqui deixaria o lock preso até o TTL (cliente 60s sem resposta).
+        print(f"[Lock] ERRO ao liberar o lock de {lead_id}: {erro!r}")
+
