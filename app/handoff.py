@@ -26,26 +26,47 @@ def estado_do_handoff(lead_id, loja_id=1):
         return "ativo"
     return aberto["estado"]
 
-
 def assumir_handoff(lead_id, vendedor, loja_id=1):
     """Um vendedor assume o lead: estado vira 'humano_assumiu',
-    grava o nome do vendedor e o carimbo de tempo."""
+    grava o nome do vendedor e o carimbo de tempo.
+
+    Trava para dois vendedores: o UPDATE só vale se o lead ainda estiver
+    'aguardando_humano'. Se outro vendedor já assumiu entre o clique e aqui,
+    nenhuma linha muda e devolvemos quem já está no comando — sem sobrescrever.
+    """
     conexao = conectar()
     cursor = conexao.cursor()
     aberto = _handoff_aberto(cursor, lead_id, loja_id)
     if aberto is None:
         conexao.close()
         return "Nenhum handoff aberto para assumir."
+
+    # Se o MESMO vendedor clicar de novo num lead que ele já assumiu,
+    # é inofensivo: não troca nada e não dá erro.
+    if aberto["estado"] == "humano_assumiu" and aberto["vendedor"] == vendedor:
+        conexao.close()
+        return f"Lead já estava com você, {vendedor}."
+
     cursor.execute(
         """
         UPDATE handoffs
         SET estado = 'humano_assumiu',
             vendedor = ?,
             assumido_em = CURRENT_TIMESTAMP
-        WHERE id = ?
+        WHERE id = ? AND estado = 'aguardando_humano'
         """,
         (vendedor, aberto["id"]),
     )
+
+    # Se nenhuma linha mudou, é porque outro vendedor já tinha assumido.
+    if cursor.rowcount == 0:
+        conexao.commit()
+        # Relê pra descobrir quem está no comando agora.
+        atual = _handoff_aberto(cursor, lead_id, loja_id)
+        conexao.close()
+        dono = atual["vendedor"] if atual and atual["vendedor"] else "outro vendedor"
+        return f"Lead já assumido por {dono}."
+
     conexao.commit()
     conexao.close()
     return f"Lead assumido por {vendedor}."

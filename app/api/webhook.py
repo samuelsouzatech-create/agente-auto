@@ -164,7 +164,7 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
         return
 
     try:
-         print(f"\n[WhatsApp] Cliente {numero} disse: {texto_juntado}")
+        print(f"\n[WhatsApp] Cliente {numero} disse: {texto_juntado}")
 
         # Grava a mensagem do cliente no histórico (para o painel ler depois).
         salvar_mensagem(numero, "cliente", texto_juntado, canal="whatsapp")
