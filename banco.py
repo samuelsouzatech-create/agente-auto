@@ -109,6 +109,18 @@ def criar_tabelas():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resultados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id TEXT NOT NULL,
+            loja_id INTEGER NOT NULL DEFAULT 1,
+            resultado TEXT NOT NULL,
+            motivo TEXT,
+            vendedor TEXT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conexao.commit()
     conexao.close()
     print("Tabelas criadas (ou já existiam).")

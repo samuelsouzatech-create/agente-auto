@@ -41,3 +41,20 @@ def historico_do_lead(lead_id: str, loja_id: int = 1) -> list:
     ).fetchall()
     conexao.close()
     return [dict(l) for l in linhas]
+
+def listar_leads(loja_id: int = 1) -> list:
+    """Lista os leads distintos que já trocaram mensagem, com o momento
+    da última mensagem (mais recente primeiro). Base pra tela de resultado."""
+    conexao = conectar()
+    linhas = conexao.execute(
+        """SELECT lead_id,
+                  MAX(criado_em) AS ultima_mensagem,
+                  COUNT(*)       AS total_mensagens
+           FROM mensagens
+           WHERE loja_id = ?
+           GROUP BY lead_id
+           ORDER BY ultima_mensagem DESC""",
+        (loja_id,),
+    ).fetchall()
+    conexao.close()
+    return [dict(l) for l in linhas]
