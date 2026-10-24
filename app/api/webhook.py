@@ -25,6 +25,7 @@ from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_audio
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
 from app.mensagens import salvar_mensagem
+from app.handoff import estado_do_handoff
 from tools import acionar_handoff
 
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
@@ -163,10 +164,17 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
         return
 
     try:
-        print(f"\n[WhatsApp] Cliente {numero} disse: {texto_juntado}")
+         print(f"\n[WhatsApp] Cliente {numero} disse: {texto_juntado}")
 
         # Grava a mensagem do cliente no histórico (para o painel ler depois).
         salvar_mensagem(numero, "cliente", texto_juntado, canal="whatsapp")
+
+        # --- Silêncio do Léo (Fase 3): se um vendedor humano assumiu este
+        # lead, o Léo NÃO responde. A mensagem do cliente já foi salva acima
+        # (o vendedor a vê no painel); aqui apenas encerramos sem chamar o Léo.
+        if estado_do_handoff(numero) == "humano_assumiu":
+            print(f"[WhatsApp] Lead {numero} está com um vendedor humano. Léo em silêncio.")
+            return
 
         # 3) Cérebro do Léo, usando o número como lead_id.
         # - thread_id dá memória por conversa (igual ao Telegram).

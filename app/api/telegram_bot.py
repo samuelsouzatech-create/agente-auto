@@ -22,6 +22,7 @@ from app.redis_atraso import calcular_atraso
 from app.api.receber_audio import transcrever_bytes
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
 from app.mensagens import salvar_mensagem
+from app.handoff import estado_do_handoff
 from tools import acionar_handoff
 
 # --- Deduplicação (igual à do WhatsApp) ---
@@ -108,6 +109,12 @@ async def processar_texto(chat_id: str, texto: str):
 
         # Grava a mensagem do cliente no histórico (para o painel ler depois).
         salvar_mensagem(chat_id, "cliente", texto_juntado, canal="telegram")
+
+        # --- Silêncio do Léo (Fase 3): se um vendedor humano assumiu este
+        # lead, o Léo NÃO responde. A mensagem do cliente já foi salva acima.
+        if estado_do_handoff(chat_id) == "humano_assumiu":
+            print(f"[Telegram] Lead {chat_id} está com um vendedor humano. Léo em silêncio.")
+            return None, []
 
         resultado = await asyncio.to_thread(
             agente_grafo.invoke,
