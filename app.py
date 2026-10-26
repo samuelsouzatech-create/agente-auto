@@ -1,47 +1,69 @@
 import uuid
 import streamlit as st
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage
+
+import banco
 from app.core.agent import agente_grafo
 from app.utils import extrair_texto
 
 
 def para_streamlit(texto):
-    """Escapa o '$' só na hora de exibir no Streamlit, que trata '$' como
-    início de fórmula LaTeX (embaralhava os preços e cortava o texto).
-    Essa gambiarra é EXCLUSIVA do Streamlit — o WhatsApp não usa."""
+    """Escapa o '$' só no Streamlit (ele trata '$' como fórmula LaTeX)."""
     return texto.replace("$", "\\$")
 
 
-st.set_page_config(page_title="Léo - Assistente da Loja", page_icon="🚗")
-st.title("🚗 Léo — Assistente Virtual")
-st.caption("Protótipo Fase 1 — conversa com o agente")
+def listar_lojas():
+    conexao = banco.conectar()
+    try:
+        return [(l["id"], l["nome"]) for l in conexao.execute("SELECT id, nome FROM lojas ORDER BY id")]
+    finally:
+        conexao.close()
 
-# Gera um lead_id único para esta conversa (uma vez por sessão do navegador)
-if "lead_id" not in st.session_state:
+
+def nova_conversa(loja_id):
+    st.session_state.loja_id = loja_id
     st.session_state.lead_id = str(uuid.uuid4())
-
-# Guarda o histórico da conversa na sessão
-if "historico" not in st.session_state:
     st.session_state.historico = []
 
-# Mostra as mensagens já trocadas
-for msg in st.session_state.historico:
-    if isinstance(msg, HumanMessage):
-        st.chat_message("user").write(para_streamlit(extrair_texto(msg.content)))
-    else:
-        st.chat_message("assistant").write(para_streamlit(extrair_texto(msg.content)))
 
-# Caixa de digitação do usuário
+st.set_page_config(page_title="Léo - Teste por loja", page_icon="🚗")
+
+lojas = listar_lojas()
+if not lojas:
+    st.error('Nenhuma loja cadastrada. Rode: python -c "import banco; banco.criar_tabelas()"')
+    st.stop()
+
+opcoes = {f"{nome} (id {id_})": id_ for id_, nome in lojas}
+escolha = st.sidebar.selectbox("Conversar com a loja", list(opcoes))
+loja_id = opcoes[escolha]
+
+if st.session_state.get("loja_id") != loja_id or "lead_id" not in st.session_state:
+    nova_conversa(loja_id)
+if st.sidebar.button("Nova conversa"):
+    nova_conversa(loja_id)
+    st.rerun()
+
+st.title("🚗 Assistente Virtual")
+st.caption(f"Você é um cliente da loja: {escolha}")
+
+for papel, texto in st.session_state.historico:
+    st.chat_message(papel).write(para_streamlit(texto))
+
 if entrada := st.chat_input("Digite sua mensagem..."):
-    st.session_state.historico.append(HumanMessage(content=entrada))
-    st.chat_message("user").write(para_streamlit(extrair_texto(entrada)))
+    st.session_state.historico.append(("user", entrada))
+    st.chat_message("user").write(para_streamlit(entrada))
 
-    with st.spinner("Léo está digitando..."):
-        resultado = agente_grafo.invoke({
-            "messages": st.session_state.historico,
-            "lead_id": st.session_state.lead_id,
-        })
-        resposta = resultado["messages"][-1]
-
-    st.session_state.historico.append(resposta)
+    with st.spinner("Digitando..."):
+        # A memória fica no checkpointer (thread_id): mandamos só a mensagem nova.
+        resultado = agente_grafo.invoke(
+            {
+                "messages": [HumanMessage(content=entrada)],
+                "lead_id": st.session_state.lead_id,
+                "loja_id": loja_id,
+                "canal": "streamlit",
+            },
+            {"configurable": {"thread_id": f"{loja_id}:streamlit:{st.session_state.lead_id}"}},
+        )
+    resposta = extrair_texto(resultado["messages"][-1].content)
+    st.session_state.historico.append(("assistant", resposta))
     st.rerun()

@@ -6,10 +6,11 @@ from banco import conectar
 @tool
 def registrar_lead(nome: str, interesse: str, forma_pagamento: str = "",
                    tem_troca: str = "", prazo: str = "",
-                   lead_id: Annotated[str, InjectedToolArg] = "") -> str:
+                   lead_id: Annotated[str, InjectedToolArg] = "",
+                   loja_id: Annotated[int, InjectedToolArg] = 1) -> str:
     """Registra/atualiza os dados de qualificação do lead ao longo da conversa.
     Use quando tiver coletado informações relevantes do cliente. Pode ser
-    chamada várias vezes na mesma conversa — os dados vão sendo completados.
+    chamada várias vezes na mesma conversa - os dados vão sendo completados.
 
     Parâmetros:
     - nome: nome do cliente
@@ -22,28 +23,27 @@ def registrar_lead(nome: str, interesse: str, forma_pagamento: str = "",
         return "Não registrei o lead: falta o identificador da conversa."
 
     conexao = conectar()
-    cursor = conexao.cursor()
-
-    cursor.execute("SELECT id FROM leads WHERE lead_id = ?", (lead_id,))
-    existente = cursor.fetchone()
-
-    if existente:
-        cursor.execute("""
-            UPDATE leads SET
-                nome = COALESCE(NULLIF(?, ''), nome),
-                interesse = COALESCE(NULLIF(?, ''), interesse),
-                forma_pagamento = COALESCE(NULLIF(?, ''), forma_pagamento),
-                tem_troca = COALESCE(NULLIF(?, ''), tem_troca),
-                prazo = COALESCE(NULLIF(?, ''), prazo),
-                atualizado_em = CURRENT_TIMESTAMP
-            WHERE lead_id = ?
-        """, (nome, interesse, forma_pagamento, tem_troca, prazo, lead_id))
-    else:
-        cursor.execute("""
-            INSERT INTO leads (lead_id, nome, interesse, forma_pagamento, tem_troca, prazo)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (lead_id, nome, interesse, forma_pagamento, tem_troca, prazo))
-
-    conexao.commit()
-    conexao.close()
-    return f"Lead registrado/atualizado: {nome} — {interesse}."
+    try:
+        existente = conexao.execute(
+            "SELECT id FROM leads WHERE loja_id = ? AND lead_id = ?", (loja_id, lead_id)
+        ).fetchone()
+        if existente:
+            conexao.execute("""
+                UPDATE leads SET
+                    nome = COALESCE(NULLIF(?, ''), nome),
+                    interesse = COALESCE(NULLIF(?, ''), interesse),
+                    forma_pagamento = COALESCE(NULLIF(?, ''), forma_pagamento),
+                    tem_troca = COALESCE(NULLIF(?, ''), tem_troca),
+                    prazo = COALESCE(NULLIF(?, ''), prazo),
+                    atualizado_em = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (nome, interesse, forma_pagamento, tem_troca, prazo, existente["id"]))
+        else:
+            conexao.execute("""
+                INSERT INTO leads (loja_id, lead_id, nome, interesse, forma_pagamento, tem_troca, prazo)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (loja_id, lead_id, nome, interesse, forma_pagamento, tem_troca, prazo))
+        conexao.commit()
+    finally:
+        conexao.close()
+    return f"Lead registrado/atualizado: {nome} - {interesse}."

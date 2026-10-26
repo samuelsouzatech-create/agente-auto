@@ -1,27 +1,26 @@
-from langchain_core.tools import tool
+from typing import Annotated
+from langchain_core.tools import tool, InjectedToolArg
 from banco import conectar
 from tools.utils import formatar_brl
 
 
 @tool
 def consultar_estoque(marca: str = "", modelo: str = "", cor: str = "",
-                      cambio: str = "", preco_max: float = 0) -> str:
+                      cambio: str = "", preco_max: float = 0,
+                      loja_id: Annotated[int, InjectedToolArg] = 1) -> str:
     """Consulta os carros DISPONÍVEIS no estoque da loja.
     Use esta ferramenta sempre que o cliente perguntar sobre carros,
     modelos, preços ou disponibilidade. NUNCA invente carros ou preços.
 
-    Parâmetros (todos opcionais — preencha só os que o cliente mencionou):
+    Parâmetros (todos opcionais - preencha só os que o cliente mencionou):
     - marca: ex. "Honda", "Fiat"
     - modelo: ex. "Civic", "Onix"
     - cor: ex. "Branco", "Preto"
     - cambio: "Automático" ou "Manual"
     - preco_max: preço máximo que o cliente quer pagar (ex. 80000)
     """
-    conexao = conectar()
-    cursor = conexao.cursor()
-
-    sql = "SELECT * FROM estoque WHERE status = 'disponivel'"
-    parametros = []
+    sql = "SELECT * FROM estoque WHERE loja_id = ? AND status = 'disponivel'"
+    parametros = [loja_id]
 
     if marca:
         sql += " AND sem_acento(marca) LIKE sem_acento(?)"
@@ -39,9 +38,11 @@ def consultar_estoque(marca: str = "", modelo: str = "", cor: str = "",
         sql += " AND preco <= ?"
         parametros.append(preco_max)
 
-    cursor.execute(sql, parametros)
-    carros = cursor.fetchall()
-    conexao.close()
+    conexao = conectar()
+    try:
+        carros = conexao.execute(sql, parametros).fetchall()
+    finally:
+        conexao.close()
 
     if not carros:
         return "Nenhum carro disponível encontrado com esses critérios."

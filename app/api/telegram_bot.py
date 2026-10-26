@@ -15,6 +15,7 @@ from langchain_core.messages import HumanMessage
 from app.config import TELEGRAM_TOKEN
 from app.core.agent import agente_grafo
 from app.utils import extrair_texto, mensagens_do_turno
+from app.formatacao import limpar_markdown
 from app.humanizador import dividir_em_bolhas
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock_esperando, liberar_lock
@@ -124,7 +125,7 @@ async def processar_texto(chat_id: str, texto: str):
             },
             {"configurable": {"thread_id": chat_id}},
         )
-        resposta = extrair_texto(resultado["messages"][-1].content)
+        resposta = limpar_markdown(extrair_texto(resultado["messages"][-1].content))
         fotos = extrair_fotos(resultado)
 
         # --- Guarda de política (PDF 4.5): preço só pode vir de tool. ---

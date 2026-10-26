@@ -18,6 +18,7 @@ from langchain_core.messages import HumanMessage
 from app.config import WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET
 from app.core.agent import agente_grafo
 from app.utils import extrair_texto, mensagens_do_turno
+from app.formatacao import limpar_markdown
 from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock_esperando, liberar_lock
@@ -188,7 +189,7 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
             },
             {"configurable": {"thread_id": numero}},
         )
-        resposta = extrair_texto(resultado["messages"][-1].content)
+        resposta = limpar_markdown(extrair_texto(resultado["messages"][-1].content))
         fotos = extrair_fotos(resultado)
 
         # --- Guarda de política (PDF 4.5): preço só pode vir de tool. ---
