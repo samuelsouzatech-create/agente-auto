@@ -376,7 +376,7 @@ def webhook_http(monkeypatch):
     wh = importar_webhook()
     agendadas = []
  
-    async def processar_falso(numero, texto, id_audio=None):
+    async def processar_falso(numero, texto, id_audio=None, loja_id=1):
         agendadas.append((numero, texto, id_audio))
  
     monkeypatch.setattr(wh, "processar_mensagem", processar_falso)

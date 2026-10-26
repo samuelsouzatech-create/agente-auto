@@ -1,11 +1,11 @@
 """
-Servidor web (FastAPI) que hospeda o webhook do WhatsApp na Fase 2.
+Servidor web (FastAPI) do webhook do WhatsApp.
 
 Rotas:
-- GET  "/"         -> saúde ("tô vivo")
-- GET  "/webhook"  -> verificação do webhook (aperto de mão da Meta)
-- POST "/webhook"  -> recebe a mensagem, responde 200 rápido e processa
-                      em segundo plano (debounce + lock + Léo + envio)
+- GET  "/"         -> saúde
+- GET  "/webhook"  -> verificação (aperto de mão da Meta)
+- POST "/webhook"  -> valida assinatura, descobre a LOJA pelo phone_number_id,
+                      deduplica, responde 200 e processa em segundo plano.
 """
 import asyncio
 import hashlib
@@ -27,32 +27,17 @@ from app.api.receber_audio import transcrever_audio
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
 from app.mensagens import salvar_mensagem
 from app.handoff import estado_do_handoff
+from app.dedup import ja_processada
+from app.canais import resolver_loja
+from app.chaves import thread_id, LOJA_PADRAO
 from tools import acionar_handoff
 
+CANAL = "whatsapp"
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
-
-# --- Deduplicação (Bloco 4) ---
-# A Meta reenvia a mesma mensagem às vezes. Guardamos os ids já processados
-# para não responder (nem gastar Gemini) duas vezes pela mesma mensagem.
-_ids_processados: set[str] = set()
-_LIMITE_IDS = 1000  # evita a lista crescer para sempre na memória
-
-
-def ja_processada(id_mensagem: str) -> bool:
-    """Devolve True se esta mensagem já foi vista antes (duplicata).
-    Se for nova, registra o id e devolve False."""
-    if id_mensagem in _ids_processados:
-        return True
-    _ids_processados.add(id_mensagem)
-    if len(_ids_processados) > _LIMITE_IDS:
-        for antigo in list(_ids_processados)[: _LIMITE_IDS // 2]:
-            _ids_processados.discard(antigo)
-    return False
 
 
 @app.get("/")
 def raiz():
-    """Rota de saúde: se isto responder, o servidor está no ar."""
     return {"status": "ok", "mensagem": "Servidor do Léo está no ar 🚗"}
 
 
@@ -62,66 +47,52 @@ def verificar_webhook(
     hub_verify_token: str = Query(default="", alias="hub.verify_token"),
     hub_challenge: str = Query(default="", alias="hub.challenge"),
 ):
-    """Aperto de mão da Meta (ver Movimento 3)."""
     if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
         return Response(content=hub_challenge, media_type="text/plain")
     return Response(content="Token de verificação inválido", status_code=403)
 
-def assinatura_valida(corpo: bytes, cabecalho: str, segredo: str) -> bool:
-    """Confere se o POST veio mesmo da Meta, comparando a assinatura enviada
-    no header 'X-Hub-Signature-256' com um HMAC-SHA256 que calculamos sobre o
-    corpo CRU da requisição, usando o App Secret como chave.
 
-    Falha FECHADA: sem App Secret configurado, rejeita tudo. Com chave vazia
-    qualquer pessoa consegue calcular uma assinatura que "bate".
-    """
+def assinatura_valida(corpo: bytes, cabecalho: str, segredo: str) -> bool:
+    """HMAC-SHA256 do corpo cru com o App Secret. Falha FECHADA sem segredo."""
     if not segredo:
         return False
-
     if not cabecalho or not cabecalho.startswith("sha256="):
         return False
-
     enviado = cabecalho.split("=", 1)[1]
     esperado = hmac.new(segredo.encode("utf-8"), corpo, hashlib.sha256).hexdigest()
-
-    # compare_digest evita comparação vulnerável a timing.
     return hmac.compare_digest(enviado, esperado)
 
-def extrair_mensagem(dados: dict):
-    """Cava o JSON da Meta e devolve (id_mensagem, numero, texto, id_audio).
 
-    - Mensagem de TEXTO: texto preenchido, id_audio = None.
-    - Mensagem de ÁUDIO: texto = None, id_audio preenchido (o id do arquivo
-      de mídia na Meta; o áudio em si é baixado depois, com o token).
-    - Qualquer outra coisa (status, etc.): tudo None.
-    """
+def extrair_mensagem(dados: dict):
+    """Devolve (id_mensagem, numero, texto, id_audio). Fora texto/áudio: Nones."""
     try:
         valor = dados["entry"][0]["changes"][0]["value"]
         mensagens = valor.get("messages")
         if not mensagens:
-            return None, None, None, None  # não é mensagem (ex.: status)
+            return None, None, None, None
         msg = mensagens[0]
-        id_mensagem = msg["id"]           # id único (wamid...) para deduplicar
-        numero = msg["from"]              # número do cliente (vira o lead_id)
-        tipo = msg.get("type")            # "text", "audio", "image"...
-
+        id_mensagem = msg["id"]
+        numero = msg["from"]
+        tipo = msg.get("type")
         if tipo == "text":
-            texto = msg["text"]["body"]
-            return id_mensagem, numero, texto, None
-
+            return id_mensagem, numero, msg["text"]["body"], None
         if tipo == "audio":
-            id_audio = msg["audio"]["id"]  # id do arquivo de áudio na Meta
-            return id_mensagem, numero, None, id_audio
-
-        # Outros tipos (imagem, figurinha, etc.): ainda não tratados.
+            return id_mensagem, numero, None, msg["audio"]["id"]
         return id_mensagem, numero, None, None
     except (KeyError, IndexError, TypeError):
         return None, None, None, None
 
+
+def extrair_id_canal(dados: dict):
+    """phone_number_id do número da LOJA que recebeu a mensagem (identifica a loja)."""
+    try:
+        return dados["entry"][0]["changes"][0]["value"].get("metadata", {}).get("phone_number_id")
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return None
+
+
 def extrair_fotos(resultado) -> list:
-    """Junta as URLs de fotos dos artifacts de ToolMessages, mas SÓ do turno
-    atual (não reenvia fotos pedidas em turnos anteriores, que o MemorySaver
-    ainda guarda na lista de mensagens)."""
+    """URLs de fotos dos artifacts, só do turno atual."""
     urls = []
     for m in mensagens_do_turno(resultado):
         artifact = getattr(m, "artifact", None)
@@ -129,113 +100,81 @@ def extrair_fotos(resultado) -> list:
             urls.extend(artifact.get("urls", []))
     return urls
 
-async def processar_mensagem(numero: str, texto: str, id_audio: str = None):
-    """Trabalho pesado, rodado em segundo plano (depois do 200 à Meta).
 
-    0) Se veio áudio, transcreve primeiro (vira texto).
-    1) Debounce: espera o cliente terminar a rajada de mensagens.
-    2) Lock: garante uma execução por vez por lead.
-    3) Chama o Léo e envia a resposta.
-    """
-    # 0) Áudio: transcreve antes de qualquer coisa (seção 4.3 do PDF).
+async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
+                             loja_id: int = LOJA_PADRAO):
+    """Segundo plano: (áudio) -> debounce -> lock -> Léo -> guarda -> envio.
+    Tudo separado por loja: chaves do Redis, memória, histórico e handoff."""
+    rotulo = f"[WhatsApp][loja {loja_id}]"
+
     if id_audio:
-        print(f"[WhatsApp] Cliente {numero} mandou um áudio. Transcrevendo...")
+        print(f"{rotulo} Cliente {numero} mandou um áudio. Transcrevendo...")
         texto = await transcrever_audio(id_audio)
         if not texto:
-            # Sem token (modo local) ou falha na transcrição: não trava o fluxo.
-            print(f"[WhatsApp] Não foi possível transcrever o áudio de {numero}. "
-                  f"Nada a processar por enquanto.")
+            print(f"{rotulo} Não foi possível transcrever o áudio de {numero}.")
             return
-        print(f"[WhatsApp] Áudio transcrito: {texto}")
+        print(f"{rotulo} Áudio transcrito: {texto}")
 
-    # 1) Debounce: acumula e espera o silêncio. Só a última da rajada segue.
-    texto_juntado = await acumular_e_esperar(numero, texto)
+    texto_juntado = await acumular_e_esperar(numero, texto, loja_id=loja_id)
     if texto_juntado is None:
-        return  # outra mensagem mais nova chegou; ela cuidará da rajada
-    # Calcula o atraso adaptativo (rápido se o cliente está ativo, mais lento
-    # se sumiu e voltou). Feito aqui, depois do debounce, roda uma vez por rajada.
-    atraso = await calcular_atraso(numero)
+        return
+    atraso = await calcular_atraso(numero, loja_id=loja_id)
 
-
-    # 2) Lock: espera a vez em vez de desistir, para não perder a 2ª mensagem
-    #    do mesmo cliente que chegou enquanto a 1ª ainda respondia.
-    token_lock = await adquirir_lock_esperando(numero)
+    token_lock = await adquirir_lock_esperando(numero, loja_id=loja_id)
     if token_lock is None:
-        print(f"[WhatsApp] Lead {numero}: lock ocupado tempo demais. Desistindo.")
+        print(f"{rotulo} Lead {numero}: lock ocupado tempo demais. Desistindo.")
         return
 
     try:
-        print(f"\n[WhatsApp] Cliente {numero} disse: {texto_juntado}")
+        print(f"\n{rotulo} Cliente {numero} disse: {texto_juntado}")
+        salvar_mensagem(numero, "cliente", texto_juntado, canal=CANAL, loja_id=loja_id)
 
-        # Grava a mensagem do cliente no histórico (para o painel ler depois).
-        salvar_mensagem(numero, "cliente", texto_juntado, canal="whatsapp")
-
-        # --- Silêncio do Léo (Fase 3): se um vendedor humano assumiu este
-        # lead, o Léo NÃO responde. A mensagem do cliente já foi salva acima
-        # (o vendedor a vê no painel); aqui apenas encerramos sem chamar o Léo.
-        if estado_do_handoff(numero) == "humano_assumiu":
-            print(f"[WhatsApp] Lead {numero} está com um vendedor humano. Léo em silêncio.")
+        if estado_do_handoff(numero, loja_id) == "humano_assumiu":
+            print(f"{rotulo} Lead {numero} está com um vendedor humano. Léo em silêncio.")
             return
 
-        # 3) Cérebro do Léo, usando o número como lead_id.
-        # - thread_id dá memória por conversa (igual ao Telegram).
-        # - to_thread roda o invoke (síncrono) fora do loop async, pra não
-        #   travar o servidor enquanto o Gemini responde.
         resultado = await asyncio.to_thread(
             agente_grafo.invoke,
             {
                 "messages": [HumanMessage(content=texto_juntado)],
                 "lead_id": numero,
+                "loja_id": loja_id,
+                "canal": CANAL,
             },
-            {"configurable": {"thread_id": numero}},
+            {"configurable": {"thread_id": thread_id(loja_id, CANAL, numero)}},
         )
         resposta = limpar_markdown(extrair_texto(resultado["messages"][-1].content))
         fotos = extrair_fotos(resultado)
 
-        # --- Guarda de política (PDF 4.5): preço só pode vir de tool. ---
-        # Se o Léo citou um valor em R$ que nenhuma tool deste turno devolveu,
-        # é preço inventado: barra a resposta, não manda fotos e aciona handoff.
         if resposta_tem_preco_inventado(resposta, resultado["messages"]):
-            print(f"[WhatsApp] GUARDA: preço inventado detectado. Acionando handoff.")
-            print(f"[WhatsApp] Resposta barrada: {resposta}")
+            print(f"{rotulo} GUARDA: preço inventado detectado. Acionando handoff.")
+            print(f"{rotulo} Resposta barrada: {resposta}")
             acionar_handoff.func(
                 motivo="Guarda de política: valor em R$ sem origem em tool.",
                 resumo=f"Resposta barrada do Léo: {resposta}",
                 lead_id=numero,
+                loja_id=loja_id,
             )
             resposta = MENSAGEM_SEGURA
             fotos = []
 
-        print(f"[WhatsApp] Léo responde: {resposta}")
+        print(f"{rotulo} Léo responde: {resposta}")
         if fotos:
-            print(f"[WhatsApp] Enviando {len(fotos)} foto(s).")
+            print(f"{rotulo} Enviando {len(fotos)} foto(s).")
         print()
 
-        # Grava a resposta do Léo no histórico (texto final, após a guarda).
-        salvar_mensagem(numero, "leo", resposta, canal="whatsapp")
-
-        # Envia a resposta humanizada (em bolhas, com pausa) pro WhatsApp,
-        # aplicando o atraso adaptativo antes da primeira bolha.
+        salvar_mensagem(numero, "leo", resposta, canal=CANAL, loja_id=loja_id)
         await enviar_resposta_humanizada(numero, resposta, atraso)
-
-        # Depois do texto, envia as fotos (se houver) como imagens.
         for url in fotos:
             await enviar_foto_whatsapp(numero, url)
     finally:
-        # Libera o lock mesmo se der erro no meio (o finally sempre roda).
-        # Passa o token para só apagar o lock se ele ainda for o nosso.
-        await liberar_lock(numero, token_lock)
+        await liberar_lock(numero, token_lock, loja_id=loja_id)
+
 
 @app.post("/webhook")
 async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
-    """Recebe o POST da Meta, valida a assinatura, deduplica e AGENDA o
-    processamento em segundo plano, devolvendo 200 imediatamente (a Meta
-    exige 200 rápido)."""
-    # Lê o corpo CRU primeiro: a assinatura é calculada sobre estes bytes
-    # exatos (request.json() reinterpretaria e não serviria para o HMAC).
     corpo = await request.body()
 
-    # Valida que o POST veio mesmo da Meta.
     if not assinatura_valida(corpo, request.headers.get("X-Hub-Signature-256"), WHATSAPP_APP_SECRET):
         print("[WhatsApp] Assinatura inválida no POST. Rejeitado (403).")
         return Response(status_code=403)
@@ -246,16 +185,19 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
         return Response(status_code=200)
 
     id_mensagem, numero, texto, id_audio = extrair_mensagem(dados)
-
-    # Se não for texto NEM áudio (ex.: imagem, status), responde 200 e ignora.
     if not texto and not id_audio:
         return Response(status_code=200)
 
-    # Deduplicação: se a Meta reenviou a mesma mensagem, ignora.
-    if ja_processada(id_mensagem):
+    # Qual loja recebeu? Pelo phone_number_id do número dela.
+    id_canal = extrair_id_canal(dados)
+    loja_id = resolver_loja(CANAL, id_canal)
+    if loja_id is None:
+        print(f"[WhatsApp] phone_number_id {id_canal} não cadastrado em canais. Ignorando.")
+        return Response(status_code=200)
+
+    if await ja_processada(CANAL, id_mensagem):
         print(f"[WhatsApp] Mensagem {id_mensagem} já processada. Ignorando duplicata.")
         return Response(status_code=200)
 
-    # Agenda o trabalho pesado em segundo plano e responde 200 na hora.
-    tarefas.add_task(processar_mensagem, numero, texto, id_audio)
+    tarefas.add_task(processar_mensagem, numero, texto, id_audio, loja_id)
     return Response(status_code=200)

@@ -1,29 +1,17 @@
 """
-Lock por lead (Bloco 5).
+Lock por lead E por loja (Fase 2, Bloco 5 + Etapa 1, Bloco 3).
 
-Garante que só UMA execução do agente rode por vez para o mesmo lead.
-Leads diferentes continuam em paralelo (o lock é por lead, não global).
-
-Usa o padrão SET NX EX do Redis:
-- NX: só cria a chave se ela ainda não existir (quem criar "ganha" o lock);
-- EX: a chave expira sozinha depois de N segundos (trava de segurança, para
-  o lock nunca ficar preso se algo travar no meio).
-
-Cada execução grava um TOKEN único no lock. Na hora de liberar, só apaga se
-o token for o seu — assim uma execução nunca apaga o lock de outra (que pode
-ter pego a vez depois que o TTL da primeira expirou).
+Uma execução por vez para o mesmo cliente NA MESMA LOJA. Chave: lock:{loja}:{lead}.
+SET NX EX + token único; liberação atômica via Lua (só o dono apaga).
 """
 import uuid
 import asyncio
 
 from app.redis_cliente import redis_cliente
+from app.chaves import chave_redis, LOJA_PADRAO
 
-# Tempo máximo que um lock pode durar (segundos). Se a execução travar,
-# o lock some sozinho depois disso e não deixa o lead preso para sempre.
 TTL_LOCK = 60
 
-# Script Lua: só apaga a chave se o valor dela for o token esperado.
-# Roda no Redis de forma atômica (ninguém mexe no meio).
 _LIBERAR_SE_DONO = """
 if redis.call("get", KEYS[1]) == ARGV[1] then
     return redis.call("del", KEYS[1])
@@ -33,31 +21,22 @@ end
 """
 
 
-async def adquirir_lock(lead_id: str) -> str | None:
-    """Tenta pegar o lock do lead UMA vez. Retorna o token (str) se conseguiu,
-    ou None se já existe um lock ativo. (Mantido para compatibilidade; o
-    caminho normal agora é adquirir_lock_esperando.)"""
-    chave = f"lock:{lead_id}"
+async def adquirir_lock(lead_id: str, *, loja_id: int = LOJA_PADRAO) -> str | None:
+    """Tenta UMA vez. Devolve o token se conseguiu, senão None."""
     token = uuid.uuid4().hex
-    criou = await redis_cliente.set(chave, token, nx=True, ex=TTL_LOCK)
+    criou = await redis_cliente.set(chave_redis("lock", loja_id, lead_id), token, nx=True, ex=TTL_LOCK)
     return token if criou else None
 
 
 async def adquirir_lock_esperando(lead_id: str, espera_max: float = 90,
-                                  intervalo: float = 0.5) -> str | None:
-    """Tenta pegar o lock e, se estiver ocupado, ESPERA a vez em vez de
-    desistir. Isso garante que uma segunda mensagem do mesmo cliente
-    (que chegou enquanto a primeira ainda respondia) seja processada em
-    seguida, sem ser descartada.
-
-    Retorna o token se conseguiu dentro de espera_max segundos, senão None.
-    """
-    chave = f"lock:{lead_id}"
+                                  intervalo: float = 0.5, *,
+                                  loja_id: int = LOJA_PADRAO) -> str | None:
+    """Espera a vez em vez de desistir (não perde a 2ª mensagem do cliente)."""
+    chave = chave_redis("lock", loja_id, lead_id)
     token = uuid.uuid4().hex
     tempo_gasto = 0.0
     while True:
-        criou = await redis_cliente.set(chave, token, nx=True, ex=TTL_LOCK)
-        if criou:
+        if await redis_cliente.set(chave, token, nx=True, ex=TTL_LOCK):
             return token
         if tempo_gasto >= espera_max:
             return None
@@ -65,20 +44,14 @@ async def adquirir_lock_esperando(lead_id: str, espera_max: float = 90,
         tempo_gasto += intervalo
 
 
-async def liberar_lock(lead_id: str, token: str | None = None) -> None:
-    """Libera o lock do lead ao terminar a execução.
-
-    Se vier o token, só apaga o lock se ele ainda for o nosso (não apaga
-    lock de outra execução que possa ter pego a vez). Sem token, apaga
-    direto (comportamento antigo, para não quebrar chamadas existentes)."""
-    chave = f"lock:{lead_id}"
+async def liberar_lock(lead_id: str, token: str | None = None, *,
+                       loja_id: int = LOJA_PADRAO) -> None:
+    """Com token, só apaga se o lock ainda for nosso. Nunca engole erro em silêncio."""
+    chave = chave_redis("lock", loja_id, lead_id)
     if token is None:
         await redis_cliente.delete(chave)
         return
     try:
         await redis_cliente.eval(_LIBERAR_SE_DONO, 1, chave, token)
     except Exception as erro:
-        # Não derruba o fluxo, mas NUNCA engole o erro em silêncio: uma falha
-        # aqui deixaria o lock preso até o TTL (cliente 60s sem resposta).
-        print(f"[Lock] ERRO ao liberar o lock de {lead_id}: {erro!r}")
-
+        print(f"[Lock] ERRO ao liberar o lock de {chave}: {erro!r}")
