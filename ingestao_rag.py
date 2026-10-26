@@ -1,68 +1,85 @@
-"""Indexa as políticas no Chroma, marcando cada pedaço com o loja_id.
+"""
+Recria o índice do Chroma a partir da tabela 'conhecimento' (Etapa 1, Bloco 5).
 
-Organização da pasta:
-  conhecimento/*.txt          -> loja 1 (como era antes)
-  conhecimento/loja_2/*.txt   -> loja 2 (e assim por diante)
+A tabela é a fonte da verdade (editada na tela Conhecimento).
+Os .txt servem só de carga inicial:
+  conhecimento/*.txt          -> loja 1
+  conhecimento/loja_2/*.txt   -> loja 2
+Um .txt só entra se a loja ainda não tem documento com aquele título,
+então o que foi editado na tela nunca é sobrescrito.
+
+Pare o bot e o painel antes de rodar (no Windows, a pasta chroma_db fica travada).
 """
 import os
 import shutil
+
 from dotenv import load_dotenv
-from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_chroma import Chroma
 
 load_dotenv()
+
+import banco  # noqa: E402
+import tools.buscar_conhecimento as busca  # noqa: E402
+from app import conhecimento  # noqa: E402
 
 PASTA_CONHECIMENTO = "conhecimento"
 PASTA_CHROMA = "chroma_db"
 LOJA_PADRAO = 1
 
 
-def _ler_txts(pasta: str, loja_id: int) -> list:
-    documentos = []
-    for nome in sorted(os.listdir(pasta)):
-        caminho = os.path.join(pasta, nome)
-        if os.path.isfile(caminho) and nome.endswith(".txt"):
-            with open(caminho, "r", encoding="utf-8") as arquivo:
-                texto = arquivo.read()
-            documentos.append(Document(
-                page_content=texto,
-                metadata={"fonte": nome, "loja_id": loja_id, "documento_id": f"{loja_id}:{nome}"},
-            ))
-    return documentos
+def _arquivos() -> list[tuple[int, str, str]]:
+    """(loja_id, titulo, texto) de cada .txt encontrado."""
+    achados = []
 
+    def ler(pasta, loja_id):
+        for nome in sorted(os.listdir(pasta)):
+            caminho = os.path.join(pasta, nome)
+            if os.path.isfile(caminho) and nome.endswith(".txt"):
+                with open(caminho, "r", encoding="utf-8") as arquivo:
+                    achados.append((loja_id, nome[:-4], arquivo.read()))
 
-def coletar_documentos() -> list:
-    documentos = _ler_txts(PASTA_CONHECIMENTO, LOJA_PADRAO)
+    if not os.path.isdir(PASTA_CONHECIMENTO):
+        return achados
+    ler(PASTA_CONHECIMENTO, LOJA_PADRAO)
     for nome in sorted(os.listdir(PASTA_CONHECIMENTO)):
         caminho = os.path.join(PASTA_CONHECIMENTO, nome)
         if os.path.isdir(caminho) and nome.startswith("loja_"):
             try:
-                loja_id = int(nome.split("_", 1)[1])
+                ler(caminho, int(nome.split("_", 1)[1]))
             except ValueError:
                 print(f"Pasta ignorada (nome deve ser loja_<número>): {nome}")
-                continue
-            documentos.extend(_ler_txts(caminho, loja_id))
-    return documentos
+    return achados
+
+
+def importar_txts() -> int:
+    conexao = banco.conectar()
+    try:
+        lojas = {linha["id"] for linha in conexao.execute("SELECT id FROM lojas")}
+    finally:
+        conexao.close()
+    importados = 0
+    for loja_id, titulo, texto in _arquivos():
+        if loja_id not in lojas:
+            print(f"Arquivo '{titulo}' ignorado: a loja {loja_id} não existe.")
+            continue
+        if conhecimento.existe_titulo(loja_id, titulo):
+            continue
+        conhecimento.gravar(loja_id, titulo, texto)
+        importados += 1
+    return importados
 
 
 def ingerir():
+    banco.criar_tabelas()
+    print(f"Documentos novos importados dos .txt: {importar_txts()}.")
     if os.path.exists(PASTA_CHROMA):
         shutil.rmtree(PASTA_CHROMA)
-        print(f"Base anterior em '{PASTA_CHROMA}' apagada (recriando do zero).")
-
-    documentos = coletar_documentos()
-    lojas = sorted({d.metadata["loja_id"] for d in documentos})
-    print(f"Arquivos lidos: {len(documentos)} documento(s), lojas: {lojas}.")
-
-    divisor = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
-    pedacos = divisor.split_documents(documentos)   # os metadados vão junto
-    print(f"Pedaços gerados: {len(pedacos)}.")
-
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-    Chroma.from_documents(documents=pedacos, embedding=embeddings, persist_directory=PASTA_CHROMA)
-    print(f"Pronto! Vetores salvos em '{PASTA_CHROMA}'.")
+        print(f"Índice anterior em '{PASTA_CHROMA}' apagado (recriando).")
+    busca._banco_conhecimento = None
+    documentos = conhecimento.todos_os_documentos()
+    for doc in documentos:
+        conhecimento.indexar(doc["loja_id"], doc["id"], doc["titulo"], doc["texto"])
+    lojas = sorted({d["loja_id"] for d in documentos})
+    print(f"Pronto! {len(documentos)} documento(s) indexado(s), lojas: {lojas}.")
 
 
 if __name__ == "__main__":
