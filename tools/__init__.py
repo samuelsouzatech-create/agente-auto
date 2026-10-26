@@ -10,7 +10,7 @@ from tools.buscar_conhecimento import buscar_conhecimento
 from tools.utils import formatar_brl
 
 __all__ = [
-    "consultar_estoque", "detalhes_veiculo", "enviar_fotos"
+    "consultar_estoque", "detalhes_veiculo", "enviar_fotos",
     "simular_financiamento",
     "registrar_troca", "agendar_visita", "registrar_lead",
     "acionar_handoff", "buscar_conhecimento", "formatar_brl",
