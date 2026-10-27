@@ -269,8 +269,30 @@ ALTER TABLE uso_custos ADD COLUMN custo_completo INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_custos_execucao ON uso_custos(execucao_id);
 """
 
+_MIGRACAO_3 = """
+-- Bloco 7A: o que o Léo percebeu na conversa (agora não, sem interesse,
+-- não quer contato). Ninguém digita comando, o Léo entende pela conversa.
+CREATE TABLE IF NOT EXISTS situacao_lead (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    lead_id TEXT NOT NULL,
+    situacao TEXT NOT NULL CHECK (situacao IN ('pediu_tempo','sem_interesse','nao_contatar')),
+    motivo TEXT,
+    retomar_em DATE,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (loja_id, lead_id)
+);
+ALTER TABLE optouts ADD COLUMN motivo TEXT;
+-- Mensagem escrita pelo vendedor no painel: direcao = 'vendedor', autor = nome.
+ALTER TABLE mensagens ADD COLUMN autor TEXT;
+-- origem: quem abriu o handoff (leo ou painel). Os dois carimbos são do Bloco 7B.
+ALTER TABLE handoffs ADD COLUMN origem TEXT NOT NULL DEFAULT 'leo';
+ALTER TABLE handoffs ADD COLUMN reavisado_em TIMESTAMP;
+ALTER TABLE handoffs ADD COLUMN gestor_avisado_em TIMESTAMP;
+"""
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2}
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

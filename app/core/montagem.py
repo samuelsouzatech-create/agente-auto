@@ -5,9 +5,10 @@ Camadas do prompt (item 1.3 da Arquitetura 4.0):
   2. prompts/base.md - regras duras, iguais para todas as lojas.
   3. segmentos/<segmento>/prompt.md - persona e objetivo do ramo.
   4. Guia das ferramentas LIGADAS nesta loja + avisos dos módulos desligados.
-  5. Data e hora no fuso da loja.
+  5. (Bloco 7A) Momento desta conversa: primeiro contato / vendedor a caminho.
+  6. Data e hora no fuso da loja.
 
-Este módulo não cria o Gemini, então os testes podem importá-lo sem chave.
+Este módulo não cria o modelo de IA, então os testes podem importá-lo sem chave.
 """
 from functools import lru_cache
 from pathlib import Path
@@ -17,7 +18,7 @@ from app.leitura_config import valor_config
 from tools import (
     consultar_estoque, detalhes_veiculo, enviar_fotos, simular_financiamento,
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff,
-    buscar_conhecimento,
+    buscar_conhecimento, registrar_interesse,
 )
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -33,12 +34,16 @@ FERRAMENTAS_DE_MODULO = {
     "agendamento": [agendar_visita],
     "fotos": [enviar_fotos],
 }
-FERRAMENTAS_UNIVERSAIS = [registrar_lead, acionar_handoff, buscar_conhecimento]
+FERRAMENTAS_UNIVERSAIS = [registrar_lead, acionar_handoff, buscar_conhecimento, registrar_interesse]
+
+# Enquanto o vendedor não chega (decisão 1.12, opção B), o Léo não simula:
+# número de parcela é assunto que o vendedor fecha.
+FERRAMENTAS_FORA_DA_ESPERA = {"simular_financiamento"}
 
 TODAS_AS_FERRAMENTAS = [
     consultar_estoque, detalhes_veiculo, enviar_fotos, simular_financiamento,
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff,
-    buscar_conhecimento,
+    buscar_conhecimento, registrar_interesse,
 ]
 
 DESCRICOES = {
@@ -54,6 +59,9 @@ DESCRICOES = {
     "acionar_handoff": "OBRIGATÓRIO em qualquer caso vermelho (ver REGRA OBRIGATÓRIA DO HANDOFF).",
     "buscar_conhecimento": ("dúvidas sobre políticas da loja: financiamento, troca, "
                             "garantia, test-drive, horário de atendimento."),
+    "registrar_interesse": ("o cliente deixa claro, com as palavras dele, que quer um tempo, "
+                            "que não tem mais interesse ou que não quer mais receber mensagens. "
+                            "Na dúvida, não use."),
 }
 
 AVISOS_MODULO_DESLIGADO = {
@@ -63,6 +71,13 @@ AVISOS_MODULO_DESLIGADO = {
     "fotos": ("Esta loja não envia fotos pelo chat. Se o cliente pedir fotos, diga "
               "isso com naturalidade e ofereça a ficha do carro ou uma visita."),
 }
+
+TEXTO_EM_ESPERA = """VENDEDOR A CAMINHO
+- Alguém da equipe de vendas já foi chamado para esta conversa e vai entrar em breve.
+- Continue atendendo normalmente, como colega da equipe: dúvidas sobre carros, ficha técnica, fotos, horário, endereço e políticas da loja.
+- Preço negociado, desconto, simulação de parcelas, aprovação de crédito e reserva: diga com naturalidade que isso o pessoal das vendas acerta com ele (ex.: "isso o vendedor fecha contigo, já já te chamam aqui").
+- Não chame acionar_handoff de novo pelo mesmo assunto. Só chame se surgir um caso vermelho novo.
+- Nunca diga "aguarde na fila", "transferindo" ou qualquer coisa que soe como sistema."""
 
 NOMES_DIAS = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
 DIAS_SEMANA = ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
@@ -77,13 +92,15 @@ def segmento_da_loja(loja) -> str:
     return getattr(loja, "segmento", None) or "veiculos"
 
 
-def ferramentas_da_loja(loja) -> list:
+def ferramentas_da_loja(loja, em_espera: bool = False) -> list:
     """Segmento + módulos ligados + universais. O resto o Léo nem conhece."""
     lista = list(FERRAMENTAS_DO_SEGMENTO.get(segmento_da_loja(loja), []))
     for modulo, tools in FERRAMENTAS_DE_MODULO.items():
         if modulo_ligado(loja, modulo):
             lista.extend(tools)
     lista.extend(FERRAMENTAS_UNIVERSAIS)
+    if em_espera:
+        lista = [f for f in lista if f.name not in FERRAMENTAS_FORA_DA_ESPERA]
     return lista
 
 
@@ -144,15 +161,34 @@ def _guia_ferramentas(loja, ferramentas) -> str:
     return "\n".join(linhas)
 
 
-def montar_prompt(loja, ferramentas, agora) -> str:
+def _camada_do_momento(loja, em_espera: bool, primeiro_contato: bool) -> str:
+    nome = valor_config(loja.config, "nome_agente", "Léo")
+    blocos = []
+    if primeiro_contato:
+        blocos.append(
+            "PRIMEIRO CONTATO\n"
+            f"- Esta é a sua primeira resposta para este cliente. Cumprimente e se apresente UMA vez, "
+            f"de forma natural, como {nome}, assistente virtual da {loja.nome} "
+            f"(ex.: \"Oi! Aqui é o {nome}, assistente virtual da {loja.nome}.\").\n"
+            "- Depois disso, não repita a apresentação."
+        )
+    if em_espera:
+        blocos.append(TEXTO_EM_ESPERA)
+    return "\n\n".join(blocos)
+
+
+def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
+                  primeiro_contato: bool = False) -> str:
     base = _ler_arquivo(str(PASTA_PROMPTS / "base.md"))
     segmento = _ler_arquivo(str(PASTA_SEGMENTOS / segmento_da_loja(loja) / "prompt.md"))
     data = (f"DATA E HORA ATUAL: {agora.strftime('%d/%m/%Y %H:%M')} "
             f"({DIAS_SEMANA[agora.weekday()]}).")
-    return "\n\n".join([
+    camadas = [
         _camada_da_loja(loja),
         base,
         segmento,
         _guia_ferramentas(loja, ferramentas),
+        _camada_do_momento(loja, em_espera, primeiro_contato),
         data,
-    ])
+    ]
+    return "\n\n".join(c for c in camadas if c)

@@ -7,11 +7,13 @@ from tools.agendar_visita import agendar_visita
 from tools.registrar_lead import registrar_lead
 from tools.acionar_handoff import acionar_handoff
 from tools.buscar_conhecimento import buscar_conhecimento
+from tools.registrar_interesse import registrar_interesse
 from tools.utils import formatar_brl
 
 __all__ = [
     "consultar_estoque", "detalhes_veiculo", "enviar_fotos",
     "simular_financiamento",
     "registrar_troca", "agendar_visita", "registrar_lead",
-    "acionar_handoff", "buscar_conhecimento", "formatar_brl",
+    "acionar_handoff", "buscar_conhecimento", "registrar_interesse",
+    "formatar_brl",
 ]

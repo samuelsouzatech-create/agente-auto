@@ -5,14 +5,21 @@ Cada canal cuida apenas da "porta": receber, juntar a rajada (debounce),
 pegar a vez (lock), chamar executar_turno() e enviar.
 
 Ordem do turno:
-  1. (Bloco 7) opt-out: quem pediu para parar não recebe resposta
+  1. separa o que aconteceu enquanto o Léo estava fora (vendedor no comando)
   2. grava a mensagem do cliente
   3. vendedor assumiu? -> Léo em silêncio
-  4. Léo da loja (grafo) responde
+  4. Léo da loja (grafo) responde. Se a equipe conversou com o cliente, ele
+     recebe esse trecho como contexto e não contradiz o que foi combinado
   5. limpa Markdown e junta as mídias do turno
   6. guarda de preço (barra valor inventado e chama o vendedor)
-  7. grava a resposta
-  8. custo do turno (Bloco 6): uma linha em uso_custos + uma no log
+  7. alerta de naturalidade (frase com cara de robô aparece no terminal)
+  8. grava a resposta
+  9. custo do turno (Bloco 6): uma linha em uso_custos + uma no log
+
+Bloco 7A: não existe opt-out por comando. Quem escreve SEMPRE é atendido.
+O que o cliente pede ("agora não", "não me procure") o Léo anota com a
+ferramenta registrar_interesse, e isso só vale para contatos que a LOJA
+iniciaria (remarketing e pós-venda, Etapa 2).
 """
 from __future__ import annotations
 
@@ -29,7 +36,8 @@ from app.formatacao import limpar_markdown
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
 from app.handoff import estado_do_handoff
 from app.humanizador import dividir_em_bolhas
-from app.mensagens import salvar_mensagem
+from app.mensagens import salvar_mensagem, mensagens_desde_a_ultima_resposta_do_leo
+from app.naturalidade import parece_robotica
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock_esperando
 from app.utils import extrair_texto, mensagens_do_turno
@@ -51,6 +59,11 @@ DESCRICAO_MIDIA = {
 
 # Canais em que cada mensagem enviada pode ser cobrada pela Meta.
 CANAIS_COBRADOS = {"whatsapp"}
+
+CONTEXTO_INICIO = ("[Contexto interno, não repita nem comente com o cliente: enquanto você "
+                   "estava fora, a conversa continuou assim com a equipe da loja. Siga o que "
+                   "foi combinado e não contradiga o vendedor.]")
+CONTEXTO_FIM = "[Mensagem atual do cliente:]"
 
 
 @dataclass
@@ -106,6 +119,28 @@ def _chamou_handoff(mensagens) -> bool:
                and not str(m.content).startswith("Erro") for m in mensagens)
 
 
+def _o_que_aconteceu_fora(loja_id: int, lead_id: str) -> list:
+    try:
+        return mensagens_desde_a_ultima_resposta_do_leo(lead_id, loja_id)
+    except Exception as erro:
+        print(f"[Turno][loja {loja_id}] Aviso: não li o histórico recente ({erro!r}).")
+        return []
+
+
+def com_contexto_do_periodo_fora(texto: str, perdidas: list) -> str:
+    """Se a equipe conversou com o cliente enquanto o Léo estava em silêncio,
+    o Léo recebe esse trecho antes da mensagem atual. O banco guarda o texto puro."""
+    linhas = []
+    for m in perdidas:
+        if m["direcao"] == "vendedor":
+            linhas.append(f"{m.get('autor') or 'Vendedor'} (equipe da loja): {m['conteudo']}")
+        elif m["direcao"] == "cliente":
+            linhas.append(f"Cliente: {m['conteudo']}")
+    if not linhas:
+        return texto
+    return f"{CONTEXTO_INICIO}\n" + "\n".join(linhas) + f"\n{CONTEXTO_FIM}\n\n{texto}"
+
+
 async def aguardar_vez(loja_id: int, lead_id: str, texto: str):
     """Debounce + lock. Devolve (texto_juntado, token) ou (None, None).
     Quem receber um token TEM que liberar o lock no final (finally)."""
@@ -128,19 +163,22 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     rotulo = _rotulo(canal, loja_id)
     print(f"\n{rotulo} Cliente {lead_id} disse: {texto}")
 
-    # 1. (Bloco 7) o opt-out entra aqui, antes de tudo.
-
+    perdidas = _o_que_aconteceu_fora(loja_id, lead_id)
     salvar_mensagem(lead_id, "cliente", texto, canal=canal, tipo=tipo, loja_id=loja_id)
 
     if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
         print(f"{rotulo} Lead {lead_id} está com um vendedor humano. Léo em silêncio.")
         return ResultadoTurno(silenciado=True)
 
+    texto_para_leo = com_contexto_do_periodo_fora(texto, perdidas)
+    if texto_para_leo != texto:
+        print(f"{rotulo} Léo volta à conversa sabendo de {len(perdidas)} mensagem(ns) da equipe/cliente.")
+
     try:
         resultado = await asyncio.to_thread(
             grafo.invoke,
             {
-                "messages": [HumanMessage(content=texto)],
+                "messages": [HumanMessage(content=texto_para_leo)],
                 "lead_id": lead_id,
                 "loja_id": loja_id,
                 "canal": canal,
@@ -173,13 +211,16 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         resposta, midias, handoff = MENSAGEM_SEGURA, [], True
         ferramentas.append("guarda_preco")
 
+    robotico = parece_robotica(resposta)
+    if robotico:
+        print(f"{rotulo} ALERTA de naturalidade: a resposta tem \"{robotico}\". Revise o prompt.")
+
     print(f"{rotulo} Léo responde: {resposta}")
     if midias:
         print(f"{rotulo} Enviando {len(midias)} foto(s).")
 
     salvar_mensagem(lead_id, "leo", resposta, canal=canal, loja_id=loja_id)
 
-    # 8. Custo do turno.
     msgs_servico = (len(dividir_em_bolhas(resposta)) + len(midias)
                     if canal in CANAIS_COBRADOS else 0)
     registro = registrar_uso(

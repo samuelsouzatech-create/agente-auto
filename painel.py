@@ -1,5 +1,5 @@
 """
-Painel do Léo (Etapa 1, Bloco 5): uma entrada só para todas as telas.
+Painel do Léo (Etapa 1, Blocos 5 e 7A): uma entrada só para todas as telas.
 A loja escolhida na barra lateral vale para todas as páginas.
 
 Rodar com:  streamlit run painel.py
@@ -13,6 +13,7 @@ from paginas.comum import escolher_loja  # noqa: E402
 paginas = {
     "Atendimento": [
         st.Page("paginas/handoff.py", title="Fila de handoff", icon="🧑‍💼", default=True),
+        st.Page("paginas/conversas.py", title="Conversas", icon="💬"),
         st.Page("paginas/resultados.py", title="Resultados", icon="📊"),
     ],
     "Loja": [
