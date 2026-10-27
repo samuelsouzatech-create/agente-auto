@@ -1,9 +1,8 @@
 """
 O turno do Léo, IGUAL para todos os canais (Etapa 1, Bloco 4 - item 1.6).
 
-Antes, WhatsApp e Telegram repetiam a mesma sequência. Agora ela mora aqui,
-uma vez só. Cada canal cuida apenas da "porta": receber, juntar a rajada
-(debounce), pegar a vez (lock), chamar executar_turno() e enviar.
+Cada canal cuida apenas da "porta": receber, juntar a rajada (debounce),
+pegar a vez (lock), chamar executar_turno() e enviar.
 
 Ordem do turno:
   1. (Bloco 7) opt-out: quem pediu para parar não recebe resposta
@@ -13,17 +12,19 @@ Ordem do turno:
   5. limpa Markdown e junta as mídias do turno
   6. guarda de preço (barra valor inventado e chama o vendedor)
   7. grava a resposta
-  8. (Bloco 6) custo do turno
+  8. custo do turno (Bloco 6): uma linha em uso_custos + uma no log
 """
 from __future__ import annotations
 
 import asyncio
+import time
 import traceback
 from dataclasses import dataclass, field
 
 from langchain_core.messages import HumanMessage, ToolMessage
 
 from app.chaves import thread_id
+from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
 from app.formatacao import limpar_markdown
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
 from app.handoff import estado_do_handoff
@@ -48,6 +49,9 @@ DESCRICAO_MIDIA = {
     "document": "documento", "location": "localização", "contacts": "contato",
 }
 
+# Canais em que cada mensagem enviada pode ser cobrada pela Meta.
+CANAIS_COBRADOS = {"whatsapp"}
+
 
 @dataclass
 class ResultadoTurno:
@@ -55,7 +59,9 @@ class ResultadoTurno:
     midias: list = field(default_factory=list)
     handoff_aberto: bool = False      # este turno abriu/atualizou um handoff
     silenciado: bool = False          # vendedor no comando: nada a enviar
-    custo: float | None = None        # preenchido no Bloco 6
+    # Custo em R$ (None = preço ainda não cadastrado). Fora da comparação (==).
+    custo: float | None = field(default=None, compare=False)
+    execucao_id: str | None = field(default=None, compare=False)
 
     @property
     def respostas(self) -> list[str]:
@@ -65,6 +71,24 @@ class ResultadoTurno:
 
 def _rotulo(canal: str, loja_id: int) -> str:
     return f"[{NOMES_CANAIS.get(canal, canal)}][loja {loja_id}]"
+
+
+def _ms_desde(inicio: float) -> int:
+    return int((time.perf_counter() - inicio) * 1000)
+
+
+def _custo(registro) -> float | None:
+    return registro["custo_total"] if registro and registro["completo"] else None
+
+
+def _id(registro) -> str | None:
+    return registro["execucao_id"] if registro else None
+
+
+def _texto_custo(r: dict) -> str:
+    valor = f"R$ {r['custo_total']:.6f}" if r["completo"] else "preço não cadastrado"
+    return (f"{r['tokens_entrada'] + r['tokens_audio']} tokens de entrada, "
+            f"{r['tokens_saida']} de saída, {r['latencia_ms']} ms, {valor}")
 
 
 def extrair_midias(mensagens) -> list[str]:
@@ -98,8 +122,9 @@ async def aguardar_vez(loja_id: int, lead_id: str, texto: str):
 async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
                          grafo=None, tipo: str = "texto") -> ResultadoTurno:
     """Roda UM turno do Léo. Não envia nada: quem envia é o canal."""
+    inicio = time.perf_counter()
     if grafo is None:
-        from app.core.agent import agente_grafo as grafo   # import tardio (cria o Gemini)
+        from app.core.agent import agente_grafo as grafo   # import tardio (cria a IA)
     rotulo = _rotulo(canal, loja_id)
     print(f"\n{rotulo} Cliente {lead_id} disse: {texto}")
 
@@ -126,12 +151,15 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         print(f"{rotulo} ERRO ao gerar a resposta do Léo:")
         traceback.print_exc()
         salvar_mensagem(lead_id, "leo", MENSAGEM_ERRO, canal=canal, loja_id=loja_id)
-        return ResultadoTurno(texto=MENSAGEM_ERRO)
+        registro = registrar_uso(loja_id, lead_id, canal, tipo="erro",
+                                 latencia_ms=_ms_desde(inicio))
+        return ResultadoTurno(texto=MENSAGEM_ERRO, execucao_id=_id(registro))
 
     do_turno = mensagens_do_turno(resultado)
     resposta = limpar_markdown(extrair_texto(resultado["messages"][-1].content))
     midias = extrair_midias(do_turno)
     handoff = _chamou_handoff(do_turno)
+    ferramentas = ferramentas_usadas(do_turno)
 
     if resposta_tem_preco_inventado(resposta, resultado["messages"]):
         print(f"{rotulo} GUARDA: preço inventado detectado. Acionando handoff.")
@@ -143,20 +171,31 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
             loja_id=loja_id,
         )
         resposta, midias, handoff = MENSAGEM_SEGURA, [], True
+        ferramentas.append("guarda_preco")
 
     print(f"{rotulo} Léo responde: {resposta}")
     if midias:
         print(f"{rotulo} Enviando {len(midias)} foto(s).")
-    print()
 
     salvar_mensagem(lead_id, "leo", resposta, canal=canal, loja_id=loja_id)
-    # 8. (Bloco 6) o custo do turno entra aqui.
-    return ResultadoTurno(texto=resposta, midias=midias, handoff_aberto=handoff)
+
+    # 8. Custo do turno.
+    msgs_servico = (len(dividir_em_bolhas(resposta)) + len(midias)
+                    if canal in CANAIS_COBRADOS else 0)
+    registro = registrar_uso(
+        loja_id, lead_id, canal, uso_das_mensagens(do_turno),
+        ferramentas=ferramentas, latencia_ms=_ms_desde(inicio), msgs_servico=msgs_servico,
+    )
+    if registro:
+        print(f"{rotulo} Custo do turno: {_texto_custo(registro)}")
+    print()
+    return ResultadoTurno(texto=resposta, midias=midias, handoff_aberto=handoff,
+                          custo=_custo(registro), execucao_id=_id(registro))
 
 
 def turno_resposta_fixa(loja_id: int, canal: str, lead_id: str, registro_cliente: str,
                         resposta: str, tipo: str = "texto") -> ResultadoTurno:
-    """Turno sem Léo (resposta pronta), respeitando o vendedor no comando."""
+    """Turno sem Léo (resposta pronta, sem IA), respeitando o vendedor no comando."""
     salvar_mensagem(lead_id, "cliente", registro_cliente, canal=canal, tipo=tipo, loja_id=loja_id)
     if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
         return ResultadoTurno(silenciado=True)

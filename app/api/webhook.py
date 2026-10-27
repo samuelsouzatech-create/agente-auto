@@ -17,7 +17,8 @@ from app.core.turno import (
     executar_turno, aguardar_vez, turno_midia_nao_suportada, turno_audio_falhou,
 )
 from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
-from app.api.receber_audio import transcrever_audio
+from app.api.receber_audio import transcrever_audio, pegar_uso_da_transcricao
+from app.custos import registrar_uso
 from app.channels.whatsapp import CanalWhatsApp
 from app.redis_lock import liberar_lock
 from app.redis_atraso import calcular_atraso
@@ -94,6 +95,10 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
     if id_audio:
         print(f"[WhatsApp][loja {loja_id}] Cliente {numero} mandou um áudio. Transcrevendo...")
         texto = await transcrever_audio(id_audio)
+        uso_audio = pegar_uso_da_transcricao(id_audio)
+        if uso_audio is not None and not uso_audio.vazio:
+            registrar_uso(loja_id, numero, CANAL, uso_audio,
+                          tipo="transcricao", ferramentas=["transcricao_audio"])
         if not texto:
             aviso = turno_audio_falhou(loja_id, CANAL, numero)
             if aviso.texto:

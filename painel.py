@@ -23,6 +23,7 @@ paginas = {
     ],
     "Operador": [
         st.Page("paginas/lojas_canais.py", title="Lojas e canais", icon="🏬"),
+        st.Page("paginas/custos.py", title="Custos", icon="💰"),
     ],
 }
 

@@ -260,7 +260,17 @@ CREATE INDEX IF NOT EXISTS idx_custos_loja_data  ON uso_custos(loja_id, criado_e
 INSERT OR IGNORE INTO lojas (id, nome, segmento, config) VALUES (1, 'Loja 1', 'veiculos', '{}');
 """
 
-MIGRACOES = {1: _MIGRACAO_1}
+_MIGRACAO_2 = """
+-- Bloco 6: o que gerou o custo (turno, transcrição, erro), qual modelo de IA
+-- respondeu, e se todos os preços necessários estavam cadastrados.
+ALTER TABLE uso_custos ADD COLUMN tipo TEXT NOT NULL DEFAULT 'turno';
+ALTER TABLE uso_custos ADD COLUMN modelo TEXT;
+ALTER TABLE uso_custos ADD COLUMN custo_completo INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_custos_execucao ON uso_custos(execucao_id);
+"""
+
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

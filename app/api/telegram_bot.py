@@ -16,7 +16,8 @@ from app.core.turno import (
 )
 from app.channels.base import enviar_humanizado, enviar_resultado
 from app.channels.telegram import CanalTelegram
-from app.api.receber_audio import transcrever_bytes
+from app.api.receber_audio import transcrever_bytes_com_uso
+from app.custos import registrar_uso
 from app.redis_lock import liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.dedup import ja_processada
@@ -55,7 +56,11 @@ async def _responder_audio(canal: CanalTelegram, entrada) -> None:
     bytes_audio = await canal.baixar_midia(entrada)
     texto = None
     if bytes_audio:
-        texto = await asyncio.to_thread(transcrever_bytes, bytes_audio, entrada.mime or "audio/ogg")
+        texto, uso = await asyncio.to_thread(
+            transcrever_bytes_com_uso, bytes_audio, entrada.mime or "audio/ogg")
+        if not uso.vazio:
+            registrar_uso(LOJA_DO_BOT, chat_id, CANAL, uso,
+                          tipo="transcricao", ferramentas=["transcricao_audio"])
     if not texto:
         aviso = turno_audio_falhou(LOJA_DO_BOT, CANAL, chat_id)
         if aviso.texto:

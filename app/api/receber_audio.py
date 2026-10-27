@@ -1,11 +1,13 @@
 """
 Transcrição de áudio para o Agente Léo.
 
-Duas camadas:
-- transcrever_bytes(bytes, mime): manda os bytes do áudio pro Gemini e
-  devolve o texto. É igual para qualquer canal (WhatsApp, Telegram...).
-- transcrever_audio(id_audio): fluxo específico do WhatsApp/Meta (baixa o
-  áudio pelo id de mídia e chama transcrever_bytes).
+Este é o ÚNICO arquivo que conhece o SDK do fornecedor de IA para áudio
+(hoje, google-genai). Se trocar de fornecedor, é aqui que muda,
+inclusive a leitura dos tokens (uso_da_resposta).
+
+- transcrever_bytes_com_uso(bytes, mime) -> (texto, Uso)
+- transcrever_bytes(bytes, mime)         -> texto (compatibilidade)
+- transcrever_audio(id_audio)            -> texto (fluxo WhatsApp/Meta)
 """
 import httpx
 from google import genai
@@ -16,14 +18,37 @@ from app.config import (
     GOOGLE_API_KEY,
     MODELO_LLM,
 )
+from app.custos import Uso
+
+# Uso de cada transcrição do WhatsApp, guardado pelo id do áudio até o
+# webhook pegar (pegar_uso_da_transcricao) e registrar o custo.
+_uso_por_audio: dict[str, Uso] = {}
+_LIMITE_USOS = 1000
 
 
-def transcrever_bytes(bytes_audio: bytes, mime: str = "audio/ogg") -> str | None:
-    """Manda os bytes do áudio pro Gemini e devolve o texto transcrito.
-    Devolve None se algo falhar (nunca lança exceção)."""
+def uso_da_resposta(resposta) -> Uso:
+    """Tokens da resposta do SDK (formato google-genai). Zero se faltar algo."""
     try:
-        cliente_gemini = genai.Client(api_key=GOOGLE_API_KEY)
-        resposta = cliente_gemini.models.generate_content(
+        meta = getattr(resposta, "usage_metadata", None)
+        if meta is None:
+            return Uso()
+        entrada = int(getattr(meta, "prompt_token_count", 0) or 0)
+        saida = int(getattr(meta, "candidates_token_count", 0) or 0)
+        audio = 0
+        for detalhe in getattr(meta, "prompt_tokens_details", None) or []:
+            if "AUDIO" in str(getattr(detalhe, "modality", "")).upper():
+                audio += int(getattr(detalhe, "token_count", 0) or 0)
+        audio = min(audio, entrada)
+        return Uso(entrada - audio, saida, audio)
+    except Exception:
+        return Uso()
+
+
+def transcrever_bytes_com_uso(bytes_audio: bytes, mime: str = "audio/ogg") -> tuple[str | None, Uso]:
+    """Transcreve e devolve (texto, uso). Nunca lança exceção."""
+    try:
+        cliente_ia = genai.Client(api_key=GOOGLE_API_KEY)
+        resposta = cliente_ia.models.generate_content(
             model=MODELO_LLM,
             contents=[
                 "Transcreva este áudio em português do Brasil. "
@@ -32,23 +57,31 @@ def transcrever_bytes(bytes_audio: bytes, mime: str = "audio/ogg") -> str | None
             ],
         )
         texto = (resposta.text or "").strip()
-        return texto or None
+        return (texto or None), uso_da_resposta(resposta)
     except Exception as e:
-        print(f"[Audio] Erro ao transcrever no Gemini: {e}")
-        return None
+        print(f"[Audio] Erro ao transcrever na IA: {e}")
+        return None, Uso()
+
+
+def transcrever_bytes(bytes_audio: bytes, mime: str = "audio/ogg") -> str | None:
+    """Compatibilidade: só o texto."""
+    return transcrever_bytes_com_uso(bytes_audio, mime)[0]
+
+
+def pegar_uso_da_transcricao(id_audio: str) -> Uso | None:
+    """Devolve (e esquece) o uso da transcrição daquele áudio do WhatsApp."""
+    return _uso_por_audio.pop(id_audio, None)
 
 
 async def transcrever_audio(id_audio: str) -> str | None:
     """Fluxo do WhatsApp/Meta: baixa o áudio pelo id e transcreve.
     Devolve None se não houver token ou se algo falhar."""
-
     if not WHATSAPP_TOKEN:
         print("[WhatsApp] AVISO: WHATSAPP_TOKEN vazio. "
               "Transcrição de áudio pulada (ainda em modo local).")
         return None
 
     cabecalho = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
-
     try:
         async with httpx.AsyncClient(timeout=30) as cliente:
             url_meta = f"https://graph.facebook.com/{WHATSAPP_API_VERSION}/{id_audio}"
@@ -62,9 +95,11 @@ async def transcrever_audio(id_audio: str) -> str | None:
             resp_audio.raise_for_status()
             bytes_audio = resp_audio.content
 
-        # A transcrição em si é igual pra todos os canais.
-        return transcrever_bytes(bytes_audio, mime)
-
+        texto, uso = transcrever_bytes_com_uso(bytes_audio, mime)
+        if len(_uso_por_audio) > _LIMITE_USOS:
+            _uso_por_audio.clear()
+        _uso_por_audio[id_audio] = uso
+        return texto
     except Exception as e:
         print(f"[WhatsApp] Erro ao baixar áudio: {e}")
         return None

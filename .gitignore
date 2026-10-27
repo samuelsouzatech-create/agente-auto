@@ -22,3 +22,6 @@ __pycache__/
 tests/__pycache__/
 
 diagnostico_meta.py
+
+# Logs estruturados (Bloco 6)
+logs/
