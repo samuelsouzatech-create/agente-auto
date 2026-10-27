@@ -1,33 +1,32 @@
 """
-Painel do Léo (Etapa 1, Blocos 5 e 7A): uma entrada só para todas as telas.
-A loja escolhida na barra lateral vale para todas as páginas.
+Painel do CLIENTE (lojista): só as telas da loja e só a loja de LOJA_ID.
+Sem seletor de loja. Sem LOJA_ID, não abre.
 
-Rodar com:  streamlit run painel.py
+Rodar (PowerShell, num terminal só para ele):
+    $env:LOJA_ID="1"
+    python -m streamlit run painel.py --server.port 8502
+
+Sem login: só local. Não exponha na internet.
 """
 import streamlit as st
 
-st.set_page_config(page_title="Painel - Léo", page_icon="🧑‍💼", layout="wide")
+st.set_page_config(page_title="Painel da loja", page_icon="🚗", layout="wide")
 
-from paginas.comum import escolher_loja  # noqa: E402
+from app.acesso import PainelSemLoja, loja_do_cliente  # noqa: E402
+from app.lojas import carregar_loja  # noqa: E402
+from paginas.comum import campo_nome, iniciar_sessao_cliente  # noqa: E402
+from paginas.menu import CLIENTE, montar  # noqa: E402
 
-paginas = {
-    "Atendimento": [
-        st.Page("paginas/handoff.py", title="Fila de handoff", icon="🧑‍💼", default=True),
-        st.Page("paginas/conversas.py", title="Conversas", icon="💬"),
-        st.Page("paginas/resultados.py", title="Resultados", icon="📊"),
-    ],
-    "Loja": [
-        st.Page("paginas/estoque.py", title="Estoque", icon="🚗"),
-        st.Page("paginas/configuracao.py", title="Configuração", icon="⚙️"),
-        st.Page("paginas/conhecimento.py", title="Conhecimento", icon="📚"),
-        st.Page("paginas/usuarios.py", title="Usuários", icon="👥"),
-    ],
-    "Operador": [
-        st.Page("paginas/lojas_canais.py", title="Lojas e canais", icon="🏬"),
-        st.Page("paginas/custos.py", title="Custos", icon="💰"),
-    ],
-}
+try:
+    LOJA_DO_CLIENTE = loja_do_cliente()
+except PainelSemLoja as erro:
+    st.error(f"🔒 {erro}")
+    st.stop()
 
-navegacao = st.navigation(paginas)
-escolher_loja()
+iniciar_sessao_cliente(LOJA_DO_CLIENTE)     # a cada rerun: a tela não troca a loja
+loja = carregar_loja(LOJA_DO_CLIENTE)
+
+navegacao = st.navigation(montar(CLIENTE))
+st.sidebar.markdown(f"### {loja.nome}")
+campo_nome("Vendedor")
 navegacao.run()

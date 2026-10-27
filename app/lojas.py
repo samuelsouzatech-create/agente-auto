@@ -6,6 +6,10 @@ Três tipos de variável:
 - PREFERÊNCIA DA LOJA: tem padrão em PADROES e é editável via salvar_config().
 - MEDIÇÃO: vem do piloto (fica em PADROES até ser medida).
 
+Cada chave editável tem um DONO:
+- "cliente": a própria loja pode mudar pelo painel dela.
+- "operador": só você muda (plano, módulos contratados, limites, custos).
+
 A tabela lojas guarda só o que a loja MUDOU. carregar_loja() completa o
 resto com PADROES, e por isso uma loja nova nunca quebra.
 """
@@ -38,6 +42,20 @@ REGRAS_DE_PRODUTO = {
     "identificacao_virtual",
     "preco_so_por_tool",
 }
+
+# ---------------------------------------------------------------------
+# Papéis: quem pode mexer em quê
+# ---------------------------------------------------------------------
+PAPEIS = ("cliente", "operador")
+
+# Chaves que só o operador altera (fazem parte do plano / contrato / custo).
+# Todo o resto do EDITAVEIS pertence ao cliente.
+CHAVES_DO_OPERADOR = frozenset({
+    *(f"modulos.{m}" for m in MODULOS),
+    "custos.teto_diario_llm",
+    "remarketing.limite_mensal",
+    "instagram.limite_private_replies_h",
+})
 
 # ---------------------------------------------------------------------
 # Padrões do produto (tabela da seção 4)
@@ -225,6 +243,23 @@ EDITAVEIS: dict[str, Callable] = {
     **{f"modulos.{m}": _bool for m in MODULOS},
 }
 
+# Garantia: toda chave do operador precisa existir no EDITAVEIS.
+assert CHAVES_DO_OPERADOR <= set(EDITAVEIS), "CHAVES_DO_OPERADOR tem chave fora do EDITAVEIS"
+
+
+def dono_da_chave(chave: str) -> str:
+    """Quem pode alterar a chave: "operador" ou "cliente".
+    Chave desconhecida ou regra de produto levanta KeyError."""
+    if chave not in EDITAVEIS:
+        raise KeyError(chave)
+    return "operador" if chave in CHAVES_DO_OPERADOR else "cliente"
+
+
+def chaves_do(papel: str) -> list[str]:
+    """Chaves que pertencem a um papel (na ordem do EDITAVEIS)."""
+    _validar_papel(papel)
+    return [c for c in EDITAVEIS if dono_da_chave(c) == papel]
+
 
 # ---------------------------------------------------------------------
 # Erros
@@ -239,8 +274,17 @@ class ConfigInvalida(ValueError):
         super().__init__("; ".join(erros))
 
 
+class SemPermissao(ConfigInvalida):
+    """Quem salvou não tem papel para alterar uma das chaves (ex.: cliente mexendo no plano)."""
+
+
 class ConflitoDeVersao(RuntimeError):
     """Outra pessoa salvou a configuração ao mesmo tempo. Recarregue e tente de novo."""
+
+
+def _validar_papel(papel: str) -> None:
+    if papel not in PAPEIS:
+        raise ConfigInvalida([f"papel '{papel}' não existe (válidos: {', '.join(PAPEIS)})"])
 
 
 # ---------------------------------------------------------------------
@@ -339,20 +383,40 @@ def modulo_ativo(loja: Loja, nome: str) -> bool:
     return bool(loja.config.get("modulos", {}).get(nome, False))
 
 
-def pendentes(loja: Loja) -> list[str]:
+def pendentes(loja: Loja, papel: str | None = None) -> list[str]:
     """Variáveis ainda no padrão do produto, não confirmadas com o cliente
-    (a marca 'padrão, a confirmar' da tela)."""
+    (a marca 'padrão, a confirmar' da tela).
+    Com papel, devolve só as pendências daquele dono."""
     confirmados = set(loja.config.get("_confirmados", []))
-    return [chave for chave in EDITAVEIS if chave not in confirmados]
+    chaves = EDITAVEIS if papel is None else chaves_do(papel)
+    return [chave for chave in chaves if chave not in confirmados]
 
 
-def salvar_config(loja_id: int, mudancas: dict[str, Any], usuario: str) -> Loja:
+def salvar_config(loja_id: int, mudancas: dict[str, Any], usuario: str,
+                  papel: str = "operador") -> Loja:
     """Valida TUDO antes de gravar (ou grava tudo, ou nada), registra cada
     mudança em config_historico e incrementa versao_config.
-    Salvar o mesmo valor do padrão é válido e marca a chave como confirmada."""
+    Salvar o mesmo valor do padrão é válido e marca a chave como confirmada.
+
+    papel: "operador" pode tudo; "cliente" só as chaves dele. Se o cliente
+    tentar mexer em chave do operador, NADA é gravado (SemPermissao).
+    O padrão é "operador" para scripts e testes antigos; as páginas do
+    painel sempre passam o papel explicitamente."""
+    _validar_papel(papel)
     if not mudancas:
         raise ConfigInvalida(["nenhuma mudança enviada"])
 
+    # 1) Permissão primeiro: cliente mexendo no plano recusa tudo.
+    if papel == "cliente":
+        negadas = [
+            f"{chave}: só o operador pode alterar"
+            for chave in mudancas
+            if chave in CHAVES_DO_OPERADOR
+        ]
+        if negadas:
+            raise SemPermissao(negadas)
+
+    # 2) Validação dos valores.
     erros, validadas = [], {}
     for chave, valor in mudancas.items():
         if chave in REGRAS_DE_PRODUTO:
@@ -369,6 +433,7 @@ def salvar_config(loja_id: int, mudancas: dict[str, Any], usuario: str) -> Loja:
     if erros:
         raise ConfigInvalida(erros)
 
+    # 3) Gravação (tudo ou nada).
     conexao = conectar()
     try:
         linha = conexao.execute(
@@ -420,7 +485,7 @@ def salvar_config(loja_id: int, mudancas: dict[str, Any], usuario: str) -> Loja:
 def criar_loja(nome: str, segmento: str = "veiculos",
                config: dict[str, Any] | None = None, usuario: str = "operador") -> int:
     """Cria uma loja nova (config vazia = todos os padrões). Se vier config,
-    ela passa pela mesma validação da tela."""
+    ela passa pela mesma validação da tela. Só o operador cria lojas."""
     if segmento not in SEGMENTOS:
         raise ConfigInvalida([f"segmento '{segmento}' não existe (disponíveis: {sorted(SEGMENTOS)})"])
     _texto(1, 80)(nome)
@@ -435,7 +500,7 @@ def criar_loja(nome: str, segmento: str = "veiculos",
     finally:
         conexao.close()
     if config:
-        salvar_config(loja_id, config, usuario)
+        salvar_config(loja_id, config, usuario, papel="operador")
     return loja_id
 
 

@@ -1,10 +1,11 @@
 """
-Como cada variável da loja aparece na tela de Configuração (Etapa 1, item 1.8).
+Como cada variável da loja aparece na tela (Etapa 1, item 1.8; separação de painel).
 
 Separado do Streamlit para dar para testar a conversão
 "valor da tela" <-> "valor da configuração" sem abrir o painel.
-Regra: toda chave de EDITAVEIS (app/lojas.py) precisa de um Campo aqui
-(um teste cobra isso).
+Regras (testes cobram):
+  - toda chave de EDITAVEIS (app/lojas.py) tem um Campo aqui;
+  - os Campos com dono="operador" são exatamente CHAVES_DO_OPERADOR.
 """
 from __future__ import annotations
 
@@ -13,17 +14,19 @@ from dataclasses import dataclass
 from app.lojas import MODULOS, PADROES, Loja, pendentes
 
 DIAS = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
+DONOS = ("cliente", "operador")
 
 GRUPOS = ("Identidade", "Atendimento", "Módulos", "Handoff", "Financiamento",
-          "Remarketing", "Pós-venda", "Instagram", "Custos e dados")
+          "Remarketing", "Pós-venda", "Instagram", "Custos", "Dados")
 
 NOTAS_GRUPO = {
-    "Módulos": "Agendamento e fotos já ligam e desligam as ferramentas do agente. "
-               "WhatsApp, Instagram, remarketing e pós-venda passam a valer na etapa de cada um.",
+    "Módulos": "É o plano contratado. Agendamento e fotos já ligam e desligam as ferramentas "
+               "do agente. WhatsApp, Instagram, remarketing e pós-venda valem na etapa de cada um.",
     "Remarketing": "Pode configurar desde já. Os envios começam na Etapa 2.",
     "Pós-venda": "Pode configurar desde já. O pós-venda começa na Etapa 2.",
     "Instagram": "Pode configurar desde já. O Instagram chega na Etapa 3.",
-    "Custos e dados": "O custo começa a ser medido no Bloco 6.",
+    "Custos": "Teto de gasto com IA por dia. O alerta automático por Telegram chega no Bloco 7B.",
+    "Dados": "Prazo de guarda das conversas, a definir com o advogado.",
 }
 
 ROTULO_OPCAO = {
@@ -49,6 +52,7 @@ class Campo:
     grupo: str
     ajuda: str = ""
     opcoes: tuple = ()
+    dono: str = "cliente"   # quem edita: "cliente" ou "operador"
 
 
 CAMPOS: tuple[Campo, ...] = (
@@ -65,11 +69,13 @@ CAMPOS: tuple[Campo, ...] = (
           "decimal", "Atendimento",
           "Medição. Hoje o código ainda usa 8 s fixos; este valor passa a ser lido mais adiante."),
     Campo("atendimento.aguardando_vendedor", "O que o agente faz enquanto espera o vendedor",
-          "opcao", "Atendimento", "Passa a valer no Bloco 7 (decisão 1.12).",
+          "opcao", "Atendimento",
+          "Hoje o agente usa sempre o meio-termo (Bloco 7A). As outras opções ficam para depois.",
           ("conversar", "esperar", "meio_termo")),
-    *(Campo(f"modulos.{m}", _ROTULO_MODULO[m], "sim_nao", "Módulos") for m in MODULOS),
+    *(Campo(f"modulos.{m}", _ROTULO_MODULO[m], "sim_nao", "Módulos", dono="operador")
+      for m in MODULOS),
     Campo("handoff.reaviso_min", "Minutos até o re-aviso ao vendedor", "inteiro", "Handoff",
-          "Já define a cor amarela da fila. O re-aviso automático chega no Bloco 7."),
+          "Já define a cor amarela da fila. O re-aviso automático chega no Bloco 7B."),
     Campo("handoff.gestor_min", "Minutos até avisar o gestor", "inteiro", "Handoff",
           "Já define a cor vermelha da fila."),
     Campo("financiamento.taxa_mensal", "Taxa da simulação", "percentual", "Financiamento",
@@ -84,7 +90,7 @@ CAMPOS: tuple[Campo, ...] = (
           "Entre 08:00 e 21:00."),
     Campo("remarketing.dias_envio", "Dias de envio", "dias", "Remarketing"),
     Campo("remarketing.limite_mensal", "Limite mensal de envios", "inteiro_opcional",
-          "Remarketing", "Deixe vazio enquanto não estiver no contrato."),
+          "Remarketing", "Do contrato. Vazio enquanto não estiver definido.", dono="operador"),
     Campo("pos_venda.revisao_meses", "Revisão: a cada quantos meses", "inteiro", "Pós-venda"),
     Campo("pos_venda.revisao_km", "Revisão: a cada quantos km", "inteiro", "Pós-venda"),
     Campo("pos_venda.troca_avista_meses", "Reabordar troca (compra à vista) após quantos meses",
@@ -99,12 +105,13 @@ CAMPOS: tuple[Campo, ...] = (
           '"todos" ou os ids dos posts separados por vírgula.'),
     Campo("instagram.resposta_publica", "Responder também em público", "sim_nao", "Instagram"),
     Campo("instagram.limite_private_replies_h", "Limite de respostas privadas por hora",
-          "inteiro", "Instagram"),
+          "inteiro", "Instagram", "Limite de uso do plano.", dono="operador"),
     Campo("instagram.texto_private_reply", "Texto da resposta privada", "texto_longo", "Instagram"),
     Campo("custos.teto_diario_llm", "Teto diário de gasto com IA (alerta, R$)",
-          "decimal_opcional", "Custos e dados", "Vazio = sem teto. Definido depois de medir."),
+          "decimal_opcional", "Custos", "Vazio = sem teto. Definido depois de medir.",
+          dono="operador"),
     Campo("dados.retencao_dias", "Guardar conversas por quantos dias", "inteiro_opcional",
-          "Custos e dados", "Vazio = a definir com o advogado."),
+          "Dados", "Vazio = a definir com o advogado."),
 )
 
 ROTULO = {c.chave: c.rotulo for c in CAMPOS}
@@ -113,6 +120,19 @@ _POR_CHAVE = {c.chave: c for c in CAMPOS}
 
 def campo(chave: str) -> Campo:
     return _POR_CHAVE[chave]
+
+
+def campos_do(dono: str) -> list[Campo]:
+    """Campos que um painel mostra: 'cliente' (Configuração) ou 'operador' (Plano e limites)."""
+    if dono not in DONOS:
+        raise ValueError(f"dono '{dono}' não existe")
+    return [c for c in CAMPOS if c.dono == dono]
+
+
+def grupos_do(dono: str) -> list[str]:
+    """Só os grupos que têm ao menos um campo daquele dono (sem aba vazia)."""
+    presentes = {c.grupo for c in campos_do(dono)}
+    return [g for g in GRUPOS if g in presentes]
 
 
 def padrao(c: Campo):

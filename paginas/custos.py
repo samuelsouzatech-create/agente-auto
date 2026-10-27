@@ -3,8 +3,9 @@ import streamlit as st
 
 from app import custos, precos
 from app.lojas import carregar_loja
-from paginas.comum import avisar, loja_atual, mostrar_aviso
+from paginas.comum import avisar, exigir_operador, loja_atual, mostrar_aviso
 
+exigir_operador()
 
 def brl(valor, casas=2):
     """Custo de IA por resposta é fração de centavo: mais casas quando precisa."""
@@ -61,7 +62,7 @@ if teto:
         st.error("Teto diário atingido. (O alerta automático por Telegram chega no Bloco 7.)")
 else:
     st.caption(f"Gasto de hoje: {brl(gasto_hoje, 4)}. Sem teto diário "
-               "(defina em Configuração > Custos e dados).")
+               "(defina em Plano e limites > Custos).")
 
 # ------------------------------------------------------------- detalhes
 por_dia = custos.custo_por_dia(loja.id, ano, mes)

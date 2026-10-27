@@ -1,0 +1,3 @@
+# Os painéis não têm login: só aceitam conexão desta máquina.
+[server]
+address = "localhost"

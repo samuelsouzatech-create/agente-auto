@@ -4,10 +4,12 @@ import streamlit as st
 from app.canais import TIPOS_DE_CANAL, cadastrar_canal, desativar_canal, listar_canais
 from app.lojas import SEGMENTOS, carregar_loja, criar_loja
 from app.lojas_admin import listar_lojas, renomear_loja
-from paginas.comum import avisar, loja_atual, mostrar_aviso, trocar_loja
+from paginas.comum import avisar, exigir_operador, loja_atual, mostrar_aviso, trocar_loja
+
+exigir_operador()
 
 st.title("🏬 Lojas e canais")
-st.caption("Tela do operador (você). Na Etapa 5, só o operador vai ver esta página.")
+st.caption("Tela do operador. Só aparece no painel do operador.")
 mostrar_aviso()
 
 # ---------------------------------------------------------------- Lojas

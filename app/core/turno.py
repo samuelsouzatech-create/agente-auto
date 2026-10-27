@@ -199,6 +199,14 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     handoff = _chamou_handoff(do_turno)
     ferramentas = ferramentas_usadas(do_turno)
 
+    # Ponto 9: o vendedor pode ter assumido enquanto a IA pensava. A IA já foi
+    # paga (o custo é registrado), mas nada é enviado nem gravado como fala do Léo.
+    if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
+        print(f"{rotulo} Vendedor assumiu durante a resposta. Resposta descartada: {resposta}")
+        registro = registrar_uso(loja_id, lead_id, canal, uso_das_mensagens(do_turno),
+                                 ferramentas=ferramentas, latencia_ms=_ms_desde(inicio))
+        return ResultadoTurno(silenciado=True, execucao_id=_id(registro))
+
     if resposta_tem_preco_inventado(resposta, resultado["messages"]):
         print(f"{rotulo} GUARDA: preço inventado detectado. Acionando handoff.")
         print(f"{rotulo} Resposta barrada: {resposta}")

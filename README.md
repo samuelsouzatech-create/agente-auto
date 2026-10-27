@@ -75,3 +75,14 @@ O projeto segue o princípio de que o banco de dados próprio é a fonte da verd
 
 Protótipo em desenvolvimento (Fase 1 — Núcleo). Projeto de estudo e portfólio.
 
+## Painéis (só local, sem login)
+
+| Painel | Comando | Porta |
+|---|---|---|
+| Operador | `python -m streamlit run operador.py --server.port 8501` | 8501 |
+| Cliente  | `$env:LOJA_ID="1"` e depois `python -m streamlit run painel.py --server.port 8502` | 8502 |
+
+- O painel do cliente mostra só a loja de `LOJA_ID` e recusa abrir sem ela.
+- Campos de plano (módulos, teto de custo, limites) só o operador altera: a regra está no `salvar_config`, não só na tela.
+- Nenhum dos dois pode ir para a internet até existir login (API do painel).
+
