@@ -87,10 +87,10 @@ def whatsapp(monkeypatch, redis_falso, loja_b):
     wh = importar("app.api.webhook")
     saidas = Saidas()
 
-    async def resposta(numero, texto, atraso=0):
+    async def resposta(numero, texto, atraso=0, **kw):
         saidas.respostas.append((numero, texto))
 
-    async def foto(numero, url):
+    async def foto(numero, url, **kw):
         return True
 
     monkeypatch.setattr(wh, "enviar_resposta_humanizada", resposta)
@@ -104,7 +104,7 @@ def whatsapp(monkeypatch, redis_falso, loja_b):
 
 def test_chaves_padronizadas():
     assert chave_redis("lock", 2, "5581") == "lock:2:5581"
-    assert chave_redis("buffer", None, "5581") == "buffer:1:5581"
+    assert chave_redis("buffer", 1, "5581") == "buffer:1:5581"
     assert thread_id(2, "whatsapp", "5581") == "2:whatsapp:5581"
 
 
@@ -199,6 +199,14 @@ def test_canal_desativado_deixa_de_resolver(loja_b):
     cadastrar_canal(LOJA_B, "whatsapp", "PNID_B")
     desativar_canal("whatsapp", "PNID_B")
     assert resolver_loja("whatsapp", "PNID_B") is None
+
+
+def test_desativar_o_unico_canal_nao_volta_para_a_loja_1(loja_b):
+    """Antes: sem canal ATIVO, tudo caía na loja 1 (isolamento furado)."""
+    cadastrar_canal(LOJA_B, "whatsapp", "PNID_B")
+    desativar_canal("whatsapp", "PNID_B")
+    assert resolver_loja("whatsapp", "PNID_B") is None
+    assert resolver_loja("whatsapp", "QUALQUER_OUTRO") is None
 
 
 def test_recadastrar_move_o_canal_sem_duplicar(loja_b):

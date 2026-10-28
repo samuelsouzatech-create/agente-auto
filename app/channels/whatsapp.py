@@ -1,11 +1,16 @@
-"""Canal WhatsApp (Cloud API da Meta), no contrato de app/channels/base.py."""
+"""Canal WhatsApp (Cloud API da Meta), no contrato de app/channels/base.py.
+
+Revisão da Etapa 1: o canal sabe de qual loja é (CanalWhatsApp(loja_id)),
+e todo envio sai pelo número dessa loja. Para só LER o webhook, não
+precisa de loja: a loja é descoberta depois, pelo phone_number_id.
+"""
 from __future__ import annotations
 
-import httpx
-
 from app.channels.base import Canal, MensagemEntrada
-from app.config import WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_API_VERSION
-from app.api.enviar_whatsapp import enviar_texto_whatsapp, enviar_foto_whatsapp
+from app.chaves import exigir_loja
+from app.api.enviar_whatsapp import (
+    enviar_texto_whatsapp, enviar_foto_whatsapp, marcar_lida_whatsapp,
+)
 
 # Tipos que não pedem resposta (reação com emoji, avisos do sistema).
 TIPOS_IGNORADOS = {"reaction", "system"}
@@ -25,6 +30,12 @@ def _inteiro(valor) -> int:
 class CanalWhatsApp(Canal):
     nome = "whatsapp"
     duracao_digitando = 20.0   # o indicador da Meta dura até ~25 s
+
+    def __init__(self, loja_id: int | None = None):
+        self.loja_id = loja_id
+
+    def _loja(self, loja_id=None) -> int:
+        return exigir_loja(loja_id if loja_id is not None else self.loja_id)
 
     def ler_webhook(self, payload) -> list[MensagemEntrada]:
         """Lê TODAS as mensagens do pacote (a Meta pode mandar várias).
@@ -75,29 +86,12 @@ class CanalWhatsApp(Canal):
         return MensagemEntrada(tipo="texto", texto=texto, **comum) if texto else None
 
     async def enviar_texto(self, lead_id: str, texto: str) -> bool:
-        return await enviar_texto_whatsapp(lead_id, texto)
+        return await enviar_texto_whatsapp(lead_id, texto, loja_id=self._loja())
 
     async def enviar_midia(self, lead_id: str, url: str) -> bool:
-        return await enviar_foto_whatsapp(lead_id, url)
+        return await enviar_foto_whatsapp(lead_id, url, loja_id=self._loja())
 
-    async def marcar_lida(self, id_mensagem: str, digitando: bool = False) -> bool:
-        """Dois 'checks azuis' + (opcional) 'digitando...', numa chamada só.
-        Sem conta Meta configurada, não faz nada (modo local)."""
-        if not id_mensagem or not WHATSAPP_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
-            return False
-        url = f"https://graph.facebook.com/{WHATSAPP_API_VERSION}/{WHATSAPP_PHONE_NUMBER_ID}/messages"
-        corpo = {"messaging_product": "whatsapp", "status": "read", "message_id": id_mensagem}
-        if digitando:
-            corpo["typing_indicator"] = {"type": "text"}
-        try:
-            async with httpx.AsyncClient(timeout=10) as cliente:
-                resposta = await cliente.post(
-                    url, json=corpo,
-                    headers={"Authorization": f"Bearer {WHATSAPP_TOKEN}"},
-                )
-            if resposta.status_code == 200:
-                return True
-            print(f"[WhatsApp] Aviso: não marcou como lida ({resposta.status_code}): {resposta.text}")
-        except Exception as erro:
-            print(f"[WhatsApp] Aviso: erro ao marcar como lida: {erro}")
-        return False
+    async def marcar_lida(self, id_mensagem: str, digitando: bool = False,
+                          loja_id: int | None = None) -> bool:
+        return await marcar_lida_whatsapp(id_mensagem, loja_id=self._loja(loja_id),
+                                          digitando=digitando)

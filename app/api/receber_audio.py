@@ -5,19 +5,15 @@ Este é o ÚNICO arquivo que conhece o SDK do fornecedor de IA para áudio
 (hoje, google-genai). Se trocar de fornecedor, é aqui que muda,
 inclusive a leitura dos tokens (uso_da_resposta).
 
-- transcrever_bytes_com_uso(bytes, mime) -> (texto, Uso)
-- transcrever_bytes(bytes, mime)         -> texto (compatibilidade)
-- transcrever_audio(id_audio)            -> texto (fluxo WhatsApp/Meta)
+- transcrever_bytes_com_uso(bytes, mime)  -> (texto, Uso)
+- transcrever_bytes(bytes, mime)          -> texto (compatibilidade)
+- transcrever_audio(id_audio, loja_id=..) -> texto (WhatsApp, token DA LOJA)
 """
 import httpx
 from google import genai
 
-from app.config import (
-    WHATSAPP_TOKEN,
-    WHATSAPP_API_VERSION,
-    GOOGLE_API_KEY,
-    MODELO_LLM,
-)
+from app.config import WHATSAPP_API_VERSION, GOOGLE_API_KEY, MODELO_LLM
+from app.credenciais import SemCredencial, credencial_whatsapp
 from app.custos import Uso
 
 # Uso de cada transcrição do WhatsApp, guardado pelo id do áudio até o
@@ -73,15 +69,16 @@ def pegar_uso_da_transcricao(id_audio: str) -> Uso | None:
     return _uso_por_audio.pop(id_audio, None)
 
 
-async def transcrever_audio(id_audio: str) -> str | None:
-    """Fluxo do WhatsApp/Meta: baixa o áudio pelo id e transcreve.
-    Devolve None se não houver token ou se algo falhar."""
-    if not WHATSAPP_TOKEN:
-        print("[WhatsApp] AVISO: WHATSAPP_TOKEN vazio. "
-              "Transcrição de áudio pulada (ainda em modo local).")
+async def transcrever_audio(id_audio: str, *, loja_id: int) -> str | None:
+    """WhatsApp: baixa o áudio pelo id (com o token DA LOJA) e transcreve.
+    Devolve None se a loja não tiver credencial ou se algo falhar."""
+    try:
+        cred = credencial_whatsapp(loja_id)
+    except SemCredencial as erro:
+        print(f"[WhatsApp][loja {loja_id}] Transcrição de áudio pulada: {erro}.")
         return None
 
-    cabecalho = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
+    cabecalho = {"Authorization": f"Bearer {cred.token}"}
     try:
         async with httpx.AsyncClient(timeout=30) as cliente:
             url_meta = f"https://graph.facebook.com/{WHATSAPP_API_VERSION}/{id_audio}"
@@ -101,5 +98,5 @@ async def transcrever_audio(id_audio: str) -> str | None:
         _uso_por_audio[id_audio] = uso
         return texto
     except Exception as e:
-        print(f"[WhatsApp] Erro ao baixar áudio: {e}")
+        print(f"[WhatsApp][loja {loja_id}] Erro ao baixar áudio: {type(e).__name__}")
         return None

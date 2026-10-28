@@ -38,6 +38,7 @@ from app.handoff import estado_do_handoff
 from app.humanizador import dividir_em_bolhas
 from app.mensagens import salvar_mensagem, mensagens_desde_a_ultima_resposta_do_leo
 from app.naturalidade import parece_robotica
+from app.pedido_parada import registrar_se_pediu_parada
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock_esperando
 from app.utils import extrair_texto, mensagens_do_turno
@@ -165,6 +166,11 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
 
     perdidas = _o_que_aconteceu_fora(loja_id, lead_id)
     salvar_mensagem(lead_id, "cliente", texto, canal=canal, tipo=tipo, loja_id=loja_id)
+
+        # Rede de segurança: pedido claro de parada é gravado pelo CÓDIGO,
+    # antes de tudo (vale até com o vendedor no comando).
+    registrar_se_pediu_parada(loja_id, lead_id, texto, canal)
+
 
     if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
         print(f"{rotulo} Lead {lead_id} está com um vendedor humano. Léo em silêncio.")

@@ -291,13 +291,16 @@ def test_painel_recusa_outro_vendedor_simulador_e_vazio(envio_falso):
 
 
 def test_painel_recusa_bot_de_outra_loja(monkeypatch, loja_b):
+    """Revisão da Etapa 1: o painel usa as credenciais DA LOJA. A loja B não tem
+    bot cadastrado, então não pode responder pelo bot da loja 1."""
     from app.canais import cadastrar_canal
-    cadastrar_canal(1, "telegram", "111")
-    monkeypatch.setattr(envio_painel, "TELEGRAM_TOKEN", "111:abc")
+    cadastrar_canal(1, "telegram", "111")          # só a loja 1 tem bot
     lead = _lead()
     assumir_conversa(lead, "Bia", loja_id=LOJA_B)
-    with pytest.raises(EnvioRecusado, match="não é o bot desta loja"):
+    with pytest.raises(EnvioRecusado):
         enviar_pelo_painel(LOJA_B, "telegram", lead, "oi", "Bia")
+    # Nada foi gravado como enviado pelo vendedor.
+    assert all(m["direcao"] != "vendedor" for m in historico_do_lead(lead, LOJA_B))
 
 
 # ------------------------------------------- o Léo volta sabendo de tudo

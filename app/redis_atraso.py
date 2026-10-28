@@ -1,12 +1,13 @@
 """
 Atraso adaptativo por lead E por loja (humanização). Chave: visto:{loja}:{lead}.
 Cliente ativo (falou há pouco) -> 1-3 s. Sumiu e voltou -> 10-30 s.
+A loja é obrigatória.
 """
 import time
 import random
 
 from app.redis_cliente import redis_cliente
-from app.chaves import chave_redis, LOJA_PADRAO
+from app.chaves import chave_redis
 
 LIMITE_ATIVO_S = 120
 ATRASO_ATIVO = (1, 3)
@@ -14,7 +15,7 @@ ATRASO_AUSENTE = (10, 30)
 TTL_VISTO = 6 * 60 * 60
 
 
-async def calcular_atraso(lead_id: str, *, loja_id: int = LOJA_PADRAO) -> float:
+async def calcular_atraso(lead_id: str, *, loja_id: int | None = None) -> float:
     chave_visto = chave_redis("visto", loja_id, lead_id)
     agora = time.time()
     visto_antes = await redis_cliente.get(chave_visto)

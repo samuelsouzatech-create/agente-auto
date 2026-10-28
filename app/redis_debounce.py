@@ -3,23 +3,22 @@ Debounce por lead E por loja (Fase 2, Bloco 5 + Etapa 1, Bloco 3).
 
 Acumula a rajada de mensagens do cliente num buffer no Redis e só processa
 depois de alguns segundos de silêncio. Chaves: buffer:{loja}:{lead} e
-ultima_hora:{loja}:{lead}.
+ultima_hora:{loja}:{lead}. A loja é obrigatória.
 """
 import time
 import asyncio
 
 from app.redis_cliente import redis_cliente
-from app.chaves import chave_redis, LOJA_PADRAO
+from app.chaves import chave_redis
 
-# Silêncio esperado antes de processar (vira config por loja no Bloco 4).
 DEBOUNCE_SEGUNDOS = 8
 TTL_BUFFER = 120
 
 
-async def acumular_e_esperar(lead_id: str, texto: str, loja_id: int = LOJA_PADRAO) -> str | None:
+async def acumular_e_esperar(lead_id: str, texto: str, loja_id: int | None = None) -> str | None:
     """Devolve o texto juntado se ESTA execução for a dona da rajada;
     None se chegou mensagem mais nova (ela cuidará)."""
-    chave_buffer = chave_redis("buffer", loja_id, lead_id)
+    chave_buffer = chave_redis("buffer", loja_id, lead_id)   # sem loja: erro
     chave_hora = chave_redis("ultima_hora", loja_id, lead_id)
     hora_desta = time.time()
 

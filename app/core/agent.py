@@ -20,6 +20,7 @@ from langchain_core.messages import ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import MODELO_LLM, TEMPERATURA, TIMEOUT, MAX_RETRIES
+from app.chaves import exigir_loja
 from app.handoff import estado_do_handoff
 from app.lojas import carregar_loja
 from app.mensagens import ja_respondeu
@@ -27,7 +28,6 @@ from app.core.montagem import (
     TODAS_AS_FERRAMENTAS, ferramentas_da_loja, montar_prompt, fuso_da_loja,
 )
 
-LOJA_PADRAO = 1
 
 # --- O modelo (sem ferramentas amarradas: cada loja amarra as suas) ---
 llm = ChatGoogleGenerativeAI(
@@ -58,7 +58,7 @@ class EstadoConversa(TypedDict):
 
 
 def _loja_do_estado(estado):
-    loja_id = estado.get("loja_id") or LOJA_PADRAO
+    loja_id = exigir_loja(estado.get("loja_id"))   # sem loja: erro, nunca loja 1
     return loja_id, carregar_loja(loja_id)
 
 

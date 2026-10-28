@@ -1,4 +1,4 @@
-"""O vendedor responde pelo painel, pelo MESMO número/bot da loja (Bloco 7A).
+"""O vendedor responde  pelo painel, pelo MESMO número/bot da loja (Bloco 7A; revisão da Etapa 1).
 
 Por que pelo painel: um número ligado à API da Meta não funciona ao mesmo
 tempo no aplicativo comum do WhatsApp. Saindo daqui, o cliente continua na
@@ -6,15 +6,13 @@ mesma conversa e não percebe troca nenhuma.
 
 Regras:
   - só responde quem ASSUMIU a conversa (assim o assistente fica em silêncio);
-  - a mensagem é gravada como direcao='vendedor' (autor = nome), e o
-    assistente recebe esse trecho quando a conversa voltar para ele;
-  - por enquanto o envio usa o número/bot do .env. Se ele não for o canal
-    desta loja, o envio é recusado (nada sai pelo número errado).
+  - a mensagem é gravada como direcao='vendedor' (autor = nome);
+  - o envio usa as credenciais DESTA loja (app/credenciais.py). Sem
+    credencial, o envio é recusado: nada sai pelo número de outra loja.
 """
 import asyncio
 
-from app.canais import id_bot_telegram, resolver_loja
-from app.config import TELEGRAM_TOKEN, WHATSAPP_PHONE_NUMBER_ID
+from app.credenciais import SemCredencial, credencial_whatsapp, token_telegram
 from app.handoff import estado_do_handoff, quem_assumiu
 from app.mensagens import salvar_mensagem
 
@@ -26,22 +24,21 @@ class EnvioRecusado(Exception):
     """O motivo vem pronto para mostrar na tela."""
 
 
-def _canal_e_da_loja(tipo: str, id_externo: str, loja_id: int) -> bool:
-    return bool(id_externo) and resolver_loja(tipo, id_externo) == loja_id
-
-
 async def _despachar(loja_id: int, canal: str, lead_id: str, texto: str) -> bool:
     if canal == "whatsapp":
-        if not _canal_e_da_loja("whatsapp", WHATSAPP_PHONE_NUMBER_ID, loja_id):
-            raise EnvioRecusado("O número de WhatsApp configurado neste computador não é o desta loja.")
+        try:
+            credencial_whatsapp(loja_id)
+        except SemCredencial as erro:
+            raise EnvioRecusado(f"O WhatsApp desta loja não está configurado neste computador: {erro}.")
         from app.api.enviar_whatsapp import enviar_texto_whatsapp
-        return await enviar_texto_whatsapp(lead_id, texto)
+        return await enviar_texto_whatsapp(lead_id, texto, loja_id=loja_id)
     if canal == "telegram":
-        if not _canal_e_da_loja("telegram", id_bot_telegram(TELEGRAM_TOKEN), loja_id):
-            raise EnvioRecusado("O bot do Telegram deste computador (TELEGRAM_TOKEN do .env) "
-                                "não é o bot desta loja.")
+        try:
+            token = token_telegram(loja_id)
+        except SemCredencial as erro:
+            raise EnvioRecusado(f"O bot de Telegram desta loja não está configurado neste computador: {erro}.")
         from telegram import Bot
-        async with Bot(TELEGRAM_TOKEN) as bot:
+        async with Bot(token) as bot:
             await bot.send_message(chat_id=lead_id, text=texto)
         return True
     raise EnvioRecusado("Este canal não recebe mensagens do painel.")

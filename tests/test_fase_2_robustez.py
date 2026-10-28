@@ -107,10 +107,10 @@ def saidas(monkeypatch, redis_falso):
     wh = importar_webhook()
     capturadas = Saidas()
  
-    async def resposta(numero, texto, atraso=0):
+    async def resposta(numero, texto, atraso=0, **kw):
         capturadas.respostas.append((numero, texto))
  
-    async def foto(numero, url):
+    async def foto(numero, url, **kw):
         capturadas.fotos.append((numero, url))
         return True
  
@@ -149,9 +149,9 @@ def test_mensagem_durante_o_processamento_nao_e_perdida(monkeypatch, saidas):
     monkeypatch.setattr(wh, "agente_grafo", grafo)
  
     async def cenario():
-        t1 = asyncio.create_task(wh.processar_mensagem("5581", "quero um civic"))
+        t1 = asyncio.create_task(wh.processar_mensagem("5581", "quero um civic", None, 1))
         await asyncio.sleep(0.4)  # o Léo ainda está processando a 1ª
-        t2 = asyncio.create_task(wh.processar_mensagem("5581", "pode ser o 2019?"))
+        t2 = asyncio.create_task(wh.processar_mensagem("5581", "pode ser o 2019?", None, 1))
         await asyncio.gather(t1, t2)
  
     asyncio.run(cenario())
@@ -170,9 +170,9 @@ def test_execucoes_do_mesmo_lead_nunca_se_sobrepoem(monkeypatch, saidas):
     monkeypatch.setattr(wh, "agente_grafo", grafo)
  
     async def cenario():
-        t1 = asyncio.create_task(wh.processar_mensagem("5581", "primeira"))
+        t1 = asyncio.create_task(wh.processar_mensagem("5581", "primeira", None, 1))
         await asyncio.sleep(0.35)
-        t2 = asyncio.create_task(wh.processar_mensagem("5581", "segunda"))
+        t2 = asyncio.create_task(wh.processar_mensagem("5581", "segunda", None, 1))
         await asyncio.gather(t1, t2)
  
     asyncio.run(cenario())
@@ -189,8 +189,8 @@ def test_leads_diferentes_rodam_em_paralelo(monkeypatch, saidas):
  
     async def cenario():
         await asyncio.gather(
-            wh.processar_mensagem("5581111", "oi, sou o Ana"),
-            wh.processar_mensagem("5581222", "oi, sou o Beto"),
+            wh.processar_mensagem("5581111", "oi, sou o Ana", None, 1),
+            wh.processar_mensagem("5581222", "oi, sou o Beto", None, 1),
         )
  
     asyncio.run(cenario())
@@ -208,7 +208,7 @@ def test_rajada_de_mensagens_vira_uma_unica_resposta(monkeypatch, saidas):
     async def cenario():
         tarefas = []
         for texto in ("oi", "vcs tem", "Civic?"):
-            tarefas.append(asyncio.create_task(wh.processar_mensagem("5581", texto)))
+            tarefas.append(asyncio.create_task(wh.processar_mensagem("5581", texto, None, 1)))
             await asyncio.sleep(0.03)
         await asyncio.gather(*tarefas)
  
@@ -255,9 +255,9 @@ def test_fotos_nao_sao_reenviadas_nos_turnos_seguintes(monkeypatch, saidas, banc
     numero = f"55{uuid.uuid4().hex[:9]}"
  
     async def cenario():
-        await wh.processar_mensagem(numero, "manda foto do corolla")
+        await wh.processar_mensagem(numero, "manda foto do corolla", None, 1)
         fotos_no_turno_1 = len(saidas.fotos)
-        await wh.processar_mensagem(numero, "ele é automático?")
+        await wh.processar_mensagem(numero, "ele é automático?", None, 1)
         return fotos_no_turno_1
  
     fotos_no_turno_1 = asyncio.run(cenario())
@@ -282,8 +282,8 @@ def test_pedir_fotos_de_novo_envia_de_novo(monkeypatch, saidas, banco_com_fotos)
     numero = f"55{uuid.uuid4().hex[:9]}"
  
     async def cenario():
-        await wh.processar_mensagem(numero, "manda foto do corolla")
-        await wh.processar_mensagem(numero, "manda as fotos de novo, por favor")
+        await wh.processar_mensagem(numero, "manda foto do corolla", None, 1)
+        await wh.processar_mensagem(numero, "manda as fotos de novo, por favor", None, 1)
  
     asyncio.run(cenario())
  

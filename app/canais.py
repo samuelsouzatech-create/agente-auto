@@ -1,17 +1,24 @@
-"""Qual loja é dona de cada canal (item 1.5).
+"""Qual loja é dona de cada canal (item 1.5; revisão da Etapa 1).
 
 Tabela canais: tipo (whatsapp/telegram/instagram) + id_externo
 (phone_number_id, id do bot, id da conta) -> loja_id.
+token_ref guarda só o NOME da variável do .env com o token do canal.
 
 Regra de resolução:
-  1. id cadastrado e ativo           -> loja dona dele
-  2. nenhum canal ATIVO desse tipo   -> loja 1 (modo de transição, loja única)
-  3. existem canais, mas não este id -> None (a mensagem é ignorada)
+  1. id cadastrado e ativo -> loja dona dele
+  2. NENHUM canal desse tipo cadastrado (nem desativado) -> loja 1
+     (modo de transição, loja única)
+  3. existem canais desse tipo, mas não este id (ou ele está desativado)
+     -> None (a mensagem é ignorada). Desativar o único canal NÃO volta
+     para a loja 1.
 """
+import re
+
 from banco import conectar
 from app.chaves import LOJA_PADRAO
 
 TIPOS_DE_CANAL = ("whatsapp", "telegram", "instagram")
+_NOME_DE_VARIAVEL = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,59}$")
 
 
 def resolver_loja(tipo: str, id_externo) -> int | None:
@@ -25,11 +32,35 @@ def resolver_loja(tipo: str, id_externo) -> int | None:
             if linha:
                 return linha["loja_id"]
         algum = conexao.execute(
-            "SELECT 1 FROM canais WHERE tipo = ? AND ativo = 1 LIMIT 1", (tipo,)
+            "SELECT 1 FROM canais WHERE tipo = ? LIMIT 1", (tipo,)
         ).fetchone()
     finally:
         conexao.close()
     return LOJA_PADRAO if algum is None else None
+
+
+def existe_canal_do_tipo(tipo: str) -> bool:
+    """Algum canal desse tipo já foi cadastrado (ativo ou desativado)?"""
+    conexao = conectar()
+    try:
+        return conexao.execute(
+            "SELECT 1 FROM canais WHERE tipo = ? LIMIT 1", (tipo,)
+        ).fetchone() is not None
+    finally:
+        conexao.close()
+
+
+def canal_ativo_da_loja(loja_id: int, tipo: str) -> dict | None:
+    """O canal ativo daquele tipo nesta loja (o primeiro cadastrado), ou None."""
+    conexao = conectar()
+    try:
+        linha = conexao.execute(
+            "SELECT * FROM canais WHERE loja_id = ? AND tipo = ? AND ativo = 1 ORDER BY id LIMIT 1",
+            (loja_id, tipo),
+        ).fetchone()
+    finally:
+        conexao.close()
+    return dict(linha) if linha else None
 
 
 def cadastrar_canal(loja_id: int, tipo: str, id_externo: str, token_ref: str = "") -> None:
@@ -38,6 +69,10 @@ def cadastrar_canal(loja_id: int, tipo: str, id_externo: str, token_ref: str = "
         raise ValueError(f"Tipo de canal inválido: {tipo}. Use: {', '.join(TIPOS_DE_CANAL)}.")
     if not str(id_externo).strip():
         raise ValueError("id_externo vazio.")
+    token_ref = (token_ref or "").strip()
+    if token_ref and not _NOME_DE_VARIAVEL.match(token_ref):
+        raise ValueError("token_ref é o NOME de uma variável do .env "
+                         "(ex.: WHATSAPP_TOKEN_LOJA2), nunca o token.")
     conexao = conectar()
     try:
         if not conexao.execute("SELECT 1 FROM lojas WHERE id = ?", (loja_id,)).fetchone():

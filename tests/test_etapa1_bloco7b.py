@@ -363,7 +363,7 @@ def test_etapa1_final_duas_lojas_cada_uma_com_seus_avisos(loja_b, telegram):
 # ---------------------------------------------------------------- runner e páginas
 def test_rodar_ciclo_e_runner():
     assert set(alertas.rodar_ciclo(TERCA_15H)) == {"handoffs", "gastos"}
-    assert runner.main(["--uma-vez"]) == 0
+    assert runner.main(["--uma-vez", "--sem-trava"]) == 0
 
 
 def test_arquivos_compilam():

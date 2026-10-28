@@ -92,20 +92,25 @@ class Saidas:
 
 @pytest.fixture
 def whatsapp(monkeypatch, redis_falso, banco_temporario):
-    """Webhook do WhatsApp com envio capturado e grafo falso trocável."""
+    """Webhook do WhatsApp com envio capturado e grafo falso trocável.
+    Desde a revisão da Etapa 1 a loja é obrigatória: estes testes da Fase 3
+    rodam sempre na loja 1, informada explicitamente."""
+    import functools
     wh = importar_modulo("app.api.webhook")
     saidas = Saidas()
 
-    async def resposta(numero, texto, atraso=0):
+    async def resposta(numero, texto, *args, **kwargs):
         saidas.respostas.append((numero, texto))
 
-    async def foto(numero, url):
+    async def foto(numero, url, *args, **kwargs):
         return True
 
     monkeypatch.setattr(wh, "enviar_resposta_humanizada", resposta)
     monkeypatch.setattr(wh, "enviar_foto_whatsapp", foto)
     grafo = GrafoFalso()
     monkeypatch.setattr(wh, "agente_grafo", grafo)
+    monkeypatch.setattr(wh, "processar_mensagem",
+                        functools.partial(wh.processar_mensagem, loja_id=1))
     return wh, grafo, saidas
 
 
@@ -332,7 +337,7 @@ def test_telegram_leo_em_silencio_mas_mensagem_e_salva(monkeypatch, redis_falso,
     abrir_handoff("777")
     assumir_handoff("777", "Ana")
 
-    resposta, fotos = asyncio.run(tb.processar_texto("777", "pode baixar?"))
+    resposta, fotos = asyncio.run(tb.processar_texto("777", "pode baixar?", loja_id=1))
 
     assert (resposta, fotos) == (None, [])
     assert grafo.entradas == []
@@ -343,7 +348,7 @@ def test_telegram_leo_responde_quando_nao_ha_humano(monkeypatch, redis_falso, ba
     tb = importar_modulo("app.api.telegram_bot")
     grafo = GrafoFalso("Tenho sim!")
     monkeypatch.setattr(tb, "agente_grafo", grafo)
-    resposta, fotos = asyncio.run(tb.processar_texto("777", "tem Civic?"))
+    resposta, fotos = asyncio.run(tb.processar_texto("777", "tem Civic?", loja_id=1))
     assert resposta == "Tenho sim!"
     assert grafo.entradas == ["tem Civic?"]
 

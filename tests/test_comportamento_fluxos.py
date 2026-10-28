@@ -168,7 +168,7 @@ def conversar_em_turnos(falas, lead_id=None) -> Conversa:
     for fala in falas:
         historico.append(HumanMessage(content=fala))
         resultado = agent.agente_grafo.invoke(
-            {"messages": historico, "lead_id": lead_id},
+            {"messages": historico, "lead_id": lead_id, "loja_id": 1},
             {"configurable": {"thread_id": lead_id}},
         )
         conversa.novas_por_turno.append(resultado["messages"][len(historico):])

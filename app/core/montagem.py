@@ -10,7 +10,6 @@ Camadas do prompt (item 1.3 da Arquitetura 4.0):
 
 Este módulo não cria o modelo de IA, então os testes podem importá-lo sem chave.
 """
-from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -79,6 +78,34 @@ TEXTO_EM_ESPERA = """VENDEDOR A CAMINHO
 - Não chame acionar_handoff de novo pelo mesmo assunto. Só chame se surgir um caso vermelho novo.
 - Nunca diga "aguarde na fila", "transferindo" ou qualquer coisa que soe como sistema."""
 
+TEXTO_EM_ESPERA_CONVERSAR = """VENDEDOR A CAMINHO
+- Alguém da equipe de vendas já foi chamado e vai entrar em breve.
+- Continue atendendo normalmente em tudo o que você já faz, inclusive simulações (sempre como estimativa).
+- Desconto, preço negociado, aprovação de crédito e reserva continuam sendo do vendedor: diga com naturalidade que ele acerta isso com o cliente.
+- Não chame acionar_handoff de novo pelo mesmo assunto. Só chame se surgir um caso vermelho novo.
+- Nunca diga "aguarde na fila", "transferindo" ou qualquer coisa que soe como sistema."""
+
+TEXTO_EM_ESPERA_QUIETO = """VENDEDOR A CAMINHO (esta loja prefere que você aguarde o colega)
+- Um colega da equipe de vendas já foi chamado. Responda com UMA frase curta e cordial dizendo que ele já vai falar com o cliente (ex.: "Já já o pessoal das vendas te chama aqui, tá?").
+- Não responda agora perguntas sobre carros, preços ou condições: o vendedor vai cuidar de tudo.
+- Se o cliente disser que não quer mais ser procurado, use registrar_interesse.
+- Nunca diga "aguarde na fila", "transferindo" ou qualquer coisa que soe como sistema."""
+
+# Decisão 1.12: a loja escolhe na Configuração (atendimento.aguardando_vendedor).
+TEXTOS_EM_ESPERA = {
+    "conversar": TEXTO_EM_ESPERA_CONVERSAR,
+    "meio_termo": TEXTO_EM_ESPERA,
+    "esperar": TEXTO_EM_ESPERA_QUIETO,
+}
+OPCAO_ESPERA_PADRAO = "meio_termo"
+FERRAMENTAS_DA_ESPERA_QUIETA = {"acionar_handoff", "registrar_interesse", "registrar_lead"}
+
+
+def opcao_de_espera(loja) -> str:
+    valor = valor_config(loja.config, "atendimento.aguardando_vendedor", OPCAO_ESPERA_PADRAO)
+    return valor if valor in TEXTOS_EM_ESPERA else OPCAO_ESPERA_PADRAO
+
+
 NOMES_DIAS = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
 DIAS_SEMANA = ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
                "sexta-feira", "sábado", "domingo")
@@ -93,15 +120,38 @@ def segmento_da_loja(loja) -> str:
 
 
 def ferramentas_da_loja(loja, em_espera: bool = False) -> list:
-    """Segmento + módulos ligados + universais. O resto o Léo nem conhece."""
+    """Segmento + módulos ligados + universais. Na espera do vendedor,
+    a opção da loja decide o que continua valendo."""
     lista = list(FERRAMENTAS_DO_SEGMENTO.get(segmento_da_loja(loja), []))
     for modulo, tools in FERRAMENTAS_DE_MODULO.items():
         if modulo_ligado(loja, modulo):
             lista.extend(tools)
     lista.extend(FERRAMENTAS_UNIVERSAIS)
     if em_espera:
-        lista = [f for f in lista if f.name not in FERRAMENTAS_FORA_DA_ESPERA]
+        opcao = opcao_de_espera(loja)
+        if opcao == "meio_termo":
+            lista = [f for f in lista if f.name not in FERRAMENTAS_FORA_DA_ESPERA]
+        elif opcao == "esperar":
+            lista = [f for f in lista if f.name in FERRAMENTAS_DA_ESPERA_QUIETA]
     return lista
+
+
+# Cache dos .md por data de modificação: editou o arquivo, vale na próxima mensagem.
+_cache_arquivos: dict[str, tuple[int, str]] = {}
+
+
+def _ler_arquivo(caminho: str) -> str:
+    p = Path(caminho)
+    modificado = p.stat().st_mtime_ns
+    guardado = _cache_arquivos.get(caminho)
+    if guardado and guardado[0] == modificado:
+        return guardado[1]
+    texto = p.read_text(encoding="utf-8").strip()
+    _cache_arquivos[caminho] = (modificado, texto)
+    return texto
+
+
+_ler_arquivo.cache_clear = _cache_arquivos.clear   # compatibilidade com o lru_cache antigo
 
 
 def fuso_da_loja(loja) -> ZoneInfo:
@@ -122,11 +172,6 @@ def descrever_dias(dias) -> str:
         return f"de {NOMES_DIAS[dias[0]]} a {NOMES_DIAS[dias[-1]]}"
     return ", ".join(NOMES_DIAS[d] for d in dias)
 
-
-@lru_cache(maxsize=None)
-def _ler_arquivo(caminho: str) -> str:
-    # Lido uma vez por execução. Se editar um .md, reinicie o bot/servidor.
-    return Path(caminho).read_text(encoding="utf-8").strip()
 
 
 def _camada_da_loja(loja) -> str:
@@ -173,7 +218,7 @@ def _camada_do_momento(loja, em_espera: bool, primeiro_contato: bool) -> str:
             "- Depois disso, não repita a apresentação."
         )
     if em_espera:
-        blocos.append(TEXTO_EM_ESPERA)
+        blocos.append(TEXTOS_EM_ESPERA[opcao_de_espera(loja)])
     return "\n\n".join(blocos)
 
 

@@ -184,10 +184,10 @@ def test_mesma_conversa_igual_nos_tres_canais(monkeypatch, redis_falso):
     urls = ["http://f/civic1.jpg", "http://f/civic2.jpg"]
     enviadas_wa, fotos_wa = [], []
 
-    async def resposta(numero, texto, atraso=0):
+    async def resposta(numero, texto, atraso=0, **kw):
         enviadas_wa.append(texto)
 
-    async def foto(numero, url):
+    async def foto(numero, url, **kw):
         fotos_wa.append(url)
         return True
 
@@ -196,8 +196,8 @@ def test_mesma_conversa_igual_nos_tres_canais(monkeypatch, redis_falso):
     monkeypatch.setattr(wh, "agente_grafo", GrafoRoteiro(texto_llm, urls))
     monkeypatch.setattr(tb, "agente_grafo", GrafoRoteiro(texto_llm, urls))
 
-    asyncio.run(wh.processar_mensagem("A", "tem civic?"))
-    resposta_tg, fotos_tg = asyncio.run(tb.processar_texto("B", "tem civic?"))
+    asyncio.run(wh.processar_mensagem("A", "tem civic?", None, 1))
+    resposta_tg, fotos_tg = asyncio.run(tb.processar_texto("B", "tem civic?", loja_id=1))
     sim = asyncio.run(turno.executar_turno(1, "simulador", "C", "tem civic?",
                                            grafo=GrafoRoteiro(texto_llm, urls)))
 
@@ -319,11 +319,11 @@ def test_whatsapp_marca_lida_antes_de_responder(monkeypatch, redis_falso):
     wh = importar("app.api.webhook")
     marcadas = []
 
-    async def marcar(id_mensagem, digitando=False):
+    async def marcar(id_mensagem, digitando=False, **kw):
         marcadas.append((id_mensagem, digitando))
         return True
 
-    async def resposta(numero, texto, atraso=0):
+    async def resposta(numero, texto, atraso=0, **kw):
         pass
 
     monkeypatch.setattr(wh.canal_whatsapp, "marcar_lida", marcar)
@@ -331,7 +331,7 @@ def test_whatsapp_marca_lida_antes_de_responder(monkeypatch, redis_falso):
     monkeypatch.setattr(wh, "agente_grafo", GrafoRoteiro("Oi!"))
     wh._ultima_recebida[(1, "5581")] = "wamid.ULTIMA"
 
-    asyncio.run(wh.processar_mensagem("5581", "oi"))
+    asyncio.run(wh.processar_mensagem("5581", "oi", None, 1))
     assert marcadas == [("wamid.ULTIMA", True)]
     assert (1, "5581") not in wh._ultima_recebida
 
@@ -340,7 +340,7 @@ def test_whatsapp_em_silencio_nao_marca_lida(monkeypatch, redis_falso):
     wh = importar("app.api.webhook")
     marcadas = []
 
-    async def marcar(id_mensagem, digitando=False):
+    async def marcar(id_mensagem, digitando=False, **kw):
         marcadas.append(id_mensagem)
         return True
 
@@ -348,7 +348,7 @@ def test_whatsapp_em_silencio_nao_marca_lida(monkeypatch, redis_falso):
     monkeypatch.setattr(wh, "agente_grafo", GrafoRoteiro("Oi!"))
     _abrir_e_assumir("5599")
     wh._ultima_recebida[(1, "5599")] = "wamid.Z"
-    asyncio.run(wh.processar_mensagem("5599", "oi"))
+    asyncio.run(wh.processar_mensagem("5599", "oi", None, 1))
     assert marcadas == []
 
 

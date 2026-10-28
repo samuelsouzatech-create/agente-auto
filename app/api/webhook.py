@@ -4,6 +4,9 @@ Servidor web (FastAPI) do webhook do WhatsApp - só a "porta".
 POST /webhook: valida assinatura -> lê TODAS as mensagens do pacote ->
 descobre a loja -> deduplica -> agenda o processamento e responde 200.
 O atendimento em si é o executar_turno() (app/core/turno.py).
+
+Revisão da Etapa 1: toda função daqui exige a loja (nada de "loja 1 por
+reserva") e todo envio sai pelo número da loja (app/credenciais.py).
 """
 import hashlib
 import hmac
@@ -24,11 +27,11 @@ from app.redis_lock import liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.dedup import ja_processada
 from app.canais import resolver_loja
-from app.chaves import LOJA_PADRAO
+from app.chaves import exigir_loja
 
 CANAL = "whatsapp"
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
-canal_whatsapp = CanalWhatsApp()
+canal_whatsapp = CanalWhatsApp()   # só lê o webhook; quem envia diz a loja a cada chamada
 
 # Última mensagem recebida de cada cliente (para marcar como lida antes de responder).
 _ultima_recebida: dict[tuple[int, str], str] = {}
@@ -42,10 +45,10 @@ def _lembrar_ultima(loja_id: int, lead_id: str, id_mensagem: str) -> None:
 
 
 async def sinalizar_leitura(loja_id: int, lead_id: str) -> None:
-    """Checks azuis + 'digitando...' na última mensagem do cliente."""
+    """Checks azuis + 'digitando...' na última mensagem do cliente (pelo número da loja)."""
     id_mensagem = _ultima_recebida.pop((loja_id, lead_id), None)
     if id_mensagem:
-        await canal_whatsapp.marcar_lida(id_mensagem, digitando=True)
+        await canal_whatsapp.marcar_lida(id_mensagem, digitando=True, loja_id=loja_id)
 
 
 @app.get("/")
@@ -90,11 +93,12 @@ def extrair_id_canal(dados: dict):
 
 
 async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
-                             loja_id: int = LOJA_PADRAO):
+                             loja_id: int | None = None):
     """Segundo plano: (áudio) -> debounce + lock -> executar_turno -> envio."""
+    loja_id = exigir_loja(loja_id)
     if id_audio:
         print(f"[WhatsApp][loja {loja_id}] Cliente {numero} mandou um áudio. Transcrevendo...")
-        texto = await transcrever_audio(id_audio)
+        texto = await transcrever_audio(id_audio, loja_id=loja_id)
         uso_audio = pegar_uso_da_transcricao(id_audio)
         if uso_audio is not None and not uso_audio.vazio:
             registrar_uso(loja_id, numero, CANAL, uso_audio,
@@ -102,7 +106,7 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
         if not texto:
             aviso = turno_audio_falhou(loja_id, CANAL, numero)
             if aviso.texto:
-                await enviar_resposta_humanizada(numero, aviso.texto)
+                await enviar_resposta_humanizada(numero, aviso.texto, loja_id=loja_id)
             return
         print(f"[WhatsApp][loja {loja_id}] Áudio transcrito: {texto}")
 
@@ -116,19 +120,20 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
         if resultado.silenciado or not resultado.texto:
             return
         await sinalizar_leitura(loja_id, numero)
-        await enviar_resposta_humanizada(numero, resultado.texto, atraso)
+        await enviar_resposta_humanizada(numero, resultado.texto, atraso, loja_id=loja_id)
         for url in resultado.midias:
-            await enviar_foto_whatsapp(numero, url)
+            await enviar_foto_whatsapp(numero, url, loja_id=loja_id)
     finally:
         await liberar_lock(numero, token, loja_id=loja_id)
 
 
 async def responder_midia_nao_suportada(numero: str, tipo_original: str,
-                                        loja_id: int = LOJA_PADRAO):
+                                        loja_id: int | None = None):
+    loja_id = exigir_loja(loja_id)
     resultado = turno_midia_nao_suportada(loja_id, CANAL, numero, tipo_original)
     if resultado.texto:
         await sinalizar_leitura(loja_id, numero)
-        await enviar_resposta_humanizada(numero, resultado.texto)
+        await enviar_resposta_humanizada(numero, resultado.texto, loja_id=loja_id)
 
 
 @app.post("/webhook")
@@ -147,7 +152,7 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
     for entrada in canal_whatsapp.ler_webhook(dados):
         loja_id = resolver_loja(CANAL, entrada.id_canal)
         if loja_id is None:
-            print(f"[WhatsApp] phone_number_id {entrada.id_canal} não cadastrado em canais. Ignorando.")
+            print(f"[WhatsApp] phone_number_id {entrada.id_canal} não cadastrado ou desativado. Ignorando.")
             continue
         if await ja_processada(CANAL, entrada.id_externo):
             print(f"[WhatsApp] Mensagem {entrada.id_externo} já processada. Ignorando duplicata.")

@@ -3,12 +3,13 @@ Lock por lead E por loja (Fase 2, Bloco 5 + Etapa 1, Bloco 3).
 
 Uma execução por vez para o mesmo cliente NA MESMA LOJA. Chave: lock:{loja}:{lead}.
 SET NX EX + token único; liberação atômica via Lua (só o dono apaga).
+A loja é obrigatória.
 """
 import uuid
 import asyncio
 
 from app.redis_cliente import redis_cliente
-from app.chaves import chave_redis, LOJA_PADRAO
+from app.chaves import chave_redis
 
 TTL_LOCK = 60
 
@@ -21,16 +22,17 @@ end
 """
 
 
-async def adquirir_lock(lead_id: str, *, loja_id: int = LOJA_PADRAO) -> str | None:
+async def adquirir_lock(lead_id: str, *, loja_id: int | None = None) -> str | None:
     """Tenta UMA vez. Devolve o token se conseguiu, senão None."""
+    chave = chave_redis("lock", loja_id, lead_id)
     token = uuid.uuid4().hex
-    criou = await redis_cliente.set(chave_redis("lock", loja_id, lead_id), token, nx=True, ex=TTL_LOCK)
+    criou = await redis_cliente.set(chave, token, nx=True, ex=TTL_LOCK)
     return token if criou else None
 
 
 async def adquirir_lock_esperando(lead_id: str, espera_max: float = 90,
                                   intervalo: float = 0.5, *,
-                                  loja_id: int = LOJA_PADRAO) -> str | None:
+                                  loja_id: int | None = None) -> str | None:
     """Espera a vez em vez de desistir (não perde a 2ª mensagem do cliente)."""
     chave = chave_redis("lock", loja_id, lead_id)
     token = uuid.uuid4().hex
@@ -45,7 +47,7 @@ async def adquirir_lock_esperando(lead_id: str, espera_max: float = 90,
 
 
 async def liberar_lock(lead_id: str, token: str | None = None, *,
-                       loja_id: int = LOJA_PADRAO) -> None:
+                       loja_id: int | None = None) -> None:
     """Com token, só apaga se o lock ainda for nosso. Nunca engole erro em silêncio."""
     chave = chave_redis("lock", loja_id, lead_id)
     if token is None:

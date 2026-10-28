@@ -70,7 +70,7 @@ CAMPOS: tuple[Campo, ...] = (
           "Medição. Hoje o código ainda usa 8 s fixos; este valor passa a ser lido mais adiante."),
     Campo("atendimento.aguardando_vendedor", "O que o agente faz enquanto espera o vendedor",
           "opcao", "Atendimento",
-          "Hoje o agente usa sempre o meio-termo (Bloco 7A). As outras opções ficam para depois.",
+            "Vale na próxima mensagem do cliente que estiver esperando o vendedor.",
           ("conversar", "esperar", "meio_termo")),
     *(Campo(f"modulos.{m}", _ROTULO_MODULO[m], "sim_nao", "Módulos", dono="operador")
       for m in MODULOS),
