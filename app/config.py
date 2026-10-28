@@ -39,4 +39,9 @@ WHATSAPP_API_VERSION = "v21.0"
 # Token do bot criado no @BotFather. É uma senha: controla o bot inteiro.
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 
+# --- Bot único de AVISOS (Bloco 7B): fala só com a equipe e com o operador ---
+TELEGRAM_AVISOS_TOKEN = os.getenv("TELEGRAM_AVISOS_TOKEN", "")
+
+# Seu chat_id: recebe os alertas de gasto (é do operador, não da loja).
+TELEGRAM_AVISOS_OPERADOR_CHAT_ID = os.getenv("TELEGRAM_AVISOS_OPERADOR_CHAT_ID", "")
 

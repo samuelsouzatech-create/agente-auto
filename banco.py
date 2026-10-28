@@ -290,9 +290,35 @@ ALTER TABLE handoffs ADD COLUMN origem TEXT NOT NULL DEFAULT 'leo';
 ALTER TABLE handoffs ADD COLUMN reavisado_em TIMESTAMP;
 ALTER TABLE handoffs ADD COLUMN gestor_avisado_em TIMESTAMP;
 """
+_MIGRACAO_4 = """
+-- Bloco 7B: todo aviso mandado pelo bot de avisos. A etiqueta
+-- (tipo, referencia, destino) garante que ninguém recebe o mesmo aviso duas vezes.
+CREATE TABLE IF NOT EXISTS avisos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER,
+    tipo TEXT NOT NULL,
+    referencia TEXT NOT NULL,
+    destino TEXT NOT NULL,
+    texto TEXT,
+    status TEXT NOT NULL CHECK (status IN ('enviado','falhou','sem_destino')),
+    tentativas INTEGER NOT NULL DEFAULT 0,
+    erro TEXT,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tipo, referencia, destino)
+);
+CREATE INDEX IF NOT EXISTS idx_avisos_loja ON avisos(loja_id, criado_em);
+-- Handoffs que já estavam abertos antes do 7B: dá como avisados, para o
+-- relógio não disparar uma enxurrada de avisos antigos na primeira vez.
+UPDATE handoffs
+   SET avisado_em        = COALESCE(avisado_em, CURRENT_TIMESTAMP),
+       reavisado_em      = COALESCE(reavisado_em, CURRENT_TIMESTAMP),
+       gestor_avisado_em = COALESCE(gestor_avisado_em, CURRENT_TIMESTAMP)
+ WHERE estado != 'encerrado';
+"""
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3}
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

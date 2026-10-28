@@ -1,7 +1,7 @@
 """Tela de Custos (Etapa 1, Bloco 6 - item 1.9). Tela do operador."""
 import streamlit as st
 
-from app import custos, precos
+from app import custos, precos, relogio
 from app.lojas import carregar_loja
 from paginas.comum import avisar, exigir_operador, loja_atual, mostrar_aviso
 
@@ -54,12 +54,15 @@ if r["incompletas"]:
 
 # ------------------------------------------------------------- teto diário
 teto = loja.get("custos.teto_diario_llm")
-gasto_hoje = custos.gasto_do_dia(loja.id, hoje)
+hoje_loja = relogio.dia_local(loja, relogio.agora_utc())
+gasto_hoje = custos.gasto_do_dia(loja.id, hoje_loja, fuso=loja.get("fuso"))
 if teto:
     st.progress(min(gasto_hoje / teto, 1.0),
-                text=f"Gasto de hoje: {brl(gasto_hoje, 4)} de {brl(teto)} (teto diário)")
+                text=f"Gasto de hoje ({hoje_loja:%d/%m}, horário da loja): "
+                     f"{brl(gasto_hoje, 4)} de {brl(teto)} (teto diário)")
     if gasto_hoje >= teto:
-        st.error("Teto diário atingido. (O alerta automático por Telegram chega no Bloco 7.)")
+        st.error("Teto diário atingido. O alerta vai pelo bot de avisos "
+                 "(precisa do python -m app.jobs.runner ligado).")
 else:
     st.caption(f"Gasto de hoje: {brl(gasto_hoje, 4)}. Sem teto diário "
                "(defina em Plano e limites > Custos).")

@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 from langchain_core.messages import ToolMessage
 
-from app import logs, precos
+from app import logs, precos, relogio
 from banco import conectar
 
 
@@ -225,14 +225,21 @@ def resumo_mes(loja_id: int, ano: int, mes: int) -> dict:
     return resumo
 
 
-def gasto_do_dia(loja_id: int, dia) -> float:
+def gasto_do_dia(loja_id: int, dia, fuso: str | None = None) -> float:
+    """Gasto de um dia. Com fuso (o da loja), o dia vira à meia-noite local;
+    sem fuso, usa o dia em UTC (comportamento antigo, mantido para os testes)."""
+    if fuso:
+        inicio, fim = relogio.limites_do_dia_em_utc(fuso, dia)
+        sql = ("SELECT COALESCE(SUM(custo_llm + custo_meta), 0) AS total FROM uso_custos "
+               "WHERE loja_id = ? AND criado_em >= ? AND criado_em < ?")
+        parametros = (loja_id, inicio, fim)
+    else:
+        sql = ("SELECT COALESCE(SUM(custo_llm + custo_meta), 0) AS total FROM uso_custos "
+               "WHERE loja_id = ? AND substr(criado_em, 1, 10) = ?")
+        parametros = (loja_id, precos._data_iso(dia))
     conexao = conectar()
     try:
-        l = conexao.execute(
-            "SELECT COALESCE(SUM(custo_llm + custo_meta), 0) AS total FROM uso_custos "
-            "WHERE loja_id = ? AND substr(criado_em, 1, 10) = ?",
-            (loja_id, precos._data_iso(dia)),
-        ).fetchone()
+        l = conexao.execute(sql, parametros).fetchone()
     finally:
         conexao.close()
     return round(l["total"], 6)
