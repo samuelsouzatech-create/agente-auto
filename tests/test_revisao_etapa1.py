@@ -258,3 +258,25 @@ def test_prompt_e_relido_quando_o_arquivo_muda(tmp_path):
     info = arquivo.stat()
     os.utime(arquivo, ns=(info.st_atime_ns, info.st_mtime_ns + 2_000_000_000))
     assert montagem._ler_arquivo(str(arquivo)) == "versão 2"
+
+
+
+# --- Ajuste da validação: frases ambíguas de "lista" e dois pedidos que passavam ---
+import pytest as _pytest
+from app.pedido_parada import pediu_para_parar as _pediu
+
+
+@_pytest.mark.parametrize("frase", [
+    "me tira da lista", "tira-me da lista", "Por favor, me remova da lista",
+    "chega de mensagem, parem", "não quero que vocês me chamem mais",
+])
+def test_pedido_de_parada_claro_e_pego(frase):
+    assert _pediu(frase)
+
+
+@_pytest.mark.parametrize("frase", [
+    "tira da lista o Gol", "me tira da lista de espera do Corolla",
+    "não quero que vocês me mandem mais fotos desse", "chega de conversa, quero fechar",
+])
+def test_conversa_normal_nao_vira_pedido_de_parada(frase):
+    assert not _pediu(frase)
