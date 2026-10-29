@@ -1,9 +1,13 @@
 """
-O "relógio" do sistema (Etapa 1, Bloco 7B; trava na revisão).
+O "relógio" do sistema (Etapa 1, Bloco 7B; trava na revisão; Etapa 2, Bloco 3).
 
 Rodar num terminal só para ele (venv ativa e Redis ligado):
-    python -m app.jobs.runner             fica rodando (Ctrl+C para parar)
-    python -m app.jobs.runner --uma-vez   roda um ciclo e sai
+    python -m app.jobs.runner                    fica rodando (Ctrl+C para parar)
+    python -m app.jobs.runner --uma-vez          roda um ciclo e sai
+    python -m app.jobs.runner --sem-remarketing  só avisos e alertas
+
+A cada ciclo (30 s): avisos de handoff e alerta de gasto.
+A cada 5 min: remarketing (simulação, a menos que REMARKETING_ENVIO_REAL=1).
 
 Trava no Redis: se já existir outro runner ligado, este sai na hora.
 Sem Redis, o runner NÃO liga (--sem-trava existe só para teste local).
@@ -18,6 +22,8 @@ from datetime import datetime
 import banco
 from app import avisos, config
 from app.jobs.alertas import rodar_ciclo
+from app.jobs.remarketing import INTERVALO_S as INTERVALO_REMARKETING_S
+from app.jobs.remarketing import envio_real_ligado, rodar_remarketing
 from app.jobs.trava import TTL_S, TravaRunner, cliente_redis_sincrono
 
 INTERVALO_S = 30
@@ -36,10 +42,11 @@ def _pegar_trava(intervalo: int):
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Relógio do sistema: avisos e alertas.")
+    parser = argparse.ArgumentParser(description="Relógio do sistema: avisos, alertas e remarketing.")
     parser.add_argument("--uma-vez", action="store_true", help="roda um ciclo e sai")
     parser.add_argument("--intervalo", type=int, default=INTERVALO_S, help="segundos entre ciclos")
     parser.add_argument("--sem-trava", action="store_true", help="SÓ PARA TESTE: liga sem Redis")
+    parser.add_argument("--sem-remarketing", action="store_true", help="não roda o remarketing")
     args = parser.parse_args(argv)
     intervalo = max(5, args.intervalo)
 
@@ -57,8 +64,15 @@ def main(argv=None) -> int:
         print("[Runner] AVISO: TELEGRAM_AVISOS_TOKEN vazio no .env. Os avisos vão falhar.")
     if not avisos.chat_do_operador():
         print("[Runner] AVISO: TELEGRAM_AVISOS_OPERADOR_CHAT_ID vazio. Alerta de gasto sem destino.")
+    if args.sem_remarketing:
+        print("[Runner] Remarketing desligado nesta execução.")
+    elif envio_real_ligado():
+        print("[Runner] Remarketing: ENVIO REAL ligado (REMARKETING_ENVIO_REAL=1).")
+    else:
+        print("[Runner] Remarketing: SIMULAÇÃO (nada é enviado ao cliente).")
     print(f"[Runner] Ligado. Ciclo a cada {intervalo}s. Ctrl+C para parar.")
 
+    ultimo_remarketing = None
     try:
         while True:
             if trava is not None:
@@ -76,6 +90,19 @@ def main(argv=None) -> int:
                           f"handoff={r['handoffs']} gasto={r['gastos']}")
             except Exception:
                 traceback.print_exc()
+
+            vez_do_remarketing = (ultimo_remarketing is None
+                                  or time.monotonic() - ultimo_remarketing >= INTERVALO_REMARKETING_S)
+            if not args.sem_remarketing and vez_do_remarketing:
+                ultimo_remarketing = time.monotonic()
+                try:
+                    t = rodar_remarketing()
+                    feitos = {k: v for k, v in t.items() if v and k != "pulado"}
+                    if feitos:
+                        print(f"[Runner] {datetime.now():%H:%M:%S} remarketing: {feitos}")
+                except Exception:
+                    traceback.print_exc()
+
             if args.uma_vez:
                 break
             time.sleep(intervalo)
