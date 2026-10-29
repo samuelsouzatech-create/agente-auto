@@ -126,7 +126,7 @@ def no_ferramentas(estado: EstadoConversa):
 
             chamada_ajustada = dict(chamada)
             chamada_ajustada["args"] = dict(chamada.get("args") or {})
-            if nome in TOOLS_COM_LOJA_ID:
+            if nome in TOOLS_COM_LOJA_ID or "loja_id" in (getattr(tool, "args", None) or {}):
                 chamada_ajustada["args"]["loja_id"] = loja_id   # sempre sobrescreve
             if nome in TOOLS_COM_LEAD_ID:
                 chamada_ajustada["args"]["lead_id"] = lead_id

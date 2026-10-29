@@ -23,6 +23,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from banco import conectar
+from app.segmentos import segmento_existe, segmentos_disponiveis
 
 # ---------------------------------------------------------------------
 # Regras de produto (não aparecem na tela, não são editáveis)
@@ -30,7 +31,6 @@ from banco import conectar
 MAX_BOLHAS = 3
 TETO_TOQUES_REMARKETING = 3
 MIN_HORAS_SEM_RESPOSTA = 24
-SEGMENTOS = {"veiculos"}
 MODULOS = ("whatsapp", "instagram", "agendamento", "fotos", "remarketing", "pos_venda")
 
 # Chaves que alguém pode tentar editar, mas que são regra de produto.
@@ -486,8 +486,9 @@ def criar_loja(nome: str, segmento: str = "veiculos",
                config: dict[str, Any] | None = None, usuario: str = "operador") -> int:
     """Cria uma loja nova (config vazia = todos os padrões). Se vier config,
     ela passa pela mesma validação da tela. Só o operador cria lojas."""
-    if segmento not in SEGMENTOS:
-        raise ConfigInvalida([f"segmento '{segmento}' não existe (disponíveis: {sorted(SEGMENTOS)})"])
+    if not segmento_existe(segmento):
+        raise ConfigInvalida([f"segmento '{segmento}' não existe "
+                              f"(disponíveis: {segmentos_disponiveis()})"])
     _texto(1, 80)(nome)
     conexao = conectar()
     try:
@@ -515,3 +516,10 @@ def historico_config(loja_id: int, limite: int = 50) -> list[dict]:
     finally:
         conexao.close()
     return [dict(l) for l in linhas]
+
+def __getattr__(nome: str):
+    """Compatibilidade: SEGMENTOS deixou de ser lista fixa (Etapa 2, Bloco 1).
+    Quem ainda importa SEGMENTOS recebe os segmentos lidos das pastas."""
+    if nome == "SEGMENTOS":
+        return set(segmentos_disponiveis())
+    raise AttributeError(f"module {__name__!r} has no attribute {nome!r}")

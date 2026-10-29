@@ -1,10 +1,12 @@
 """Canal simulador: guarda o que 'enviaria' numa lista. Usado nos testes e,
-na Etapa 4, na página de demonstração."""
+na Etapa 4, na página de demonstração. Não tem janela de 24 h."""
 from __future__ import annotations
 
 import uuid
 
 from app.channels.base import Canal, MensagemEntrada
+from app.resultado_envio import ResultadoEnvio
+from app.templates import ValoresFaltando, preencher
 
 
 class CanalSimulador(Canal):
@@ -32,3 +34,11 @@ class CanalSimulador(Canal):
     async def enviar_midia(self, lead_id: str, url: str) -> bool:
         self.enviadas.append(("midia", url))
         return True
+
+    async def enviar_template(self, lead_id: str, modelo, valores: dict) -> ResultadoEnvio:
+        try:
+            texto = preencher(modelo, valores)
+        except ValoresFaltando as erro:
+            return ResultadoEnvio(ok=False, detalhe=str(erro))
+        self.enviadas.append(("modelo", texto))
+        return ResultadoEnvio(ok=True, id_externo=f"sim-{uuid.uuid4().hex[:8]}")

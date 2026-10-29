@@ -1,19 +1,23 @@
 """
-Contrato único dos canais (Etapa 1, Bloco 4 - item 1.7).
+Contrato único dos canais (Etapa 1, Bloco 4 - item 1.7; Etapa 2, Bloco 1).
 
 Todo canal (WhatsApp, Telegram, simulador e, na Etapa 3, Instagram) sabe:
   - ler_webhook(payload)  -> lista de MensagemEntrada (várias por pacote)
   - enviar_texto / enviar_midia
   - marcar_lida / digitando (quando o canal tiver)
-  - enviar_template / janela_aberta (implementados na Etapa 2)
+  - janela_aberta(loja_id, lead_id, agora): regra única em app/janela.py
+  - enviar_template(lead_id, modelo, valores): só canais com modelos (WhatsApp)
 """
 from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 
+from app import janela as _janela
 from app.humanizador import dividir_em_bolhas
+from app.resultado_envio import ResultadoEnvio  # noqa: F401  (reexportado)
 
 
 @dataclass(frozen=True)
@@ -57,11 +61,12 @@ class Canal(ABC):
     async def baixar_midia(self, entrada: MensagemEntrada) -> bytes | None:
         return None
 
-    async def enviar_template(self, lead_id: str, nome: str, variaveis: list) -> bool:
-        raise NotImplementedError(f"{self.nome}: modelos de mensagem chegam na Etapa 2.")
+    async def enviar_template(self, lead_id: str, modelo, valores: dict) -> ResultadoEnvio:
+        raise NotImplementedError(
+            f"{self.nome}: este canal não usa modelos de mensagem (texto livre sempre).")
 
-    def janela_aberta(self, loja_id: int, lead_id: str) -> bool:
-        raise NotImplementedError(f"{self.nome}: janela de 24h chega na Etapa 2.")
+    def janela_aberta(self, loja_id: int, lead_id: str, agora: datetime) -> bool:
+        return _janela.janela_aberta(loja_id, lead_id, self.nome, agora)
 
 
 async def esperar_digitando(canal: Canal, lead_id: str, segundos: float) -> None:

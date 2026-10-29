@@ -1,0 +1,67 @@
+{
+  "versao": 1,
+  "idioma_padrao": "pt_BR",
+  "exemplos": {
+    "nome": "Ana",
+    "carro": "Honda Civic 2019",
+    "agente": "Léo",
+    "loja": "Auto Exemplo",
+    "oficina": "Oficina do Zé"
+  },
+  "modelos": [
+    {
+      "nome": "retomada_interesse",
+      "categoria": "marketing",
+      "objetivo": "Remarketing: retomar a conversa com quem perguntou de um carro e sumiu.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. O {carro} que você viu com a gente continua disponível. Quer que eu te passe mais detalhes ou prefere marcar uma visita?"
+    },
+    {
+      "nome": "retomada_alternativa",
+      "categoria": "marketing",
+      "objetivo": "Remarketing: o carro de interesse foi vendido; oferece um parecido.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Aquele carro que você viu já foi vendido, mas chegou um {carro} bem parecido. Quer dar uma olhada?"
+    },
+    {
+      "nome": "retomada_geral",
+      "categoria": "marketing",
+      "objetivo": "Remarketing sem carro definido.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Passando para saber se você ainda está procurando carro. Chegaram opções novas por aqui, quer que eu te mostre?"
+    },
+    {
+      "nome": "pos_venda_agradecimento",
+      "categoria": "utilidade",
+      "objetivo": "D+1: agradecimento e documentação.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Obrigado pela confiança na compra do {carro}. Se surgir qualquer dúvida sobre a documentação ou o carro, é só me chamar por aqui."
+    },
+    {
+      "nome": "pos_venda_acompanhamento",
+      "categoria": "marketing",
+      "objetivo": "D+7: como está o carro (categoria a confirmar).",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Já faz uma semana com o {carro}. Está tudo certo com ele? Qualquer coisa, me conta."
+    },
+    {
+      "nome": "pos_venda_avaliacao",
+      "categoria": "utilidade",
+      "objetivo": "D+30: avaliação ligada à compra.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Como foi sua experiência na compra do {carro}? Sua opinião ajuda muito a gente a melhorar."
+    },
+    {
+      "nome": "pos_venda_revisao",
+      "categoria": "marketing",
+      "objetivo": "Revisão oferecida pela loja.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Está chegando a hora da revisão do {carro}. Quer que eu veja um horário para você?"
+    },
+    {
+      "nome": "pos_venda_revisao_oficina",
+      "categoria": "marketing",
+      "objetivo": "Revisão com a oficina parceira.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Está chegando a hora da revisão do {carro}, e a {oficina}, nossa parceira, pode cuidar disso para você. Quer que eu veja um horário?"
+    },
+    {
+      "nome": "pos_venda_troca",
+      "categoria": "marketing",
+      "objetivo": "Oferta de troca.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Já pensou em trocar o {carro}? Temos boas condições para quem já é cliente. Quer que eu te mostre algumas opções?"
+    }
+  ]
+}

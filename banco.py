@@ -316,9 +316,125 @@ UPDATE handoffs
        gestor_avisado_em = COALESCE(gestor_avisado_em, CURRENT_TIMESTAMP)
  WHERE estado != 'encerrado';
 """
+_MIGRACAO_5 = """
+-- Etapa 2, Bloco 1: remarketing, vendas, régua de pós-venda e status dos
+-- modelos de mensagem. loja_id obrigatório e SEM valor padrão.
+
+CREATE TABLE IF NOT EXISTS remarketing_envios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    lead_id TEXT NOT NULL,
+    canal TEXT NOT NULL,
+    toque INTEGER NOT NULL CHECK (toque BETWEEN 1 AND 3),
+    veiculo_id INTEGER,
+    modelo TEXT,
+    categoria TEXT CHECK (categoria IN ('marketing','utilidade','livre')),
+    estado TEXT NOT NULL CHECK (estado IN ('enviado','falhou','simulado','bloqueado')),
+    motivo_bloqueio TEXT,
+    contexto TEXT,
+    enviado_em TIMESTAMP,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    custo_meta REAL,
+    execucao_id TEXT,
+    UNIQUE (loja_id, lead_id, canal, toque)
+);
+CREATE INDEX IF NOT EXISTS idx_remarketing_loja ON remarketing_envios(loja_id, estado, criado_em);
+
+-- Fonte de acontecimentos do segmento de veículos.
+CREATE TABLE IF NOT EXISTS vendas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    lead_id TEXT NOT NULL,
+    veiculo_id INTEGER NOT NULL,
+    data_venda DATE NOT NULL,
+    forma_pagamento TEXT NOT NULL CHECK (forma_pagamento IN ('avista','financiado')),
+    meses_financiamento INTEGER CHECK (meses_financiamento IS NULL OR meses_financiamento > 0),
+    vendedor TEXT,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (loja_id, lead_id, veiculo_id)
+);
+CREATE INDEX IF NOT EXISTS idx_vendas_loja ON vendas(loja_id, lead_id);
+
+-- Régua de pós-venda (neutra ao segmento).
+CREATE TABLE IF NOT EXISTS reguas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('pos_venda')),
+    modelo_origem TEXT,
+    ativa INTEGER NOT NULL DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+-- Uma régua ATIVA por loja e tipo (as inativas ficam de histórico).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reguas_uma_ativa ON reguas(loja_id, tipo) WHERE ativa = 1;
+
+CREATE TABLE IF NOT EXISTS regua_passos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    regua_id INTEGER NOT NULL REFERENCES reguas(id),
+    ordem INTEGER NOT NULL,
+    nome TEXT NOT NULL,
+    gatilho TEXT NOT NULL,
+    deslocamento_dias INTEGER NOT NULL,
+    condicao_pagamento TEXT NOT NULL DEFAULT 'todos'
+        CHECK (condicao_pagamento IN ('todos','avista','financiado')),
+    acao TEXT NOT NULL CHECK (acao IN ('enviar_modelo','avisar_vendedor')),
+    modelo TEXT,
+    ativo INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_passos_regua ON regua_passos(loja_id, regua_id, ordem);
+
+CREATE TABLE IF NOT EXISTS regua_execucoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    regua_id INTEGER NOT NULL,
+    passo_id INTEGER NOT NULL,
+    lead_id TEXT NOT NULL,
+    evento_tipo TEXT NOT NULL,
+    evento_id INTEGER NOT NULL,
+    agendado_para TIMESTAMP NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'agendado' CHECK (estado IN
+        ('agendado','enviado','avisado','falhou','simulado','cancelado','bloqueado')),
+    motivo TEXT,
+    modelo TEXT,
+    categoria TEXT CHECK (categoria IN ('marketing','utilidade','livre')),
+    contexto TEXT,
+    custo_meta REAL,
+    execucao_id TEXT,
+    executado_em TIMESTAMP,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (passo_id, evento_tipo, evento_id)
+);
+CREATE INDEX IF NOT EXISTS idx_execucoes_loja ON regua_execucoes(loja_id, estado, agendado_para);
+
+-- Cada loja tem a própria conta na Meta: aprovação é POR LOJA.
+CREATE TABLE IF NOT EXISTS modelos_loja (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    nome TEXT NOT NULL,
+    idioma TEXT NOT NULL DEFAULT 'pt_BR',
+    status TEXT NOT NULL DEFAULT 'rascunho'
+        CHECK (status IN ('rascunho','submetido','aprovado','rejeitado')),
+    categoria_efetiva TEXT CHECK (categoria_efetiva IN ('marketing','utilidade')),
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (loja_id, nome, idioma)
+);
+
+-- Carro de interesse do lead (validado contra o estoque da loja no Bloco 5).
+-- Tabela própria em vez de ALTER TABLE leads: o SQLite não tem
+-- "ADD COLUMN IF NOT EXISTS" e toda migração precisa poder rodar de novo.
+CREATE TABLE IF NOT EXISTS interesse_veiculo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    lead_id TEXT NOT NULL,
+    veiculo_id INTEGER NOT NULL,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (loja_id, lead_id)
+);
+"""
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4}
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

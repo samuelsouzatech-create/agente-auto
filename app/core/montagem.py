@@ -8,12 +8,18 @@ Camadas do prompt (item 1.3 da Arquitetura 4.0):
   5. (Bloco 7A) Momento desta conversa: primeiro contato / vendedor a caminho.
   6. Data e hora no fuso da loja.
 
+Etapa 2, Bloco 1: as ferramentas do ramo vêm da pasta do segmento
+(segmentos/<segmento>/ferramentas.py), via app/segmentos.py.
 Este módulo não cria o modelo de IA, então os testes podem importá-lo sem chave.
 """
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from app.leitura_config import valor_config
+from app.segmentos import (
+    PASTA_SEGMENTOS,  # noqa: F401  (compatibilidade; quem manda é app/segmentos.py)
+    ferramentas_de_modulo_do_segmento, ferramentas_do_segmento, pasta_do_segmento,
+)
 from tools import (
     consultar_estoque, detalhes_veiculo, enviar_fotos, simular_financiamento,
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff,
@@ -22,23 +28,16 @@ from tools import (
 
 RAIZ = Path(__file__).resolve().parents[2]
 PASTA_PROMPTS = RAIZ / "prompts"
-PASTA_SEGMENTOS = RAIZ / "segmentos"
 FUSO_PADRAO = "America/Recife"
 
-# --- Quais ferramentas cada loja recebe ---
-FERRAMENTAS_DO_SEGMENTO = {
-    "veiculos": [consultar_estoque, detalhes_veiculo, simular_financiamento, registrar_troca],
-}
-FERRAMENTAS_DE_MODULO = {
-    "agendamento": [agendar_visita],
-    "fotos": [enviar_fotos],
-}
+# Valem para qualquer segmento.
 FERRAMENTAS_UNIVERSAIS = [registrar_lead, acionar_handoff, buscar_conhecimento, registrar_interesse]
 
 # Enquanto o vendedor não chega (decisão 1.12, opção B), o Léo não simula:
 # número de parcela é assunto que o vendedor fecha.
 FERRAMENTAS_FORA_DA_ESPERA = {"simular_financiamento"}
 
+# Lista de todas as tools conhecidas (o agente usa para injetar loja_id).
 TODAS_AS_FERRAMENTAS = [
     consultar_estoque, detalhes_veiculo, enviar_fotos, simular_financiamento,
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff,
@@ -120,13 +119,21 @@ def segmento_da_loja(loja) -> str:
 
 
 def ferramentas_da_loja(loja, em_espera: bool = False) -> list:
-    """Segmento + módulos ligados + universais. Na espera do vendedor,
-    a opção da loja decide o que continua valendo."""
-    lista = list(FERRAMENTAS_DO_SEGMENTO.get(segmento_da_loja(loja), []))
-    for modulo, tools in FERRAMENTAS_DE_MODULO.items():
+    """Segmento + módulos ligados (do segmento) + universais. Na espera do
+    vendedor, a opção da loja decide o que continua valendo."""
+    segmento = segmento_da_loja(loja)
+    lista = ferramentas_do_segmento(segmento)
+    for modulo, tools in ferramentas_de_modulo_do_segmento(segmento).items():
         if modulo_ligado(loja, modulo):
             lista.extend(tools)
     lista.extend(FERRAMENTAS_UNIVERSAIS)
+    # Sem repetir (um segmento pode declarar uma universal também).
+    vistas, unicas = set(), []
+    for f in lista:
+        if f.name not in vistas:
+            vistas.add(f.name)
+            unicas.append(f)
+    lista = unicas
     if em_espera:
         opcao = opcao_de_espera(loja)
         if opcao == "meio_termo":
@@ -173,7 +180,6 @@ def descrever_dias(dias) -> str:
     return ", ".join(NOMES_DIAS[d] for d in dias)
 
 
-
 def _camada_da_loja(loja) -> str:
     cfg = loja.config
     nome_agente = valor_config(cfg, "nome_agente", "Léo")
@@ -197,8 +203,10 @@ def _guia_ferramentas(loja, ferramentas) -> str:
     linhas = ["QUANDO USAR CADA FERRAMENTA (só estas existem nesta loja)"]
     for f in ferramentas:
         linhas.append(f"- {f.name}: {DESCRICOES.get(f.name, f.description.strip().splitlines()[0])}")
+    # Só avisa de módulo que o segmento tem (barbearia não ouve falar de "ficha do carro").
+    modulos_do_segmento = ferramentas_de_modulo_do_segmento(segmento_da_loja(loja))
     avisos = [texto for modulo, texto in AVISOS_MODULO_DESLIGADO.items()
-              if not modulo_ligado(loja, modulo)]
+              if modulo in modulos_do_segmento and not modulo_ligado(loja, modulo)]
     if avisos:
         linhas.append("")
         linhas.append("LIMITES DESTA LOJA")
@@ -225,7 +233,7 @@ def _camada_do_momento(loja, em_espera: bool, primeiro_contato: bool) -> str:
 def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
                   primeiro_contato: bool = False) -> str:
     base = _ler_arquivo(str(PASTA_PROMPTS / "base.md"))
-    segmento = _ler_arquivo(str(PASTA_SEGMENTOS / segmento_da_loja(loja) / "prompt.md"))
+    segmento = _ler_arquivo(str(pasta_do_segmento(segmento_da_loja(loja)) / "prompt.md"))
     data = (f"DATA E HORA ATUAL: {agora.strftime('%d/%m/%Y %H:%M')} "
             f"({DIAS_SEMANA[agora.weekday()]}).")
     camadas = [

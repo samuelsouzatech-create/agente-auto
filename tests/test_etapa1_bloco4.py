@@ -373,13 +373,16 @@ def test_enviar_resultado_silenciado_nao_envia_nada():
     assert canal.enviadas == []
 
 
-def test_template_e_janela_ficam_para_a_etapa_2():
+def test_simulador_sem_janela_e_registra_modelo():
+    from datetime import datetime, timezone
     from app.channels.simulador import CanalSimulador
+    from app.templates import modelo_do_segmento
     canal = CanalSimulador()
-    with pytest.raises(NotImplementedError):
-        asyncio.run(canal.enviar_template("lead", "modelo", []))
-    with pytest.raises(NotImplementedError):
-        canal.janela_aberta(1, "lead")
+    assert canal.janela_aberta(1, "lead", datetime.now(timezone.utc)) is True
+    modelo = modelo_do_segmento("veiculos", "retomada_geral")
+    r = asyncio.run(canal.enviar_template("lead", modelo,
+                                          {"nome": "Ana", "agente": "Léo", "loja": "Loja 1"}))
+    assert r.ok and canal.enviadas[0][0] == "modelo"
 
 
 def test_telegram_le_texto_audio_e_foto():

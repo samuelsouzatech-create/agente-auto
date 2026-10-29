@@ -9,7 +9,7 @@ from __future__ import annotations
 from app.channels.base import Canal, MensagemEntrada
 from app.chaves import exigir_loja
 from app.api.enviar_whatsapp import (
-    enviar_texto_whatsapp, enviar_foto_whatsapp, marcar_lida_whatsapp,
+    enviar_texto_whatsapp, enviar_foto_whatsapp, marcar_lida_whatsapp, enviar_template_whatsapp,
 )
 
 # Tipos que não pedem resposta (reação com emoji, avisos do sistema).
@@ -95,3 +95,8 @@ class CanalWhatsApp(Canal):
                           loja_id: int | None = None) -> bool:
         return await marcar_lida_whatsapp(id_mensagem, loja_id=self._loja(loja_id),
                                           digitando=digitando)
+
+    async def enviar_template(self, lead_id: str, modelo, valores: dict):
+        """Modelo aprovado, pelo número e token DESTA loja."""
+        return await enviar_template_whatsapp(lead_id, modelo, valores, loja_id=self._loja())
+

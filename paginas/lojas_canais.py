@@ -2,7 +2,8 @@
 import streamlit as st
 
 from app.canais import TIPOS_DE_CANAL, cadastrar_canal, desativar_canal, listar_canais
-from app.lojas import SEGMENTOS, carregar_loja, criar_loja
+from app.lojas import carregar_loja, criar_loja
+from app.segmentos import segmentos_disponiveis
 from app.lojas_admin import listar_lojas, renomear_loja
 from paginas.comum import avisar, exigir_operador, loja_atual, mostrar_aviso, trocar_loja
 
@@ -19,7 +20,7 @@ st.dataframe(listar_lojas(), hide_index=True)
 with st.expander("➕ Criar loja"):
     with st.form("nova_loja", clear_on_submit=True):
         nome = st.text_input("Nome da loja")
-        segmento = st.selectbox("Segmento", sorted(SEGMENTOS))
+        segmento = st.selectbox("Segmento", segmentos_disponiveis())
         if st.form_submit_button("Criar"):
             try:
                 novo_id = criar_loja(nome, segmento)
