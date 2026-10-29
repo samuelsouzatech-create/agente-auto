@@ -1,5 +1,5 @@
 """
-Job de remarketing (Etapa 2, Bloco 3): manda a mensagem de retomada.
+Job de remarketing (Etapa 2, Blocos 3 e 4): manda a mensagem de retomada.
 
 Roda dentro do relógio (python -m app.jobs.runner), a cada 5 minutos.
 Para cada loja ativa com o módulo ligado, pergunta à elegibilidade
@@ -8,10 +8,13 @@ de mandar, e escolhe como falar:
 
   janela aberta (Telegram; WhatsApp só se o cliente falou há < 24 h):
       o assistente escreve uma mensagem natural, no tom da loja,
-      retomando o assunto da conversa. Se a IA falhar ou escrever algo
-      com cara de robô, usa um texto reserva.
+      retomando o assunto da conversa. Se a IA falhar, escrever algo
+      com cara de robô ou disser que já fez algo, usa um texto reserva.
   janela fechada (WhatsApp): modelo aprovado pela Meta, preenchido com
       nome, carro, agente e loja. Modelo não aprovado não sai.
+
+Bloco 4: falhou 3 vezes -> 'bloqueado' (falhas_repetidas) e não tenta
+mais sozinho. Lead pulado não ocupa vaga da rodada.
 
 MODO SIMULAÇÃO é o padrão: faz tudo, menos enviar, e grava 'simulado'
 com o texto que sairia. Envio de verdade só com REMARKETING_ENVIO_REAL=1
@@ -49,9 +52,10 @@ from app.templates import (
 )
 
 INTERVALO_S = 300                       # o runner chama a cada 5 minutos
-MAX_POR_RODADA = 10                     # por loja, por rodada
+MAX_POR_RODADA = 10                     # por loja, por rodada (só conta quem foi processado)
 PAUSA_ENTRE_ENVIOS_S = 3                # não dispara tudo de uma vez
 REPETIR_FALHA_APOS = timedelta(hours=6)
+MAX_TENTATIVAS = 3                      # falhou 3 vezes: para e espera alguém olhar
 LIMITE_TEXTO_LIVRE = 400
 MENSAGENS_DE_CONTEXTO = 12
 MODELO_COM_CARRO = "retomada_interesse"
@@ -65,12 +69,18 @@ MOTIVOS = {
     "modelo_nao_aprovado": "Modelo ainda não aprovado pela Meta nesta loja",
     "janela_fechada": "A Meta recusou: janela de 24 h fechada",
     "erro_no_envio": "O canal recusou o envio",
+    "falhas_repetidas": "Falhou 3 vezes; precisa de alguém olhar",
 }
 
 # Coisas que um vendedor de verdade não escreve.
 _CARA_DE_ROBO = re.compile(
     r"(?i)(responda\s+\"?sair|digite\s|parar\s+de\s+receber|n[aã]o\s+quer\s+mais\s+receber"
     r"|rob[oô]\b|assistente\s+virtual|intelig[eê]ncia\s+artificial|sou\s+um\s+bot)"
+)
+# Promessa de algo que ninguém fez (o certo é OFERECER).
+_PROMESSA = re.compile(
+    r"(?i)\b(separei|consegui\s+separar|j[aá]\s+(te\s+)?(enviei|mandei|separei)"
+    r"|reservei|deixei\s+separad)"
 )
 
 
@@ -144,6 +154,7 @@ Como escrever:
 - Uma mensagem só, curta: no máximo 2 frases e 300 caracteres.
 - Natural, como um vendedor de verdade no WhatsApp. Sem markdown, sem listas, no máximo 1 emoji.
 - Retome o assunto da conversa abaixo. Não repita o que você já disse.
+- OFEREÇA, não diga que já fez: nada de "separei", "consegui separar", "já te mandei" ou "reservei".
 - Não invente preço, condição, desconto nem carro que não apareceu na conversa.
 - Não fale de robô, IA ou assistente virtual e não dê instruções como "responda SAIR".
 - {_ORIENTACAO_DO_TOQUE.get(toque, _ORIENTACAO_DO_TOQUE[3])}
@@ -177,7 +188,7 @@ def _limpar_texto(texto) -> str:
         return ""
     t = texto.replace("**", "").replace("__", "").strip().strip('"').strip()
     t = re.sub(r"\n{3,}", "\n\n", t)
-    if not t or len(t) > LIMITE_TEXTO_LIVRE or _CARA_DE_ROBO.search(t):
+    if not t or len(t) > LIMITE_TEXTO_LIVRE or _CARA_DE_ROBO.search(t) or _PROMESSA.search(t):
         return ""
     return t
 
@@ -235,7 +246,7 @@ def _tentativa_anterior(loja_id: int, lead_id: str, canal: str, toque: int) -> d
     conexao = conectar()
     try:
         linha = conexao.execute(
-            "SELECT estado, criado_em FROM remarketing_envios "
+            "SELECT estado, motivo_bloqueio, contexto, criado_em FROM remarketing_envios "
             "WHERE loja_id = ? AND lead_id = ? AND canal = ? AND toque = ?",
             (loja_id, lead_id, canal, toque)).fetchone()
     finally:
@@ -243,11 +254,22 @@ def _tentativa_anterior(loja_id: int, lead_id: str, canal: str, toque: int) -> d
     return dict(linha) if linha else None
 
 
+def _tentativas_ate_agora(anterior: dict | None) -> int:
+    if not anterior or anterior["estado"] != "falhou":
+        return 0
+    try:
+        return int(json.loads(anterior["contexto"] or "{}").get("tentativas") or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
 def _deve_pular(anterior: dict | None, real: bool, agora: datetime) -> bool:
     if not anterior:
         return False
     if anterior["estado"] == "enviado":
         return True
+    if anterior.get("motivo_bloqueio") == "falhas_repetidas":
+        return True                      # só alguém olhando destrava
     if not real:                         # simulação: uma vez por toque basta
         return True
     if anterior["estado"] == "simulado":  # ligou o envio: agora vai de verdade
@@ -311,7 +333,8 @@ def limpar_simulacoes(loja_id) -> int:
 def _registrar(loja: Loja, d: Decisao, agora: datetime, estado: str, *, real: bool,
                texto: str = "", origem: str = "", modelo: str | None = None,
                categoria: str | None = None, motivo: str | None = None,
-               veiculo_id=None, uso: Uso | None = None, detalhe: str = "") -> str:
+               veiculo_id=None, uso: Uso | None = None, detalhe: str = "",
+               tentativas: int = 0) -> str:
     uso = uso or Uso()
     execucao_id = uuid.uuid4().hex
     custo_meta = None
@@ -332,6 +355,8 @@ def _registrar(loja: Loja, d: Decisao, agora: datetime, estado: str, *, real: bo
                 "modo": "real" if real else "simulacao"}
     if detalhe:
         contexto["detalhe"] = detalhe[:300]
+    if tentativas:
+        contexto["tentativas"] = tentativas
     _gravar_envio(loja.id, d, agora, estado, modelo=modelo, categoria=categoria, motivo=motivo,
                   contexto=contexto, veiculo_id=veiculo_id, custo_meta=custo_meta,
                   execucao_id=execucao_id)
@@ -347,8 +372,14 @@ def _registrar(loja: Loja, d: Decisao, agora: datetime, estado: str, *, real: bo
 def _depois_do_envio(loja, d, agora, resultado: ResultadoEnvio, comum: dict) -> str:
     if resultado.ok:
         return _registrar(loja, d, agora, "enviado", **comum)
+    anterior = _tentativa_anterior(loja.id, d.lead_id, d.canal, d.toque)
+    tentativas = _tentativas_ate_agora(anterior) + 1
+    if tentativas >= MAX_TENTATIVAS:
+        return _registrar(loja, d, agora, "bloqueado", motivo="falhas_repetidas",
+                          detalhe=resultado.detalhe, tentativas=tentativas, **comum)
     motivo = "janela_fechada" if resultado.janela_fechada else "erro_no_envio"
-    return _registrar(loja, d, agora, "falhou", motivo=motivo, detalhe=resultado.detalhe, **comum)
+    return _registrar(loja, d, agora, "falhou", motivo=motivo, detalhe=resultado.detalhe,
+                      tentativas=tentativas, **comum)
 
 
 def _mensagem_livre(loja, d, agora, dados, *, real, redator, enviador) -> str:
@@ -427,11 +458,14 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
             loja = carregar_loja(loja_id)
             if not loja.ativo or not modulo_ativo(loja, "remarketing"):
                 continue
-            fila = elegiveis(loja_id, agora)[:max_por_loja]
+            fila = elegiveis(loja_id, agora)
         except Exception as erro:        # uma loja com problema não trava as outras
             print(f"[Remarketing] Erro na loja {loja_id}: {erro!r}")
             continue
+        processados = 0
         for decisao in fila:
+            if processados >= max_por_loja:
+                break
             try:
                 estado = processar_lead(loja, decisao, agora, real=real,
                                         redator=redator, enviador=enviador)
@@ -439,6 +473,8 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
                 print(f"[Remarketing][loja {loja_id}] Erro com {decisao.lead_id}: {erro!r}")
                 estado = "erro"
             totais[estado] += 1
+            if estado != "pulado":       # pulado não ocupa vaga da rodada
+                processados += 1
             if estado == "enviado" and pausa:
                 time.sleep(pausa)
     return totais

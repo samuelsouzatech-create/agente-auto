@@ -24,6 +24,7 @@ from app.chaves import exigir_loja
 from app.handoff import estado_do_handoff
 from app.lojas import carregar_loja
 from app.mensagens import ja_respondeu
+from app.retomada import retomada_recente
 from app.core.montagem import (
     TODAS_AS_FERRAMENTAS, ferramentas_da_loja, montar_prompt, fuso_da_loja,
 )
@@ -76,6 +77,17 @@ def _momento_da_conversa(estado, loja_id) -> dict:
         print(f"[Agente] Aviso: não consegui ler o momento da conversa ({erro!r}).")
         return {"em_espera": False, "primeiro_contato": False}
 
+def _retomada_da_conversa(estado, loja_id, agora):
+    """Etapa 2, Bloco 4: mandei retomada para este cliente? Se o banco falhar, segue normal."""
+    lead_id = estado.get("lead_id") or ""
+    if not lead_id:
+        return None
+    try:
+        return retomada_recente(loja_id, lead_id, estado.get("canal") or "", agora)
+    except Exception as erro:
+        print(f"[Agente] Aviso: não consegui ler a retomada ({erro!r}).")
+        return None
+
 
 def _modelo_com(ferramentas_loja):
     # O LLM falso dos testes não tem bind_tools: usamos ele direto.
@@ -92,7 +104,8 @@ def no_agente(estado: EstadoConversa):
     momento = _momento_da_conversa(estado, loja_id)
     ferramentas_loja = ferramentas_da_loja(loja, em_espera=momento["em_espera"])
     agora = datetime.now(fuso_da_loja(loja))
-    prompt = montar_prompt(loja, ferramentas_loja, agora, **momento)
+    retomada = _retomada_da_conversa(estado, loja_id, agora)
+    prompt = montar_prompt(loja, ferramentas_loja, agora, retomada=retomada, **momento)
     resposta = _modelo_com(ferramentas_loja).invoke([("system", prompt)] + estado["messages"])
     return {"messages": [resposta]}
 

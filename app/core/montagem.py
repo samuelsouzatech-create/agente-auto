@@ -13,6 +13,7 @@ Etapa 2, Bloco 1: as ferramentas do ramo vêm da pasta do segmento
 Este módulo não cria o modelo de IA, então os testes podem importá-lo sem chave.
 """
 from pathlib import Path
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.leitura_config import valor_config
@@ -229,9 +230,30 @@ def _camada_do_momento(loja, em_espera: bool, primeiro_contato: bool) -> str:
         blocos.append(TEXTOS_EM_ESPERA[opcao_de_espera(loja)])
     return "\n\n".join(blocos)
 
+def _camada_da_retomada(retomada, agora) -> str:
+    """Etapa 2, Bloco 4: a retomada que o assistente mandou pelo relógio."""
+    if not retomada or not retomada.get("texto"):
+        return ""
+    quando = retomada.get("enviado_em")
+    if isinstance(quando, datetime):
+        if agora.tzinfo is not None:
+            quando = quando.astimezone(agora.tzinfo)
+        rotulo = f"em {quando:%d/%m} às {quando:%H:%M}"
+    else:
+        rotulo = "há pouco"
+    return (
+        "RETOMADA QUE VOCÊ MANDOU\n"
+        f"- {rotulo}, você mandou esta mensagem para retomar o contato com este cliente: "
+        f"\"{retomada['texto']}\"\n"
+        "- O cliente está respondendo a essa conversa. Continue a partir dela, naturalmente: "
+        "não se apresente de novo e não repita a mesma oferta com as mesmas palavras.\n"
+        "- Se ele disser que não tem mais interesse ou que quer um tempo, aceite com educação, "
+        "sem insistir."
+    )
+
 
 def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
-                  primeiro_contato: bool = False) -> str:
+                  primeiro_contato: bool = False, retomada: dict | None = None) -> str:
     base = _ler_arquivo(str(PASTA_PROMPTS / "base.md"))
     segmento = _ler_arquivo(str(pasta_do_segmento(segmento_da_loja(loja)) / "prompt.md"))
     data = (f"DATA E HORA ATUAL: {agora.strftime('%d/%m/%Y %H:%M')} "
@@ -242,6 +264,7 @@ def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
         segmento,
         _guia_ferramentas(loja, ferramentas),
         _camada_do_momento(loja, em_espera, primeiro_contato),
+        _camada_da_retomada(retomada, agora),
         data,
     ]
     return "\n\n".join(c for c in camadas if c)
