@@ -37,6 +37,7 @@ from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
 from app import base_pos_venda, regua, vendas
 from app.pausa import pausado
+from app.modo_envio import real_para
 from app.custos import Uso, registrar_uso
 from app.elegibilidade import no_horario_de_envio, proxima_abertura
 from app.interesse import pode_contatar, situacao_do_lead
@@ -313,7 +314,6 @@ def rodar_pos_venda(agora: datetime | None = None, *, envio_real: bool | None = 
                     enviador=None, lojas: list[int] | None = None,
                     max_por_loja: int = MAX_POR_RODADA) -> dict:
     agora = _utc(agora or agora_utc())
-    real = envio_real_ligado() if envio_real is None else bool(envio_real)
     if enviador is None:
         from app.jobs.remarketing import EnviadorReal
         enviador = EnviadorReal()
@@ -323,6 +323,7 @@ def rodar_pos_venda(agora: datetime | None = None, *, envio_real: bool | None = 
             loja = carregar_loja(loja_id)
             if not loja.ativo or not modulo_ativo(loja, "pos_venda") or pausado(loja_id):
                 continue
+            real = real_para(loja, "pos_venda", envio_real)
             fila = regua.vencidas(loja_id, agora, max_por_loja)
         except Exception as erro:          # uma loja com problema não trava as outras
             print(f"[Pós-venda] Erro na loja {loja_id}: {erro!r}")
@@ -378,3 +379,4 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+    

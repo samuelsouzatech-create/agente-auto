@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
 from app import reativacao, regua
+from app import modo_envio
 from app.chaves import exigir_loja
 from app.elegibilidade import candidatos, enviados_no_mes
 from app.lojas import carregar_loja
@@ -80,10 +81,20 @@ def _texto(contexto) -> str:
         return ""
 
 
-def modo_de_envio() -> dict[str, bool]:
-    """True = envio real; False = simulação."""
-    return {tipo: (os.getenv(var) or "").strip().lower() in ("1", "true", "sim", "yes")
-            for tipo, var in VARIAVEIS_ENVIO.items()}
+ROTULOS_MODO = {"real": "Real", "teste_loja": "Simulação (loja em teste)",
+                "teste_servidor": "Simulação (servidor em teste)", "teste": "Simulação"}
+
+
+def modo_de_envio(loja=None) -> dict[str, bool]:
+    """True = envio real. Sem loja: só a chave geral do servidor (.env).
+    Com loja: a chave geral E a escolha da loja (Plano e limites > Envios)."""
+    if loja is None:
+        return {tipo: modo_envio.chave_geral_ligada(tipo) for tipo in VARIAVEIS_ENVIO}
+    return {tipo: modo_envio.real_para(loja, tipo) for tipo in VARIAVEIS_ENVIO}
+
+
+def situacao_do_modo(loja) -> dict[str, str]:
+    return {tipo: modo_envio.situacao(loja, tipo) for tipo in VARIAVEIS_ENVIO}
 
 
 def inicio_do_mes(loja, agora: datetime) -> datetime:

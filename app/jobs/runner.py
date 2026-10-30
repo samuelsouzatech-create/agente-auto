@@ -102,6 +102,7 @@ def main(argv=None) -> int:
         print("[Runner] Reativação: ENVIO REAL ligado (REATIVACAO_ENVIO_REAL=1).")
     else:
         print("[Runner] Reativação: SIMULAÇÃO (nada é enviado ao cliente).")
+    print("[Runner] Envio real só sai nas lojas marcadas em Plano e limites > Envios.")
     print(f"[Runner] Ligado. Ciclo a cada {intervalo}s. Ctrl+C para parar.")
 
     ultimo_remarketing = None

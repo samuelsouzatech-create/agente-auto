@@ -47,6 +47,7 @@ from app import config  # noqa: F401  (carrega o .env)
 from app.aviso_limite import avisar_limite
 from app.chaves import exigir_loja
 from app.pausa import pausado
+from app.modo_envio import real_para
 from app.custos import Uso, registrar_uso, uso_das_mensagens
 from app.elegibilidade import Decisao, avaliar, candidatos, elegiveis
 from app.lojas import PADROES, TETO_TOQUES_REMARKETING, Loja, carregar_loja, modulo_ativo
@@ -511,7 +512,6 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
                       redator=None, enviador=None, pausa_s: float | None = None,
                       max_por_loja: int = MAX_POR_RODADA, lojas: list[int] | None = None) -> dict:
     agora = _utc(agora or agora_utc())
-    real = envio_real_ligado() if envio_real is None else bool(envio_real)
     redator = redator or escrever_com_ia
     enviador = enviador or EnviadorReal()
     pausa = PAUSA_ENTRE_ENVIOS_S if pausa_s is None else pausa_s
@@ -523,6 +523,7 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
             if not loja.ativo or not modulo_ativo(loja, "remarketing") or pausado(loja_id):
                 continue
             fila = elegiveis(loja_id, agora)
+            real = real_para(loja, "remarketing", envio_real)
         except Exception as erro:        # uma loja com problema não trava as outras
             print(f"[Remarketing] Erro na loja {loja_id}: {erro!r}")
             continue

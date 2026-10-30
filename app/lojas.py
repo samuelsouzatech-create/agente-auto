@@ -32,6 +32,7 @@ MAX_BOLHAS = 3
 TETO_TOQUES_REMARKETING = 3
 MIN_HORAS_SEM_RESPOSTA = 24
 MODULOS = ("whatsapp", "instagram", "agendamento", "fotos", "remarketing", "pos_venda")
+TIPOS_ENVIO = ("remarketing", "pos_venda", "reativacao")
 
 # Chaves que alguém pode tentar editar, mas que são regra de produto.
 REGRAS_DE_PRODUTO = {
@@ -52,6 +53,7 @@ PAPEIS = ("cliente", "operador")
 # Todo o resto do EDITAVEIS pertence ao cliente.
 CHAVES_DO_OPERADOR = frozenset({
     *(f"modulos.{m}" for m in MODULOS),
+    *(f"envio_real.{t}" for t in TIPOS_ENVIO),
     "custos.teto_diario_llm",
     "remarketing.limite_mensal",
     "instagram.limite_private_replies_h",
@@ -98,6 +100,7 @@ PADROES: dict = {
         "texto_private_reply": "Oi! Vi seu comentário, te chamei por aqui para te ajudar 🙂",
     },
     "custos": {"teto_diario_llm": None},
+    "envio_real": {"remarketing": False, "pos_venda": False, "reativacao": False},
     "dados": {"retencao_dias": None},            # a definir com o advogado
 }
 
@@ -241,6 +244,7 @@ EDITAVEIS: dict[str, Callable] = {
     "custos.teto_diario_llm": _opcional(_float(0, 10_000)),
     "dados.retencao_dias": _opcional(_int(30, 3650)),
     **{f"modulos.{m}": _bool for m in MODULOS},
+    **{f"envio_real.{t}": _bool for t in TIPOS_ENVIO},
 }
 
 # Garantia: toda chave do operador precisa existir no EDITAVEIS.

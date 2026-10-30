@@ -55,16 +55,18 @@ else:
             avisar("Envios pausados. O atendimento de quem escreve continua normal.", "warning")
         st.rerun()
 
-modo = pe.modo_de_envio()
+modos = pe.situacao_do_modo(loja)
 uso = pe.uso_do_limite(loja.id, agora)
 c1, c2, c3, c4 = st.columns(4)
 for coluna, tipo, modulo in ((c1, "remarketing", "remarketing"), (c2, "pos_venda", "pos_venda"),
                              (c3, "reativacao", "remarketing")):
     ligado = modulo_ativo(loja, modulo)
-    coluna.metric(pe.TIPOS[tipo], ("Real" if modo[tipo] else "Simulação") if ligado else "Desligado")
+    coluna.metric(pe.TIPOS[tipo], pe.ROTULOS_MODO[modos[tipo]] if ligado else "Desligado")
 c4.metric("Limite do mês (retomada + reativação)",
           f"{uso['usados']} de {uso['limite']}" if uso["limite"] is not None else "não definido")
-st.caption("Simulação: o sistema faz tudo, menos enviar. Ligar módulos e limite fica com o operador.")
+st.caption("Simulação: o sistema faz tudo, menos enviar. Envio real precisa de duas chaves: "
+           "a geral do servidor e a da loja (Plano e limites > Envios). "
+           "Módulos, limite e modo de envio ficam com o operador.")
 
 # ------------------------------------------------------------ resultado do mês
 st.divider()

@@ -31,6 +31,7 @@ from app.elegibilidade import no_horario_de_envio, vagas_no_mes
 from app.jobs.remarketing import EnviadorReal, _ler_agora
 from app.lojas import Loja, carregar_loja, modulo_ativo
 from app.pausa import pausado
+from app.modo_envio import real_para
 from app.relogio import agora_utc, para_banco
 from app.templates import (
     ModeloInexistente, ModeloInvalido, ValoresFaltando, categoria_para_custo,
@@ -169,7 +170,6 @@ def rodar_reativacao(agora: datetime | None = None, *, envio_real: bool | None =
                      enviador=None, pausa_s: float | None = None,
                      max_por_loja: int = MAX_POR_RODADA, lojas: list[int] | None = None) -> dict:
     agora = _utc(agora or agora_utc())
-    real = envio_real_ligado() if envio_real is None else bool(envio_real)
     enviador = enviador or EnviadorReal()
     pausa = PAUSA_ENTRE_ENVIOS_S if pausa_s is None else pausa_s
     totais = dict.fromkeys(ESTADOS, 0)
@@ -181,6 +181,7 @@ def rodar_reativacao(agora: datetime | None = None, *, envio_real: bool | None =
                 continue
             if not no_horario_de_envio(loja, agora):
                 continue
+            real = real_para(loja, "reativacao", envio_real)
             fila = _fila(loja_id, agora, real)
             if not fila:
                 continue

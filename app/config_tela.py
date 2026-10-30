@@ -16,12 +16,14 @@ from app.lojas import MODULOS, PADROES, Loja, pendentes
 DIAS = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
 DONOS = ("cliente", "operador")
 
-GRUPOS = ("Identidade", "Atendimento", "Módulos", "Handoff", "Financiamento",
+GRUPOS = ("Identidade", "Atendimento", "Módulos", "Envios", "Handoff", "Financiamento",
           "Remarketing", "Pós-venda", "Instagram", "Custos", "Dados")
 
 NOTAS_GRUPO = {
     "Módulos": "É o plano contratado. Agendamento e fotos já ligam e desligam as ferramentas "
                "do agente. WhatsApp, Instagram, remarketing e pós-venda valem na etapa de cada um.",
+    "Envios": "Desligado = TESTE: o sistema faz tudo, menos enviar. Ligado = envio real, mas só "
+              "se a chave geral do servidor (.env) também estiver ligada. Loja nova começa em teste.",
     "Remarketing": "Pode configurar desde já. Os envios começam na Etapa 2.",
     "Pós-venda": "Pode configurar desde já. O pós-venda começa na Etapa 2.",
     "Instagram": "Pode configurar desde já. O Instagram chega na Etapa 3.",
@@ -74,6 +76,12 @@ CAMPOS: tuple[Campo, ...] = (
           ("conversar", "esperar", "meio_termo")),
     *(Campo(f"modulos.{m}", _ROTULO_MODULO[m], "sim_nao", "Módulos", dono="operador")
       for m in MODULOS),
+    Campo("envio_real.remarketing", "Retomadas: envio real", "sim_nao", "Envios",
+          "Desligado: só simula e mostra na tela o que sairia.", dono="operador"),
+    Campo("envio_real.pos_venda", "Pós-venda: envio real", "sim_nao", "Envios",
+          "Desligado: só simula e mostra na tela o que sairia.", dono="operador"),
+    Campo("envio_real.reativacao", "Reativação da base: envio real", "sim_nao", "Envios",
+          "Desligado: só simula e mostra na tela o que sairia.", dono="operador"),
     Campo("handoff.reaviso_min", "Minutos até o re-aviso ao vendedor", "inteiro", "Handoff",
           "Já define a cor amarela da fila. O re-aviso automático chega no Bloco 7B."),
     Campo("handoff.gestor_min", "Minutos até avisar o gestor", "inteiro", "Handoff",
