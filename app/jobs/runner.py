@@ -1,13 +1,15 @@
 """
-O "relógio" do sistema (Etapa 1, Bloco 7B; trava na revisão; Etapa 2, Bloco 3).
+O "relógio" do sistema (Etapa 1, Bloco 7B; trava na revisão; Etapa 2, Blocos 3 e 5A).
 
 Rodar num terminal só para ele (venv ativa e Redis ligado):
     python -m app.jobs.runner                    fica rodando (Ctrl+C para parar)
     python -m app.jobs.runner --uma-vez          roda um ciclo e sai
-    python -m app.jobs.runner --sem-remarketing  só avisos e alertas
+    python -m app.jobs.runner --sem-remarketing  sem remarketing
+    python -m app.jobs.runner --sem-pos-venda    sem pós-venda
 
 A cada ciclo (30 s): avisos de handoff e alerta de gasto.
-A cada 5 min: remarketing (simulação, a menos que REMARKETING_ENVIO_REAL=1).
+A cada 5 min: remarketing e pós-venda (simulação, a menos que
+REMARKETING_ENVIO_REAL=1 / POS_VENDA_ENVIO_REAL=1).
 
 Trava no Redis: se já existir outro runner ligado, este sai na hora.
 Sem Redis, o runner NÃO liga (--sem-trava existe só para teste local).
@@ -22,6 +24,9 @@ from datetime import datetime
 import banco
 from app import avisos, config, precos
 from app.jobs.alertas import rodar_ciclo
+from app.jobs.pos_venda import INTERVALO_S as INTERVALO_POS_VENDA_S
+from app.jobs.pos_venda import envio_real_ligado as pos_venda_real_ligado
+from app.jobs.pos_venda import rodar_pos_venda
 from app.jobs.remarketing import INTERVALO_S as INTERVALO_REMARKETING_S
 from app.jobs.remarketing import envio_real_ligado, rodar_remarketing
 from app.jobs.trava import TTL_S, TravaRunner, cliente_redis_sincrono
@@ -41,12 +46,17 @@ def _pegar_trava(intervalo: int):
                       "Ligue o Redis (Docker) ou use --sem-trava só para teste.")
 
 
+def _na_vez(ultimo, intervalo) -> bool:
+    return ultimo is None or time.monotonic() - ultimo >= intervalo
+
+
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Relógio do sistema: avisos, alertas e remarketing.")
+    parser = argparse.ArgumentParser(description="Relógio do sistema: avisos, alertas, remarketing e pós-venda.")
     parser.add_argument("--uma-vez", action="store_true", help="roda um ciclo e sai")
     parser.add_argument("--intervalo", type=int, default=INTERVALO_S, help="segundos entre ciclos")
     parser.add_argument("--sem-trava", action="store_true", help="SÓ PARA TESTE: liga sem Redis")
     parser.add_argument("--sem-remarketing", action="store_true", help="não roda o remarketing")
+    parser.add_argument("--sem-pos-venda", action="store_true", help="não roda o pós-venda")
     args = parser.parse_args(argv)
     intervalo = max(5, args.intervalo)
 
@@ -74,9 +84,16 @@ def main(argv=None) -> int:
         print("[Runner] Remarketing: ENVIO REAL ligado (REMARKETING_ENVIO_REAL=1).")
     else:
         print("[Runner] Remarketing: SIMULAÇÃO (nada é enviado ao cliente).")
+    if args.sem_pos_venda:
+        print("[Runner] Pós-venda desligado nesta execução.")
+    elif pos_venda_real_ligado():
+        print("[Runner] Pós-venda: ENVIO REAL ligado (POS_VENDA_ENVIO_REAL=1).")
+    else:
+        print("[Runner] Pós-venda: SIMULAÇÃO (nada é enviado ao cliente).")
     print(f"[Runner] Ligado. Ciclo a cada {intervalo}s. Ctrl+C para parar.")
 
     ultimo_remarketing = None
+    ultimo_pos_venda = None
     try:
         while True:
             if trava is not None:
@@ -95,15 +112,23 @@ def main(argv=None) -> int:
             except Exception:
                 traceback.print_exc()
 
-            vez_do_remarketing = (ultimo_remarketing is None
-                                  or time.monotonic() - ultimo_remarketing >= INTERVALO_REMARKETING_S)
-            if not args.sem_remarketing and vez_do_remarketing:
+            if not args.sem_remarketing and _na_vez(ultimo_remarketing, INTERVALO_REMARKETING_S):
                 ultimo_remarketing = time.monotonic()
                 try:
                     t = rodar_remarketing()
                     feitos = {k: v for k, v in t.items() if v and k != "pulado"}
                     if feitos:
                         print(f"[Runner] {datetime.now():%H:%M:%S} remarketing: {feitos}")
+                except Exception:
+                    traceback.print_exc()
+
+            if not args.sem_pos_venda and _na_vez(ultimo_pos_venda, INTERVALO_POS_VENDA_S):
+                ultimo_pos_venda = time.monotonic()
+                try:
+                    t = rodar_pos_venda()
+                    feitos = {k: v for k, v in t.items() if v and k != "adiado"}
+                    if feitos:
+                        print(f"[Runner] {datetime.now():%H:%M:%S} pós-venda: {feitos}")
                 except Exception:
                     traceback.print_exc()
 

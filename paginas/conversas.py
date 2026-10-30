@@ -2,7 +2,10 @@
 responder pelo mesmo número e devolver ao assistente. O cliente não recebe
 nenhum aviso de troca."""
 import streamlit as st
+from datetime import date
 
+from app.estoque import listar_estoque
+from app.vendas import FORMAS, VendaInvalida, registrar_venda, vendas_do_lead
 from app.envio_painel import CANAIS_COM_ENVIO, EnvioRecusado, enviar_pelo_painel
 from app.handoff import assumir_conversa, devolver_ao_agente, estado_do_handoff, quem_assumiu
 from app.interesse import ROTULOS, reativar_contato, situacao_do_lead
@@ -90,6 +93,34 @@ with col_acoes:
             reativar_contato(loja.id, lead_id)
             avisar("Contato reativado: a loja volta a poder procurar este cliente.")
             st.rerun()
+    st.markdown("---")
+    for v in vendas_do_lead(loja.id, lead_id):
+        st.caption(f"✅ Comprou {v['carro'] or 'um carro'} em {v['data_venda']}")
+    with st.expander("🏁 Marcar como vendido"):
+        carros = listar_estoque(loja_id=loja.id, incluir_vendidos=False)
+        if not carros:
+            st.caption("Nenhum carro disponível no estoque desta loja.")
+        else:
+            nomes = {c["id"]: f"{c['marca']} {c['modelo']} {c['ano']}" for c in carros}
+            with st.form(f"venda_{loja.id}_{lead_id}"):
+                carro_id = st.selectbox("Carro", list(nomes), format_func=nomes.get)
+                data_venda = st.date_input("Data da venda", value=date.today(), format="DD/MM/YYYY")
+                forma = st.radio("Pagamento", FORMAS, horizontal=True,
+                                 format_func={"avista": "À vista", "financiado": "Financiado"}.get)
+                meses = st.number_input("Meses de financiamento (0 = não sei)",
+                                        min_value=0, max_value=120, step=1)
+                if st.form_submit_button("Registrar venda", type="primary"):
+                    try:
+                        r = registrar_venda(loja.id, lead_id, carro_id, data_venda, forma,
+                                            meses_financiamento=meses or None, vendedor=vendedor)
+                        agendados = sum(1 for p in r["pos_venda"] if p["estado"] == "agendado")
+                        extra = (f" {agendados} passo(s) de pós-venda agendado(s)."
+                                 if r["pos_venda_ligado"] else " Pós-venda desligado nesta loja.")
+                        avisar(f"Venda registrada: {r['carro']}.{extra}")
+                    except VendaInvalida as erro:
+                        avisar(str(erro), "error")
+                    st.rerun()
+
 
 with col_conversa:
     mostrar_historico(lead_id, loja.id)

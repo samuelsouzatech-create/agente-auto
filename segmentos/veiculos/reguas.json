@@ -1,0 +1,25 @@
+{
+  "versao": 1,
+  "padrao": "proxima",
+  "gatilhos": ["venda", "fim_financiamento"],
+  "reguas": {
+    "proxima": {
+      "titulo": "Completa: agradecimento, acompanhamento, avaliação, revisão e oferta de troca",
+      "passos": [
+        {"nome": "agradecimento", "gatilho": "venda", "dias": 1, "modelo": "pos_venda_agradecimento"},
+        {"nome": "acompanhamento", "gatilho": "venda", "dias": 7, "modelo": "pos_venda_acompanhamento"},
+        {"nome": "avaliacao", "gatilho": "venda", "dias": 30, "modelo": "pos_venda_avaliacao"},
+        {"nome": "revisao", "gatilho": "venda", "meses_config": "pos_venda.revisao_meses", "modelo": "pos_venda_revisao"},
+        {"nome": "troca_avista", "gatilho": "venda", "meses_config": "pos_venda.troca_avista_meses", "pagamento": "avista", "modelo": "pos_venda_troca"},
+        {"nome": "troca_financiado", "gatilho": "fim_financiamento", "meses_config": "pos_venda.troca_financiado_meses_restantes", "antes": true, "pagamento": "financiado", "modelo": "pos_venda_troca"}
+      ]
+    },
+    "essencial": {
+      "titulo": "Essencial: só agradecimento e avaliação",
+      "passos": [
+        {"nome": "agradecimento", "gatilho": "venda", "dias": 1, "modelo": "pos_venda_agradecimento"},
+        {"nome": "avaliacao", "gatilho": "venda", "dias": 30, "modelo": "pos_venda_avaliacao"}
+      ]
+    }
+  }
+}
