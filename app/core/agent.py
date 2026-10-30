@@ -21,6 +21,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import MODELO_LLM, TEMPERATURA, TIMEOUT, MAX_RETRIES
 from app.chaves import exigir_loja
+from app.cliente_da_casa import compras_do_cliente
 from app.handoff import estado_do_handoff
 from app.lojas import carregar_loja
 from app.mensagens import ja_respondeu
@@ -105,7 +106,10 @@ def no_agente(estado: EstadoConversa):
     ferramentas_loja = ferramentas_da_loja(loja, em_espera=momento["em_espera"])
     agora = datetime.now(fuso_da_loja(loja))
     retomada = _retomada_da_conversa(estado, loja_id, agora)
-    prompt = montar_prompt(loja, ferramentas_loja, agora, retomada=retomada, **momento)
+    # Etapa 2, Bloco 5B: já comprou aqui? (falhou: segue como lead normal)
+    compras = compras_do_cliente(loja, estado.get("lead_id") or "", estado.get("canal") or "")
+    prompt = montar_prompt(loja, ferramentas_loja, agora, retomada=retomada,
+                           compras=compras, **momento)
     resposta = _modelo_com(ferramentas_loja).invoke([("system", prompt)] + estado["messages"])
     return {"messages": [resposta]}
 

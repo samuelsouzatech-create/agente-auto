@@ -251,9 +251,30 @@ def _camada_da_retomada(retomada, agora) -> str:
         "sem insistir."
     )
 
+def _camada_do_cliente_da_casa(compras) -> str:
+    """Etapa 2, Bloco 5B: só aparece para quem já comprou nesta loja."""
+    if not compras:
+        return ""
+    itens = []
+    for c in compras[:3]:
+        data = c.get("data")
+        quando = data.strftime("%d/%m/%Y") if hasattr(data, "strftime") else str(data or "").strip()
+        texto = c["descricao"] + (f" em {quando}" if quando else "")
+        if c.get("detalhe"):
+            texto += f" ({c['detalhe']})"
+        itens.append(texto)
+    return (
+        "CLIENTE QUE JÁ COMPROU\n"
+        f"- Este cliente já comprou com a loja: {'; '.join(itens)}.\n"
+        "- Trate como cliente da casa: com proximidade e sem roteiro de venda. "
+        "Não ofereça de novo o que ele já comprou.\n"
+        "- Se ele relatar qualquer problema com a compra, siga a regra PÓS-VENDA."
+    )
+
 
 def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
-                  primeiro_contato: bool = False, retomada: dict | None = None) -> str:
+                  primeiro_contato: bool = False, retomada: dict | None = None,
+                  compras: list | None = None) -> str:
     base = _ler_arquivo(str(PASTA_PROMPTS / "base.md"))
     segmento = _ler_arquivo(str(pasta_do_segmento(segmento_da_loja(loja)) / "prompt.md"))
     data = (f"DATA E HORA ATUAL: {agora.strftime('%d/%m/%Y %H:%M')} "
@@ -264,7 +285,9 @@ def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
         segmento,
         _guia_ferramentas(loja, ferramentas),
         _camada_do_momento(loja, em_espera, primeiro_contato),
+        _camada_do_cliente_da_casa(compras),
         _camada_da_retomada(retomada, agora),
         data,
     ]
     return "\n\n".join(c for c in camadas if c)
+
