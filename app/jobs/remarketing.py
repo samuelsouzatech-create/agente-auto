@@ -1,5 +1,5 @@
 """
-Job de remarketing (Etapa 2, Blocos 3 e 4): manda a mensagem de retomada.
+Job de remarketing (Etapa 2, Blocos 3, 4 e 8): manda a mensagem de retomada.
 
 Roda dentro do relógio (python -m app.jobs.runner), a cada 5 minutos.
 Para cada loja ativa com o módulo ligado, pergunta à elegibilidade
@@ -15,6 +15,10 @@ de mandar, e escolhe como falar:
 
 Bloco 4: falhou 3 vezes -> 'bloqueado' (falhas_repetidas) e não tenta
 mais sozinho. Lead pulado não ocupa vaga da rodada.
+
+Bloco 8: carro de interesse vendido -> oferece um parecido (mesma loja,
+preço até 20% de diferença); sem parecido, bloqueia (carro_vendido) e
+confere de novo em 6 h. Limite do mês acabou -> avisa gestor e operador.
 
 MODO SIMULAÇÃO é o padrão: faz tudo, menos enviar, e grava 'simulado'
 com o texto que sairia. Envio de verdade só com REMARKETING_ENVIO_REAL=1
@@ -40,6 +44,7 @@ from zoneinfo import ZoneInfo
 import banco
 from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
+from app.aviso_limite import avisar_limite
 from app.chaves import exigir_loja
 from app.pausa import pausado
 from app.custos import Uso, registrar_uso, uso_das_mensagens
@@ -60,7 +65,9 @@ MAX_TENTATIVAS = 3                      # falhou 3 vezes: para e espera alguém 
 LIMITE_TEXTO_LIVRE = 400
 MENSAGENS_DE_CONTEXTO = 12
 MODELO_COM_CARRO = "retomada_interesse"
+MODELO_ALTERNATIVA = "retomada_alternativa"
 MODELO_GERAL = "retomada_geral"
+FAIXA_PRECO_ALTERNATIVA = 0.20          # parecido = até 20% mais caro ou mais barato
 CANAIS_COBRADOS = {"whatsapp"}
 ESTADOS = ("enviado", "simulado", "falhou", "bloqueado", "pulado", "erro")
 
@@ -71,6 +78,7 @@ MOTIVOS = {
     "janela_fechada": "A Meta recusou: janela de 24 h fechada",
     "erro_no_envio": "O canal recusou o envio",
     "falhas_repetidas": "Falhou 3 vezes; precisa de alguém olhar",
+    "carro_vendido": "O carro de interesse foi vendido e não há outro parecido",
 }
 
 # Coisas que um vendedor de verdade não escreve.
@@ -137,6 +145,13 @@ _ORIENTACAO_DO_TOQUE = {
 _QUEM = {"cliente": "Cliente", "leo": "Você", "vendedor": "Vendedor da loja"}
 
 
+def _linha_do_carro(dados: dict) -> str:
+    if dados.get("alternativa"):
+        return (f"{dados['carro']} (JÁ FOI VENDIDO: não ofereça esse). "
+                f"Ofereça no lugar o {dados['alternativa']}, que está disponível e é parecido.")
+    return dados.get("carro") or "-"
+
+
 def _prompt_redator(loja: Loja, toque: int, dados: dict, historico: list[dict]) -> str:
     agente = loja.get("nome_agente") or "Léo"
     cidade = loja.get("cidade") or ""
@@ -156,14 +171,15 @@ Como escrever:
 - Natural, como um vendedor de verdade no WhatsApp. Sem markdown, sem listas, no máximo 1 emoji.
 - Retome o assunto da conversa abaixo. Não repita o que você já disse.
 - OFEREÇA, não diga que já fez: nada de "separei", "consegui separar", "já te mandei" ou "reservei".
-- Não invente preço, condição, desconto nem carro que não apareceu na conversa.
+- Não invente preço, condição nem desconto. Só fale de carros que aparecem na conversa
+  ou na linha "Carro de interesse" abaixo.
 - Não fale de robô, IA ou assistente virtual e não dê instruções como "responda SAIR".
 - {_ORIENTACAO_DO_TOQUE.get(toque, _ORIENTACAO_DO_TOQUE[3])}
 - Escreva só a mensagem, sem aspas.
 
 Nome do cliente: {dados['nome'] or 'não informado'}
 Interesse anotado: {dados['interesse'] or '-'}
-Carro de interesse: {dados['carro'] or '-'}
+Carro de interesse: {_linha_do_carro(dados)}
 
 Conversa (mais antiga primeiro):
 {conversa}"""
@@ -203,12 +219,35 @@ def _texto_reserva(loja: Loja, dados: dict) -> str:
     nome = _primeiro_nome(dados["nome"])
     oi = f"Oi, {nome}!" if nome else "Oi!"
     quem = f"{loja.get('nome_agente') or 'Léo'} aqui, da {loja.nome}."
+    if dados.get("alternativa"):
+        return (f"{oi} {quem} Aquele {dados['carro']} já foi vendido, mas temos um "
+                f"{dados['alternativa']} bem parecido. Quer dar uma olhada?")
     if dados["carro_disponivel"]:
         return f"{oi} {quem} O {dados['carro']} que você viu continua disponível. Quer que eu te passe mais detalhes?"
     return f"{oi} {quem} Passando para saber se ainda posso te ajudar. Ficou alguma dúvida?"
 
 
 # ------------------------------------------------------------ banco
+
+def _nome_do_carro(linha) -> str:
+    return f'{linha["marca"]} {linha["modelo"]} {linha["ano"]}'
+
+
+def _alternativa(conexao, loja_id: int, carro) -> dict | None:
+    """Carro disponível parecido com o vendido: mesma loja, preço até 20% de
+    diferença; mesmo modelo primeiro, depois mesma marca, depois o preço mais perto."""
+    if carro is None or carro["preco"] is None:
+        return None
+    preco = float(carro["preco"])
+    linha = conexao.execute(
+        "SELECT id, marca, modelo, ano FROM estoque "
+        "WHERE loja_id = ? AND status = 'disponivel' AND id != ? AND preco BETWEEN ? AND ? "
+        "ORDER BY (modelo = ?) DESC, (marca = ?) DESC, ABS(preco - ?) LIMIT 1",
+        (loja_id, carro["id"], preco * (1 - FAIXA_PRECO_ALTERNATIVA),
+         preco * (1 + FAIXA_PRECO_ALTERNATIVA), carro["modelo"], carro["marca"], preco),
+    ).fetchone()
+    return dict(linha) if linha else None
+
 
 def _dados_do_lead(loja_id: int, lead_id: str) -> dict:
     conexao = conectar()
@@ -217,17 +256,22 @@ def _dados_do_lead(loja_id: int, lead_id: str) -> dict:
             "SELECT nome, interesse FROM leads WHERE loja_id = ? AND lead_id = ?",
             (loja_id, lead_id)).fetchone()
         carro = conexao.execute(
-            "SELECT e.id, e.marca, e.modelo, e.ano, e.status FROM interesse_veiculo i "
+            "SELECT e.id, e.marca, e.modelo, e.ano, e.preco, e.status FROM interesse_veiculo i "
             "JOIN estoque e ON e.id = i.veiculo_id AND e.loja_id = i.loja_id "
             "WHERE i.loja_id = ? AND i.lead_id = ?", (loja_id, lead_id)).fetchone()
+        vendido = bool(carro) and carro["status"] != "disponivel"
+        alternativa = _alternativa(conexao, loja_id, carro) if vendido else None
     finally:
         conexao.close()
     return {
         "nome": (lead["nome"] or "").strip() if lead else "",
         "interesse": (lead["interesse"] or "").strip() if lead else "",
         "veiculo_id": carro["id"] if carro else None,
-        "carro": f'{carro["marca"]} {carro["modelo"]} {carro["ano"]}' if carro else "",
-        "carro_disponivel": bool(carro) and carro["status"] == "disponivel",
+        "carro": _nome_do_carro(carro) if carro else "",
+        "carro_disponivel": bool(carro) and not vendido,
+        "carro_vendido": vendido,
+        "alternativa": _nome_do_carro(alternativa) if alternativa else "",
+        "alternativa_id": alternativa["id"] if alternativa else None,
     }
 
 
@@ -335,7 +379,7 @@ def _registrar(loja: Loja, d: Decisao, agora: datetime, estado: str, *, real: bo
                texto: str = "", origem: str = "", modelo: str | None = None,
                categoria: str | None = None, motivo: str | None = None,
                veiculo_id=None, uso: Uso | None = None, detalhe: str = "",
-               tentativas: int = 0) -> str:
+               tentativas: int = 0, extra: dict | None = None) -> str:
     uso = uso or Uso()
     execucao_id = uuid.uuid4().hex
     custo_meta = None
@@ -354,6 +398,8 @@ def _registrar(loja: Loja, d: Decisao, agora: datetime, estado: str, *, real: bo
                       execucao_id=execucao_id, agora=agora)
     contexto = {"texto": texto, "origem": origem, "janela_aberta": bool(d.janela_aberta),
                 "modo": "real" if real else "simulacao"}
+    if extra:
+        contexto.update(extra)
     if detalhe:
         contexto["detalhe"] = detalhe[:300]
     if tentativas:
@@ -383,6 +429,10 @@ def _depois_do_envio(loja, d, agora, resultado: ResultadoEnvio, comum: dict) -> 
                       tentativas=tentativas, **comum)
 
 
+def _extra_da_alternativa(dados: dict) -> dict | None:
+    return {"alternativa_de": dados["carro"]} if dados.get("alternativa") else None
+
+
 def _mensagem_livre(loja, d, agora, dados, *, real, redator, enviador) -> str:
     try:
         bruto, uso = redator(loja, d.lead_id, d.canal, d.toque, dados,
@@ -394,7 +444,8 @@ def _mensagem_livre(loja, d, agora, dados, *, real, redator, enviador) -> str:
     if not texto:
         texto, origem = _texto_reserva(loja, dados), "reserva"
     comum = dict(real=real, texto=texto, origem=origem, categoria="livre",
-                 veiculo_id=dados["veiculo_id"], uso=uso)
+                 veiculo_id=dados["alternativa_id"] or dados["veiculo_id"], uso=uso,
+                 extra=_extra_da_alternativa(dados))
     if not real:
         return _registrar(loja, d, agora, "simulado", **comum)
     resultado = asyncio.run(enviador.texto(loja.id, d.canal, d.lead_id, texto))
@@ -402,13 +453,20 @@ def _mensagem_livre(loja, d, agora, dados, *, real, redator, enviador) -> str:
 
 
 def _mensagem_modelo(loja, d, agora, dados, *, real, enviador) -> str:
-    nome_modelo = MODELO_COM_CARRO if dados["carro_disponivel"] else MODELO_GERAL
-    base = dict(real=real, origem="modelo", veiculo_id=dados["veiculo_id"])
+    if dados["alternativa"]:
+        nome_modelo, carro = MODELO_ALTERNATIVA, dados["alternativa"]
+    elif dados["carro_disponivel"]:
+        nome_modelo, carro = MODELO_COM_CARRO, dados["carro"]
+    else:
+        nome_modelo, carro = MODELO_GERAL, dados["carro"]
+    base = dict(real=real, origem="modelo",
+                veiculo_id=dados["alternativa_id"] or dados["veiculo_id"],
+                extra=_extra_da_alternativa(dados))
     try:
         modelo = modelo_do_segmento(loja.segmento, nome_modelo)
     except (ModeloInexistente, ModeloInvalido):
         return _registrar(loja, d, agora, "bloqueado", motivo="sem_modelo", modelo=nome_modelo, **base)
-    valores = {"nome": _primeiro_nome(dados["nome"]), "carro": dados["carro"],
+    valores = {"nome": _primeiro_nome(dados["nome"]), "carro": carro,
                "agente": loja.get("nome_agente") or "Léo", "loja": loja.nome}
     try:
         texto = preencher(modelo, valores)
@@ -432,6 +490,11 @@ def processar_lead(loja: Loja, decisao: Decisao, agora: datetime, *, real: bool,
     if _deve_pular(_tentativa_anterior(loja.id, d.lead_id, d.canal, d.toque), real, agora):
         return "pulado"
     dados = _dados_do_lead(loja.id, d.lead_id)
+    if dados["carro_vendido"] and not dados["alternativa"]:
+        # Carro vendido e nada parecido: não manda "ainda tem interesse?".
+        # Confere de novo em 6 h (pode entrar um parecido no estoque).
+        return _registrar(loja, d, agora, "bloqueado", real=real, origem="regra",
+                          motivo="carro_vendido", veiculo_id=dados["veiculo_id"])
     if d.janela_aberta:
         return _mensagem_livre(loja, d, agora, dados, real=real, redator=redator, enviador=enviador)
     return _mensagem_modelo(loja, d, agora, dados, real=real, enviador=enviador)
@@ -463,6 +526,10 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
         except Exception as erro:        # uma loja com problema não trava as outras
             print(f"[Remarketing] Erro na loja {loja_id}: {erro!r}")
             continue
+        try:
+            avisar_limite(loja, agora, real=real)
+        except Exception as erro:        # o aviso nunca trava os envios
+            print(f"[Remarketing] Erro no aviso de limite da loja {loja_id}: {erro!r}")
         processados = 0
         for decisao in fila:
             if processados >= max_por_loja:

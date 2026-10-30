@@ -244,13 +244,14 @@ def test_carro_de_interesse_disponivel_usa_retomada_interesse():
     assert "Toyota Corolla 2021" in json.loads(e["contexto"])["texto"]
 
 
-def test_carro_vendido_usa_retomada_geral():
+def test_carro_vendido_sem_parecido_nao_manda_retomada():
     _ligar()
     _lead("5581", "Ana Souza")
     _conversa("5581", canal="whatsapp")
     _carro_de_interesse("5581", status="vendido")
     _rodar()
-    assert _envios()[0]["modelo"] == "retomada_geral"
+    e = _envios()[0]
+    assert (e["estado"], e["motivo_bloqueio"]) == ("bloqueado", "carro_vendido")
 
 
 # ---------------------------------------------------------------- texto da IA

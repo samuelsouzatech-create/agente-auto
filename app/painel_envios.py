@@ -39,6 +39,7 @@ MOTIVOS = {
     "sem_canal": "O cliente nunca conversou pelo WhatsApp ou Telegram",
     "pediu_tempo": "Pediu um tempo; reagendado",
     "pausa_longa": "Venceu durante a pausa dos envios",
+    "carro_vendido": "O carro de interesse foi vendido e não há outro parecido",
     **regua.MOTIVOS,
     **reativacao.MOTIVOS,
 }
