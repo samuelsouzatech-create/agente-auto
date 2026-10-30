@@ -510,9 +510,24 @@ CREATE TABLE IF NOT EXISTS reativacao (
 CREATE INDEX IF NOT EXISTS idx_reativacao_loja ON reativacao(loja_id, estado);
 CREATE INDEX IF NOT EXISTS idx_reativacao_tel ON reativacao(loja_id, telefone);
 """
+_MIGRACAO_8 = """
+-- Etapa 2, Bloco 7: pausar/retomar todos os envios da loja (dono da loja ou operador).
+-- Uma linha por ação; a situação atual é a última linha da loja.
+CREATE TABLE IF NOT EXISTS pausas_envio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    acao TEXT NOT NULL CHECK (acao IN ('pausar','retomar')),
+    usuario TEXT NOT NULL,
+    papel TEXT NOT NULL CHECK (papel IN ('cliente','operador')),
+    motivo TEXT,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_pausas_loja ON pausas_envio(loja_id, id);
+"""
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7}
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

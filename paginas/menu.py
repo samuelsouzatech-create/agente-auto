@@ -7,6 +7,7 @@ CLIENTE = {
         ("paginas/handoff.py", "Fila de handoff", "🧑‍💼"),
         ("paginas/conversas.py", "Conversas", "💬"),
         ("paginas/resultados.py", "Resultados", "📊"),
+        ("paginas/envios.py", "Retomadas e pós-venda", "📣"),
     ],
     "Loja": [
         ("paginas/estoque.py", "Estoque", "🚗"),

@@ -30,6 +30,7 @@ from app.custos import Uso, registrar_uso
 from app.elegibilidade import no_horario_de_envio, vagas_no_mes
 from app.jobs.remarketing import EnviadorReal, _ler_agora
 from app.lojas import Loja, carregar_loja, modulo_ativo
+from app.pausa import pausado
 from app.relogio import agora_utc, para_banco
 from app.templates import (
     ModeloInexistente, ModeloInvalido, ValoresFaltando, categoria_para_custo,
@@ -176,7 +177,7 @@ def rodar_reativacao(agora: datetime | None = None, *, envio_real: bool | None =
     for loja_id in (lojas or _ids_lojas_ativas()):
         try:
             loja = carregar_loja(loja_id)
-            if not loja.ativo or not modulo_ativo(loja, "remarketing"):
+            if not loja.ativo or not modulo_ativo(loja, "remarketing") or pausado(loja_id):
                 continue
             if not no_horario_de_envio(loja, agora):
                 continue

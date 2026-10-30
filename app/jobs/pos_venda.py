@@ -36,6 +36,7 @@ import banco
 from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
 from app import base_pos_venda, regua, vendas
+from app.pausa import pausado
 from app.custos import Uso, registrar_uso
 from app.elegibilidade import no_horario_de_envio, proxima_abertura
 from app.interesse import pode_contatar, situacao_do_lead
@@ -320,7 +321,7 @@ def rodar_pos_venda(agora: datetime | None = None, *, envio_real: bool | None = 
     for loja_id in (lojas or _ids_lojas_ativas()):
         try:
             loja = carregar_loja(loja_id)
-            if not loja.ativo or not modulo_ativo(loja, "pos_venda"):
+            if not loja.ativo or not modulo_ativo(loja, "pos_venda") or pausado(loja_id):
                 continue
             fila = regua.vencidas(loja_id, agora, max_por_loja)
         except Exception as erro:          # uma loja com problema não trava as outras
