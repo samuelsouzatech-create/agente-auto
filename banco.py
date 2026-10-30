@@ -432,9 +432,59 @@ CREATE TABLE IF NOT EXISTS interesse_veiculo (
     UNIQUE (loja_id, lead_id)
 );
 """
+_MIGRACAO_6 = """
+-- Etapa 2, Bloco 6A: a base que a loja já tinha antes do sistema (planilha/CRM).
+CREATE TABLE IF NOT EXISTS importacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    arquivo TEXT,
+    usuario TEXT NOT NULL,
+    consentimento INTEGER NOT NULL DEFAULT 0,
+    linhas INTEGER NOT NULL DEFAULT 0,
+    contatos_novos INTEGER NOT NULL DEFAULT 0,
+    contatos_atualizados INTEGER NOT NULL DEFAULT 0,
+    compras INTEGER NOT NULL DEFAULT 0,
+    recusadas INTEGER NOT NULL DEFAULT 0,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    desfeita_em TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_importacoes_loja ON importacoes(loja_id, criado_em);
+
+-- Um contato por telefone (normalizado) em cada loja.
+CREATE TABLE IF NOT EXISTS contatos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    telefone TEXT NOT NULL,
+    nome TEXT,
+    origem TEXT NOT NULL DEFAULT 'planilha',
+    consentimento INTEGER NOT NULL DEFAULT 0,
+    consentimento_em TIMESTAMP,
+    consentimento_por TEXT,
+    importacao_id INTEGER,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (loja_id, telefone)
+);
+
+-- Compras de antes do sistema: o carro não precisa estar no estoque.
+CREATE TABLE IF NOT EXISTS compras_anteriores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    telefone TEXT NOT NULL,
+    descricao TEXT NOT NULL,
+    data_compra DATE NOT NULL,
+    forma_pagamento TEXT CHECK (forma_pagamento IS NULL OR forma_pagamento IN ('avista','financiado')),
+    meses_financiamento INTEGER,
+    importacao_id INTEGER,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (loja_id, telefone, descricao, data_compra)
+);
+CREATE INDEX IF NOT EXISTS idx_compras_ant_tel ON compras_anteriores(loja_id, telefone);
+"""
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5}
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

@@ -89,7 +89,7 @@ def test_migracao_v5_cria_tabelas_e_e_idempotente():
     banco.criar_tabelas()
     banco.criar_tabelas()
     con = banco.conectar()
-    assert banco.versao_schema(con) == 5
+    assert banco.versao_schema(con) == banco.VERSAO_SCHEMA
     tabelas = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     con.close()
     for t in ("remarketing_envios", "vendas", "reguas", "regua_passos",
@@ -104,7 +104,7 @@ def test_migracao_v5_pode_rodar_de_novo():
     con.close()
     banco.migrar()                      # não pode quebrar
     con = banco.conectar()
-    assert banco.versao_schema(con) == 5
+    assert banco.versao_schema(con) == banco.VERSAO_SCHEMA
     con.close()
 
 

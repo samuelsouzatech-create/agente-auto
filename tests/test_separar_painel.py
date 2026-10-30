@@ -187,7 +187,8 @@ def test_paginas_do_cliente_nao_importam_coisas_do_operador(arquivo):
 
 def test_menus_nao_se_misturam():
     assert not set(arquivos(CLIENTE)) & set(arquivos(OPERADOR))
-    assert {"paginas/custos.py", "paginas/lojas_canais.py", "paginas/plano.py"} == set(arquivos(OPERADOR))
+    assert {"paginas/custos.py", "paginas/lojas_canais.py", "paginas/plano.py",
+            "paginas/importar_base.py"} == set(arquivos(OPERADOR))
 
 
 @pytest.mark.parametrize("arquivo", arquivos(OPERADOR))

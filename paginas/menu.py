@@ -21,6 +21,7 @@ OPERADOR = {
         ("paginas/lojas_canais.py", "Lojas e canais", "🏬"),
         ("paginas/plano.py", "Plano e limites", "📦"),
         ("paginas/custos.py", "Custos", "💰"),
+        ("paginas/importar_base.py", "Importar base", "📥"),
     ],
 }
 
