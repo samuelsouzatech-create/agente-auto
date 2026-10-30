@@ -2,7 +2,7 @@
 Nada é enviado a ninguém nesta tela."""
 import streamlit as st
 
-from app import base_pos_venda, importacao
+from app import base_pos_venda, importacao, reativacao
 from app.lojas import carregar_loja
 from app.relogio import agora_utc, dia_local
 from paginas.comum import (
@@ -124,3 +124,50 @@ if st.button("Agendar pós-venda da base", disabled=not pv["pendentes"]):
         avisar(f"{r['compras']} compra(s): {r['agendados']} passo(s) agendado(s), "
                f"{r['ja_passaram']} já tinham passado.")
     st.rerun()
+st.divider()
+st.subheader("Reativar contatos antigos")
+st.caption("Uma mensagem só, por modelo aprovado pela Meta, para quem autorizou e está parado há meses. "
+           "Conta no mesmo limite mensal do remarketing. Quem responder segue com o assistente normalmente.")
+rr = reativacao.resumo(loja.id)
+na_fila = rr["na_fila"] + rr["simulado"] + rr["falhou"]
+r1, r2, r3, r4 = st.columns(4)
+r1.metric("Na fila", na_fila)
+r2.metric("Enviados", rr["enviado"])
+r3.metric("Bloqueados", rr["bloqueado"])
+r4.metric("Cancelados", rr["cancelado"])
+
+with st.form("form_reativacao"):
+    f1, f2, f3 = st.columns(3)
+    meses = f1.selectbox("Parado há pelo menos", reativacao.OPCOES_MESES,
+                         index=reativacao.OPCOES_MESES.index(reativacao.MESES_PADRAO),
+                         format_func=lambda m: f"{m} meses")
+    publico = f2.selectbox("Quem", list(reativacao.PUBLICOS), format_func=reativacao.PUBLICOS.get)
+    maximo = f3.number_input("Máximo de contatos", min_value=1, max_value=reativacao.MAX_POR_LOTE,
+                             value=50, step=10)
+    montar = st.form_submit_button("Montar fila de reativação")
+if montar:
+    try:
+        r = reativacao.montar_fila(loja.id, meses=int(meses), publico=publico, maximo=int(maximo),
+                                   usuario=usuario_atual())
+    except reativacao.ReativacaoInvalida as erro:
+        avisar(str(erro), "error")
+    else:
+        fora = ", ".join(f"{reativacao.MOTIVOS.get(k, k)}: {v}" for k, v in r["ignorados"].items())
+        avisar(f"{r['na_fila']} contato(s) na fila." + (f" Ficaram de fora - {fora}." if fora else ""))
+    st.rerun()
+
+if na_fila and st.button("Cancelar a fila de reativação"):
+    n = reativacao.cancelar_fila(loja.id)
+    avisar(f"{n} contato(s) tirados da fila.")
+    st.rerun()
+
+ultimos = reativacao.listar(loja.id)
+if ultimos:
+    with st.expander(f"Últimos {len(ultimos)} da reativação"):
+        st.dataframe([{
+            "Telefone": l["telefone"],
+            "Situação": reativacao.ROTULOS_ESTADO.get(l["estado"], l["estado"]),
+            "Motivo": reativacao.MOTIVOS.get(l["motivo"] or "", l["motivo"] or ""),
+            "Mensagem": l["texto"] or "",
+            "Atualizado (UTC)": l["atualizado_em"] or "",
+        } for l in ultimos], hide_index=True)

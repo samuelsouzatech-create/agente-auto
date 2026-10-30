@@ -176,13 +176,16 @@ def _ultima_atividade(loja_id: int, lead_id: str, canal: str) -> datetime | None
 
 
 def enviados_no_mes(loja_id, agora: datetime) -> int:
+    """Remarketing + reativação (Bloco 6C) dividem o mesmo limite mensal."""
     loja_id = exigir_loja(loja_id)
     loja = carregar_loja(loja_id)
     inicio = para_banco(_inicio_do_mes(loja, _utc(agora)))
     linha = _consulta(
-        "SELECT COUNT(*) AS n FROM remarketing_envios WHERE loja_id = ? "
-        "AND estado = 'enviado' AND COALESCE(enviado_em, criado_em) >= ?",
-        (loja_id, inicio),
+        "SELECT (SELECT COUNT(*) FROM remarketing_envios WHERE loja_id = ? "
+        "        AND estado = 'enviado' AND COALESCE(enviado_em, criado_em) >= ?) "
+        "     + (SELECT COUNT(*) FROM reativacao WHERE loja_id = ? "
+        "        AND estado = 'enviado' AND enviado_em >= ?) AS n",
+        (loja_id, inicio, loja_id, inicio),
     )
     return int(linha[0]["n"])
 

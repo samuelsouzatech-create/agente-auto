@@ -62,6 +62,18 @@
       "categoria": "marketing",
       "objetivo": "Oferta de troca.",
       "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Já pensou em trocar o {carro}? Temos boas condições para quem já é cliente. Quer que eu te mostre algumas opções?"
+    },
+    {
+      "nome": "reativacao_contato",
+      "categoria": "marketing",
+      "objetivo": "Reativação: contato antigo da base, parado há meses, sem compra registrada.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Faz um tempo que a gente não conversa. Chegaram carros novos por aqui; se estiver pensando em comprar ou trocar, quer que eu te mostre algumas opções?"
+    },
+    {
+      "nome": "reativacao_cliente",
+      "categoria": "marketing",
+      "objetivo": "Reativação: cliente que comprou há bastante tempo.",
+      "texto": "Oi, {nome}! Aqui é o {agente}, da {loja}. Faz um tempo desde a compra do {carro}. Como ele está? Se pensar em trocar, temos boas condições para quem já é cliente da casa."
     }
   ]
 }

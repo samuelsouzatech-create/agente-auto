@@ -481,10 +481,38 @@ CREATE TABLE IF NOT EXISTS compras_anteriores (
 );
 CREATE INDEX IF NOT EXISTS idx_compras_ant_tel ON compras_anteriores(loja_id, telefone);
 """
+_MIGRACAO_7 = """
+-- Etapa 2, Bloco 6C: reativação de contatos antigos da base (uma mensagem por modelo aprovado).
+CREATE TABLE IF NOT EXISTS reativacao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    contato_id INTEGER NOT NULL,
+    telefone TEXT NOT NULL,
+    lote TEXT NOT NULL,
+    meses_inativo INTEGER NOT NULL,
+    criado_por TEXT NOT NULL,
+    lead_id TEXT,
+    modelo TEXT,
+    categoria TEXT CHECK (categoria IS NULL OR categoria IN ('marketing','utilidade')),
+    estado TEXT NOT NULL DEFAULT 'na_fila' CHECK (estado IN
+        ('na_fila','simulado','enviado','falhou','bloqueado','cancelado')),
+    motivo TEXT,
+    texto TEXT,
+    tentativas INTEGER NOT NULL DEFAULT 0,
+    detalhe TEXT,
+    custo_meta REAL,
+    execucao_id TEXT,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP,
+    enviado_em TIMESTAMP,
+    UNIQUE (loja_id, lote, telefone)
+);
+CREATE INDEX IF NOT EXISTS idx_reativacao_loja ON reativacao(loja_id, estado);
+CREATE INDEX IF NOT EXISTS idx_reativacao_tel ON reativacao(loja_id, telefone);
+"""
 
 
-
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6}
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

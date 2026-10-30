@@ -1,10 +1,11 @@
 """
-A retomada que o assistente mandou (Etapa 2, Bloco 4).
+A retomada que o assistente mandou (Etapa 2, Bloco 4; reativação no Bloco 6C).
 
 A retomada sai pelo relógio (runner), mas a memória do assistente fica no
 processo do bot. Para ele não responder fora de contexto quando o cliente
 volta, a cada mensagem o agente pergunta aqui: "mandei alguma retomada
 para este cliente nos últimos dias?". Se sim, o texto entra no prompt.
+Sem retomada de remarketing, confere a reativação (WhatsApp, pelo telefone).
 
 Só conta o que foi ENVIADO de verdade (simulação, falha e bloqueio não).
 Também conta as respostas, para a tela do Bloco 6.
@@ -43,6 +44,9 @@ def retomada_recente(loja_id, lead_id: str, canal: str, agora: datetime) -> dict
     finally:
         conexao.close()
     if not linha:
+        if canal in (None, "", "whatsapp"):
+            from app.reativacao import reativacao_recente   # import tardio: evita ciclo
+            return reativacao_recente(loja_id, lead_id, agora)
         return None
     try:
         texto = (json.loads(linha["contexto"] or "{}").get("texto") or "").strip()
