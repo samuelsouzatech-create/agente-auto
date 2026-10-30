@@ -20,7 +20,7 @@ import traceback
 from datetime import datetime
 
 import banco
-from app import avisos, config
+from app import avisos, config, precos
 from app.jobs.alertas import rodar_ciclo
 from app.jobs.remarketing import INTERVALO_S as INTERVALO_REMARKETING_S
 from app.jobs.remarketing import envio_real_ligado, rodar_remarketing
@@ -64,6 +64,10 @@ def main(argv=None) -> int:
         print("[Runner] AVISO: TELEGRAM_AVISOS_TOKEN vazio no .env. Os avisos vão falhar.")
     if not avisos.chat_do_operador():
         print("[Runner] AVISO: TELEGRAM_AVISOS_OPERADOR_CHAT_ID vazio. Alerta de gasto sem destino.")
+    faltam_precos = precos.faltando()
+    if faltam_precos:
+        print(f"[Runner] AVISO: preço da IA não cadastrado ({', '.join(faltam_precos)}). "
+              "O custo fica zero e o alerta de gasto não dispara. Cadastre na tela Custos.")
     if args.sem_remarketing:
         print("[Runner] Remarketing desligado nesta execução.")
     elif envio_real_ligado():
