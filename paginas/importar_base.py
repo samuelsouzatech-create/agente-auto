@@ -2,7 +2,7 @@
 Nada é enviado a ninguém nesta tela."""
 import streamlit as st
 
-from app import importacao
+from app import base_pos_venda, importacao
 from app.lojas import carregar_loja
 from app.relogio import agora_utc, dia_local
 from paginas.comum import (
@@ -106,3 +106,21 @@ for imp in lista:
             except importacao.ImportacaoInvalida as erro:
                 avisar(str(erro), "error")
             st.rerun()
+
+st.divider()
+st.subheader("Pós-venda da base")
+pv = base_pos_venda.resumo(loja.id)
+p1, p2 = st.columns(2)
+p1.metric("Compras prontas para agendar", pv["pendentes"])
+p2.metric("Passos agendados da base", pv["agendados"])
+st.info("Só entram compras de contatos COM autorização. Passos cuja data já passou não saem. "
+        "Pelo WhatsApp, o primeiro contato só sai por modelo aprovado pela Meta.")
+if st.button("Agendar pós-venda da base", disabled=not pv["pendentes"]):
+    try:
+        r = base_pos_venda.agendar_base(loja.id)
+    except base_pos_venda.BaseNaoAgendada as erro:
+        avisar(str(erro), "error")
+    else:
+        avisar(f"{r['compras']} compra(s): {r['agendados']} passo(s) agendado(s), "
+               f"{r['ja_passaram']} já tinham passado.")
+    st.rerun()

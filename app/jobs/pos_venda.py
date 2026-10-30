@@ -35,7 +35,7 @@ from zoneinfo import ZoneInfo
 import banco
 from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
-from app import regua, vendas
+from app import base_pos_venda, regua, vendas
 from app.custos import Uso, registrar_uso
 from app.elegibilidade import no_horario_de_envio, proxima_abertura
 from app.interesse import pode_contatar, situacao_do_lead
@@ -59,6 +59,7 @@ ESTADOS = ("enviado", "avisado", "simulado", "adiado", "cancelado", "bloqueado",
 
 MOTIVOS = {
     **regua.MOTIVOS,
+    **base_pos_venda.MOTIVOS,
     "sem_canal": "O cliente nunca conversou pelo WhatsApp ou Telegram",
     "sem_modelo": "O segmento não tem o modelo deste passo",
     "faltam_dados": "Falta o nome do cliente para o modelo",
@@ -158,14 +159,17 @@ def _primeiro_nome(nome) -> str:
 
 def _valores(loja: Loja, e: dict) -> dict:
     lead = _um("SELECT nome FROM leads WHERE loja_id = ? AND lead_id = ?", (loja.id, e["lead_id"]))
+    nome = (lead["nome"] if lead else "") or base_pos_venda.nome_do_contato(loja.id, e["lead_id"])
     valores = {
-        "nome": _primeiro_nome(lead["nome"] if lead else ""),
+        "nome": _primeiro_nome(nome),
         "agente": loja.get("nome_agente") or "Léo",
         "loja": loja.nome,
         "oficina": str(loja.get("pos_venda.oficina_parceira") or "").strip(),
     }
     if e["evento_tipo"] == vendas.EVENTO:
         valores.update(vendas.valores_da_venda(loja.id, e["evento_id"]))
+    elif e["evento_tipo"] == base_pos_venda.EVENTO:
+        valores.update(base_pos_venda.valores_da_compra(loja.id, e["evento_id"]))
     return valores
 
 
@@ -203,7 +207,10 @@ def _avisar_vendedor(loja: Loja, e: dict, valores: dict, *, real: bool, registra
 
 
 def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> str:
+    if e["evento_tipo"] == base_pos_venda.EVENTO:          # Bloco 6B
+        e = base_pos_venda.sincronizar_lead(loja.id, e)
     lead_id, passo = e["lead_id"], e["passo_nome"]
+
 
     def registrar(estado, motivo=None, texto="", **extra) -> str:
         if real or estado == "cancelado":
@@ -223,6 +230,10 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
 
     if not e["passo_ativo"]:
         return registrar("cancelado", "passo_desligado")
+    if e["evento_tipo"] == base_pos_venda.EVENTO:          # Bloco 6B: autorização conferida de novo
+        barrado = base_pos_venda.motivo_para_nao_enviar(loja.id, e["evento_id"])
+        if barrado:
+            return registrar("cancelado", barrado)
     if not pode_contatar(loja.id, lead_id, dia_local(loja, agora)):
         s = situacao_do_lead(loja.id, lead_id)
         if s and s["situacao"] == "pediu_tempo" and s.get("retomar_em"):
@@ -245,6 +256,8 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
         return _avisar_vendedor(loja, e, valores, real=real, registrar=registrar)
 
     canal = _canal_do_lead(loja.id, lead_id)
+    if canal is None and e["evento_tipo"] == base_pos_venda.EVENTO:
+        canal = "whatsapp"          # contato da base: só por modelo aprovado da Meta
     if canal is None:
         return registrar("bloqueado", "sem_canal")
     try:

@@ -2,6 +2,11 @@ from typing import Annotated
 from langchain_core.tools import tool, InjectedToolArg
 from banco import conectar
 
+# Etapa 2, Bloco 6B: sem prometer prazo ("em instantes") quando a loja está fechada.
+ORIENTACAO = ("Diga ao cliente, com naturalidade e sem anunciar transferência, que alguém da "
+              "equipe vai continuar com ele. Não prometa prazo: se estiver fora do horário da "
+              "loja, diga que retomam no próximo horário de atendimento.")
+
 
 @tool
 def acionar_handoff(motivo: str, resumo: str,
@@ -29,8 +34,7 @@ def acionar_handoff(motivo: str, resumo: str,
                     (motivo, resumo, existente["id"]),
                 )
                 conexao.commit()
-                return ("Handoff atualizado. Avise o cliente que um vendedor vai "
-                        "continuar o atendimento em instantes.")
+                return "Handoff atualizado. " + ORIENTACAO
 
         conexao.execute(
             "INSERT INTO handoffs (loja_id, lead_id, motivo, resumo, estado) VALUES (?, ?, ?, ?, 'aguardando_humano')",
@@ -39,5 +43,4 @@ def acionar_handoff(motivo: str, resumo: str,
         conexao.commit()
     finally:
         conexao.close()
-    return ("Handoff acionado. Avise o cliente que um vendedor vai continuar "
-            "o atendimento em instantes.")
+    return "Handoff acionado. " + ORIENTACAO

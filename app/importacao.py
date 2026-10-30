@@ -335,6 +335,13 @@ def desfazer_importacao(loja_id, importacao_id: int, *, agora: datetime | None =
             raise ImportacaoInvalida("Importação não encontrada nesta loja.")
         if imp["desfeita_em"]:
             raise ImportacaoInvalida("Esta importação já foi desfeita.")
+        conexao.execute(
+            "UPDATE regua_execucoes SET estado = 'cancelado', motivo = 'importacao_desfeita', "
+            "executado_em = CURRENT_TIMESTAMP WHERE loja_id = ? AND estado = 'agendado' "
+            "AND evento_tipo = 'compra_anterior' AND evento_id IN "
+            "(SELECT id FROM compras_anteriores WHERE loja_id = ? AND importacao_id = ?)",
+            (loja_id, loja_id, importacao_id))
+
         compras = conexao.execute(
             "DELETE FROM compras_anteriores WHERE loja_id = ? AND importacao_id = ?",
             (loja_id, importacao_id)).rowcount
