@@ -29,6 +29,7 @@ from app.redis_atraso import calcular_atraso
 from app.dedup import ja_processada
 from app.canais import resolver_loja, id_bot_telegram
 from app.chaves import exigir_loja
+from app.logs import registrar_canal_desconhecido
 
 CANAL = "telegram"
 VARIAVEL_PADRAO = "TELEGRAM_TOKEN"
@@ -117,6 +118,7 @@ def main(argv=None) -> None:
     BOT_ID = id_bot_telegram(token)
     loja = resolver_loja(CANAL, BOT_ID)
     if loja is None:
+        registrar_canal_desconhecido(CANAL, BOT_ID)
         print(f"[Telegram] ERRO: o bot {BOT_ID} não está cadastrado (ou está desativado) em canais.")
         print("  Cadastre em: painel do operador > Lojas e canais.")
         return

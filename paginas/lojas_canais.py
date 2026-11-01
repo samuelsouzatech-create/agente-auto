@@ -45,10 +45,8 @@ with st.form(f"renomear_{loja.id}"):
 
 # ---------------------------------------------------------------- Canais
 st.subheader("Canais desta loja")
-st.caption("Enquanto nenhum canal de um tipo tiver sido cadastrado, as mensagens desse tipo vão "
-           "para a loja 1 (modo de transição). Depois do primeiro cadastro, ids não cadastrados "
-           "ou desativados são ignorados. O token fica no .env: aqui vai só o NOME da variável.")
-
+st.caption("Mensagens de um canal não cadastrado ou desativado são ignoradas. "
+           "O token fica no .env: aqui vai só o NOME da variável.")
 canais = listar_canais(loja.id)
 if not canais:
     st.info("Nenhum canal cadastrado nesta loja.")

@@ -1,42 +1,34 @@
-"""Qual loja é dona de cada canal (item 1.5; revisão da Etapa 1).
+"""Qual loja é dona de cada canal (item 1.5; P1 do Plano Mestre).
 
 Tabela canais: tipo (whatsapp/telegram/instagram) + id_externo
 (phone_number_id, id do bot, id da conta) -> loja_id.
 token_ref guarda só o NOME da variável do .env com o token do canal.
 
-Regra de resolução:
-  1. id cadastrado e ativo -> loja dona dele
-  2. NENHUM canal desse tipo cadastrado (nem desativado) -> loja 1
-     (modo de transição, loja única)
-  3. existem canais desse tipo, mas não este id (ou ele está desativado)
-     -> None (a mensagem é ignorada). Desativar o único canal NÃO volta
-     para a loja 1.
+Regra única: id cadastrado e ativo -> loja dona dele. Qualquer outro caso
+(id desconhecido, desativado ou vazio) -> None, e a mensagem é ignorada.
+Não existe loja padrão: mensagem sem dono não vai para loja nenhuma.
 """
 import re
 
 from banco import conectar
-from app.chaves import LOJA_PADRAO
 
 TIPOS_DE_CANAL = ("whatsapp", "telegram", "instagram")
 _NOME_DE_VARIAVEL = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,59}$")
 
 
 def resolver_loja(tipo: str, id_externo) -> int | None:
+    """Loja dona do canal, ou None se o id não está cadastrado ou está desativado."""
+    if not id_externo:
+        return None
     conexao = conectar()
     try:
-        if id_externo:
-            linha = conexao.execute(
-                "SELECT loja_id FROM canais WHERE tipo = ? AND id_externo = ? AND ativo = 1",
-                (tipo, str(id_externo)),
-            ).fetchone()
-            if linha:
-                return linha["loja_id"]
-        algum = conexao.execute(
-            "SELECT 1 FROM canais WHERE tipo = ? LIMIT 1", (tipo,)
+        linha = conexao.execute(
+            "SELECT loja_id FROM canais WHERE tipo = ? AND id_externo = ? AND ativo = 1",
+            (tipo, str(id_externo)),
         ).fetchone()
     finally:
         conexao.close()
-    return LOJA_PADRAO if algum is None else None
+    return linha["loja_id"] if linha else None
 
 
 def existe_canal_do_tipo(tipo: str) -> bool:

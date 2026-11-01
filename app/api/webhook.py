@@ -28,6 +28,7 @@ from app.redis_atraso import calcular_atraso
 from app.dedup import ja_processada
 from app.canais import resolver_loja
 from app.chaves import exigir_loja
+from app.logs import registrar_canal_desconhecido
 
 CANAL = "whatsapp"
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
@@ -152,7 +153,7 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
     for entrada in canal_whatsapp.ler_webhook(dados):
         loja_id = resolver_loja(CANAL, entrada.id_canal)
         if loja_id is None:
-            print(f"[WhatsApp] phone_number_id {entrada.id_canal} não cadastrado ou desativado. Ignorando.")
+            registrar_canal_desconhecido(CANAL, entrada.id_canal)
             continue
         if await ja_processada(CANAL, entrada.id_externo):
             print(f"[WhatsApp] Mensagem {entrada.id_externo} já processada. Ignorando duplicata.")

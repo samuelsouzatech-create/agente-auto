@@ -24,7 +24,7 @@ def main(argumentos):
     if argumentos == ["listar"]:
         canais = listar_canais()
         if not canais:
-            print("Nenhum canal cadastrado (modo de transição: tudo vai para a loja 1).")
+            print("Nenhum canal cadastrado: nenhuma mensagem será atendida até cadastrar.")
         for c in canais:
             status = "ativo" if c["ativo"] else "desativado"
             print(f"loja {c['loja_id']}: {c['tipo']} {c['id_externo']} ({status})")

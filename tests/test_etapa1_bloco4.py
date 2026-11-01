@@ -80,7 +80,7 @@ def _abrir_e_assumir(lead_id, loja_id=1):
     assumir_handoff(lead_id, "Ana", loja_id=loja_id)
 
 
-def _payload(*mensagens, phone_number_id=None, statuses=None):
+def _payload(*mensagens, phone_number_id="PNID_TESTE", statuses=None):
     valor = {}
     if mensagens:
         valor["messages"] = list(mensagens)
@@ -253,7 +253,9 @@ def test_ler_webhook_classifica_os_tipos():
 @pytest.fixture
 def webhook_http(monkeypatch):
     from fastapi.testclient import TestClient
+    from app.canais import cadastrar_canal
     wh = importar("app.api.webhook")
+    cadastrar_canal(1, "whatsapp", "PNID_TESTE")
     agendadas, vistos = [], set()
 
     async def processar_falso(numero, texto, id_audio=None, loja_id=1):
