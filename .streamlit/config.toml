@@ -1,3 +1,11 @@
 # Os painéis não têm login: só aceitam conexão desta máquina.
 [server]
 address = "localhost"
+
+[theme]
+base = "dark"
+primaryColor = "#22c55e"
+backgroundColor = "#0a0a0b"
+secondaryBackgroundColor = "#141417"
+textColor = "#f4f4f5"
+font = "sans serif"
