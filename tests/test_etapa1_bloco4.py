@@ -115,7 +115,7 @@ def test_turno_normal_limpa_markdown_traz_fotos_e_grava_historico():
     entrada, config = grafo.chamadas[0]
     assert config["configurable"]["thread_id"] == "1:simulador:lead-1"
     assert (entrada["loja_id"], entrada["canal"], entrada["lead_id"]) == (1, "simulador", "lead-1")
-    assert [(m["direcao"], m["conteudo"], m["canal"]) for m in historico_do_lead("lead-1")] == [
+    assert [(m["direcao"], m["conteudo"], m["canal"]) for m in historico_do_lead("lead-1", 1)] == [
         ("cliente", "tem civic?", "simulador"),
         ("leo", "O Civic 2019 está disponível!", "simulador"),
     ]
@@ -128,7 +128,7 @@ def test_turno_em_silencio_quando_o_vendedor_assumiu():
     r = asyncio.run(turno.executar_turno(1, "whatsapp", "lead-2", "baixa o preço?", grafo=grafo))
     assert r.silenciado and r.texto is None
     assert grafo.chamadas == []
-    assert [m["direcao"] for m in historico_do_lead("lead-2")] == ["cliente"]
+    assert [m["direcao"] for m in historico_do_lead("lead-2", 1)] == ["cliente"]
 
 
 def test_turno_guarda_barra_preco_inventado():
@@ -158,14 +158,14 @@ def test_turno_com_erro_do_gemini_responde_com_honestidade():
     grafo = GrafoRoteiro(erro=RuntimeError("Gemini fora do ar"))
     r = asyncio.run(turno.executar_turno(1, "whatsapp", "lead-5", "oi", grafo=grafo))
     assert r.texto == turno.MENSAGEM_ERRO
-    assert historico_do_lead("lead-5")[-1]["conteudo"] == turno.MENSAGEM_ERRO
+    assert historico_do_lead("lead-5", 1)[-1]["conteudo"] == turno.MENSAGEM_ERRO
 
 
 def test_midia_nao_suportada_responde_e_respeita_o_vendedor():
     turno = importar("app.core.turno")
     r = turno.turno_midia_nao_suportada(1, "whatsapp", "lead-6", "image")
     assert r.texto == turno.MENSAGEM_MIDIA_NAO_SUPORTADA
-    assert [m["conteudo"] for m in historico_do_lead("lead-6")] == [
+    assert [m["conteudo"] for m in historico_do_lead("lead-6", 1)] == [
         "[imagem]", turno.MENSAGEM_MIDIA_NAO_SUPORTADA]
 
     _abrir_e_assumir("lead-7")
@@ -203,7 +203,7 @@ def test_mesma_conversa_igual_nos_tres_canais(monkeypatch, redis_falso):
 
     assert enviadas_wa == [esperado] and resposta_tg == esperado and sim.texto == esperado
     assert fotos_wa == urls and fotos_tg == urls and sim.midias == urls
-    canais = {lead: {m["canal"] for m in historico_do_lead(lead)} for lead in ("A", "B", "C")}
+    canais = {lead: {m["canal"] for m in historico_do_lead(lead, 1)} for lead in ("A", "B", "C")}
     assert canais == {"A": {"whatsapp"}, "B": {"telegram"}, "C": {"simulador"}}
 
 

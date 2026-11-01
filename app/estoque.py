@@ -16,7 +16,7 @@ OPCOES_CAMBIO = ["Automático", "Manual"]
 OPCOES_STATUS = ["disponivel", "reservado", "vendido"]
 
 
-def listar_estoque(loja_id=1, incluir_vendidos=True):
+def listar_estoque(loja_id, incluir_vendidos=True):
     """Lista os carros do estoque. Por padrão traz todos; se
     incluir_vendidos=False, traz só os que não estão vendidos."""
     conexao = conectar()
@@ -37,7 +37,7 @@ def listar_estoque(loja_id=1, incluir_vendidos=True):
     return [dict(linha) for linha in linhas]
 
 
-def buscar_carro(carro_id, loja_id=1):
+def buscar_carro(carro_id, loja_id):
     """Retorna um carro pelo id, ou None se não existir."""
     conexao = conectar()
     cursor = conexao.cursor()
@@ -51,7 +51,7 @@ def buscar_carro(carro_id, loja_id=1):
 
 
 def adicionar_carro(marca, modelo, ano, km, cor, cambio, preco,
-                    status="disponivel", fotos="", loja_id=1):
+                    status="disponivel", fotos="", *, loja_id):
     """Cadastra um carro novo. Retorna o id gerado."""
     conexao = conectar()
     cursor = conexao.cursor()
@@ -70,7 +70,7 @@ def adicionar_carro(marca, modelo, ano, km, cor, cambio, preco,
 
 
 def atualizar_carro(carro_id, marca, modelo, ano, km, cor, cambio, preco,
-                    status, fotos="", loja_id=1):
+                    status, fotos="", *, loja_id):
     """Atualiza todos os campos editáveis de um carro existente."""
     conexao = conectar()
     cursor = conexao.cursor()
@@ -89,7 +89,7 @@ def atualizar_carro(carro_id, marca, modelo, ano, km, cor, cambio, preco,
     return "Carro atualizado."
 
 
-def marcar_status(carro_id, status, loja_id=1):
+def marcar_status(carro_id, status, loja_id):
     """Atalho pra mudar só o status (ex.: marcar como 'vendido').
     Tira o carro da oferta na hora, como manda a seção 7 do documento."""
     conexao = conectar()

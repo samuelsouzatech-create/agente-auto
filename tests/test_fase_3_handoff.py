@@ -10,6 +10,9 @@ Grupos:
   E. Resultado do lead (app/resultados.py)
   F. CRUD de estoque (app/estoque.py) e baixa que tira o carro da oferta
 
+Desde o P0 (Plano Mestre) a loja é obrigatória em app/: estes testes rodam
+sempre na loja 1, informada explicitamente.
+
 Dependência de teste:  pip install "fakeredis[lua]"
 """
 
@@ -133,14 +136,14 @@ def linhas_handoff(lead_id="5581"):
 
 def test_lead_sem_handoff_esta_ativo(banco_temporario):
     from app.handoff import estado_do_handoff
-    assert estado_do_handoff("5581") == "ativo"
+    assert estado_do_handoff("5581", 1) == "ativo"
 
 
 def test_acionar_handoff_coloca_o_lead_na_fila(banco_temporario):
     from app.handoff import estado_do_handoff, listar_handoffs
     abrir_handoff("5581")
-    assert estado_do_handoff("5581") == "aguardando_humano"
-    fila = listar_handoffs()
+    assert estado_do_handoff("5581", 1) == "aguardando_humano"
+    fila = listar_handoffs(loja_id=1)
     assert [h["lead_id"] for h in fila] == ["5581"]
     assert fila[0]["motivo"] == "cliente pediu desconto"
 
@@ -157,9 +160,9 @@ def test_acionar_duas_vezes_nao_duplica_a_fila(banco_temporario):
 def test_assumir_grava_vendedor_e_carimbo(banco_temporario):
     from app.handoff import assumir_handoff, estado_do_handoff
     abrir_handoff("5581")
-    msg = assumir_handoff("5581", "Ana")
+    msg = assumir_handoff("5581", "Ana", loja_id=1)
     assert "Ana" in msg
-    assert estado_do_handoff("5581") == "humano_assumiu"
+    assert estado_do_handoff("5581", 1) == "humano_assumiu"
     linha = linhas_handoff("5581")[0]
     assert linha["vendedor"] == "Ana"
     assert linha["assumido_em"] is not None
@@ -168,25 +171,25 @@ def test_assumir_grava_vendedor_e_carimbo(banco_temporario):
 def test_devolver_ao_agente_reativa_o_leo(banco_temporario):
     from app.handoff import assumir_handoff, devolver_ao_agente, estado_do_handoff
     abrir_handoff("5581")
-    assumir_handoff("5581", "Ana")
-    devolver_ao_agente("5581")
-    assert estado_do_handoff("5581") == "ativo"
+    assumir_handoff("5581", "Ana", loja_id=1)
+    devolver_ao_agente("5581", loja_id=1)
+    assert estado_do_handoff("5581", 1) == "ativo"
     assert linhas_handoff("5581")[0]["encerrado_em"] is not None
 
 
 def test_encerrar_handoff_tira_da_fila(banco_temporario):
     from app.handoff import encerrar_handoff, listar_handoffs, estado_do_handoff
     abrir_handoff("5581")
-    encerrar_handoff("5581")
-    assert listar_handoffs() == []
-    assert estado_do_handoff("5581") == "ativo"
+    encerrar_handoff("5581", loja_id=1)
+    assert listar_handoffs(loja_id=1) == []
+    assert estado_do_handoff("5581", 1) == "ativo"
 
 
 def test_acoes_sem_handoff_aberto_nao_quebram(banco_temporario):
     from app.handoff import assumir_handoff, devolver_ao_agente, encerrar_handoff
-    assert "Nenhum handoff" in assumir_handoff("0000", "Ana")
-    assert "Nenhum handoff" in devolver_ao_agente("0000")
-    assert "Nenhum handoff" in encerrar_handoff("0000")
+    assert "Nenhum handoff" in assumir_handoff("0000", "Ana", loja_id=1)
+    assert "Nenhum handoff" in devolver_ao_agente("0000", loja_id=1)
+    assert "Nenhum handoff" in encerrar_handoff("0000", loja_id=1)
     assert linhas_handoff("0000") == []
 
 
@@ -195,10 +198,10 @@ def test_novo_handoff_depois_de_devolver_cria_nova_linha(banco_temporario):
     (o histórico do anterior fica preservado)."""
     from app.handoff import assumir_handoff, devolver_ao_agente, estado_do_handoff
     abrir_handoff("5581", motivo="primeiro")
-    assumir_handoff("5581", "Ana")
-    devolver_ao_agente("5581")
+    assumir_handoff("5581", "Ana", loja_id=1)
+    devolver_ao_agente("5581", loja_id=1)
     abrir_handoff("5581", motivo="segundo")
-    assert estado_do_handoff("5581") == "aguardando_humano"
+    assert estado_do_handoff("5581", 1) == "aguardando_humano"
     assert [l["motivo"] for l in linhas_handoff("5581")] == ["primeiro", "segundo"]
 
 
@@ -212,10 +215,10 @@ def test_fila_mostra_o_mais_antigo_primeiro_e_so_abertos(banco_temporario):
         con.execute("UPDATE handoffs SET criado_em = ? WHERE lead_id = ?", (hora, lead))
     con.commit()
     con.close()
-    assert [h["lead_id"] for h in listar_handoffs()] == ["2", "3", "1"]
-    encerrar_handoff("3")
-    assert [h["lead_id"] for h in listar_handoffs()] == ["2", "1"]
-    assert len(listar_handoffs(apenas_abertos=False)) == 3
+    assert [h["lead_id"] for h in listar_handoffs(loja_id=1)] == ["2", "3", "1"]
+    encerrar_handoff("3", loja_id=1)
+    assert [h["lead_id"] for h in listar_handoffs(loja_id=1)] == ["2", "1"]
+    assert len(listar_handoffs(loja_id=1, apenas_abertos=False)) == 3
 
 
 def test_handoffs_de_lojas_diferentes_nao_se_misturam(banco_temporario):
@@ -243,8 +246,8 @@ def test_segundo_vendedor_nao_sobrescreve_o_primeiro(banco_temporario):
     'já assumido por <vendedor>'."""
     from app.handoff import assumir_handoff
     abrir_handoff("5581")
-    assumir_handoff("5581", "Ana")
-    resposta_do_beto = assumir_handoff("5581", "Beto")
+    assumir_handoff("5581", "Ana", loja_id=1)
+    resposta_do_beto = assumir_handoff("5581", "Beto", loja_id=1)
     assert linhas_handoff("5581")[0]["vendedor"] == "Ana", "O Beto sobrescreveu a Ana."
     assert "Ana" in resposta_do_beto, "O Beto deveria ser avisado de que a Ana já assumiu."
 
@@ -253,9 +256,9 @@ def test_mesmo_vendedor_assumir_de_novo_e_inofensivo(banco_temporario):
     """Duplo clique do MESMO vendedor não pode dar erro nem trocar o dono."""
     from app.handoff import assumir_handoff, estado_do_handoff
     abrir_handoff("5581")
-    assumir_handoff("5581", "Ana")
-    assumir_handoff("5581", "Ana")
-    assert estado_do_handoff("5581") == "humano_assumiu"
+    assumir_handoff("5581", "Ana", loja_id=1)
+    assumir_handoff("5581", "Ana", loja_id=1)
+    assert estado_do_handoff("5581", 1) == "humano_assumiu"
     assert linhas_handoff("5581")[0]["vendedor"] == "Ana"
 
 
@@ -268,13 +271,13 @@ def test_whatsapp_leo_em_silencio_mas_mensagem_do_cliente_e_salva(whatsapp):
     from app.mensagens import historico_do_lead
     wh, grafo, saidas = whatsapp
     abrir_handoff("5581")
-    assumir_handoff("5581", "Ana")
+    assumir_handoff("5581", "Ana", loja_id=1)
 
     asyncio.run(wh.processar_mensagem("5581", "e aí, consegue baixar o valor?"))
 
     assert grafo.entradas == [], "O Léo respondeu com um humano no comando."
     assert saidas.respostas == [], "Nada pode ser enviado ao cliente pelo Léo."
-    hist = historico_do_lead("5581")
+    hist = historico_do_lead("5581", 1)
     assert [(m["direcao"], m["conteudo"]) for m in hist] == [("cliente", "e aí, consegue baixar o valor?")]
 
 
@@ -282,9 +285,9 @@ def test_whatsapp_leo_volta_a_responder_depois_de_devolvido(whatsapp):
     from app.handoff import assumir_handoff, devolver_ao_agente
     wh, grafo, saidas = whatsapp
     abrir_handoff("5581")
-    assumir_handoff("5581", "Ana")
+    assumir_handoff("5581", "Ana", loja_id=1)
     asyncio.run(wh.processar_mensagem("5581", "primeira, com o humano"))
-    devolver_ao_agente("5581")
+    devolver_ao_agente("5581", loja_id=1)
     asyncio.run(wh.processar_mensagem("5581", "segunda, já com o Léo"))
 
     assert grafo.entradas == ["segunda, já com o Léo"]
@@ -307,7 +310,7 @@ def test_silencio_vale_so_para_o_lead_com_humano(whatsapp):
     from app.handoff import assumir_handoff
     wh, grafo, saidas = whatsapp
     abrir_handoff("5581")
-    assumir_handoff("5581", "Ana")
+    assumir_handoff("5581", "Ana", loja_id=1)
     asyncio.run(wh.processar_mensagem("5582", "oi, tem Civic?"))
     assert grafo.entradas == ["oi, tem Civic?"]
 
@@ -318,9 +321,9 @@ def test_silencio_libera_o_lock_do_lead(whatsapp):
     from app.handoff import assumir_handoff, devolver_ao_agente
     wh, grafo, saidas = whatsapp
     abrir_handoff("5581")
-    assumir_handoff("5581", "Ana")
+    assumir_handoff("5581", "Ana", loja_id=1)
     asyncio.run(wh.processar_mensagem("5581", "x"))
-    devolver_ao_agente("5581")
+    devolver_ao_agente("5581", loja_id=1)
 
     inicio = time.time()
     asyncio.run(wh.processar_mensagem("5581", "y"))
@@ -335,13 +338,13 @@ def test_telegram_leo_em_silencio_mas_mensagem_e_salva(monkeypatch, redis_falso,
     grafo = GrafoFalso()
     monkeypatch.setattr(tb, "agente_grafo", grafo)
     abrir_handoff("777")
-    assumir_handoff("777", "Ana")
+    assumir_handoff("777", "Ana", loja_id=1)
 
     resposta, fotos = asyncio.run(tb.processar_texto("777", "pode baixar?", loja_id=1))
 
     assert (resposta, fotos) == (None, [])
     assert grafo.entradas == []
-    assert [(m["direcao"], m["canal"]) for m in historico_do_lead("777")] == [("cliente", "telegram")]
+    assert [(m["direcao"], m["canal"]) for m in historico_do_lead("777", 1)] == [("cliente", "telegram")]
 
 
 def test_telegram_leo_responde_quando_nao_ha_humano(monkeypatch, redis_falso, banco_temporario):
@@ -362,7 +365,7 @@ def test_conversa_normal_grava_cliente_e_leo_no_banco(whatsapp):
     wh, grafo, saidas = whatsapp
     grafo.resposta = "Temos um Civic 2019!"
     asyncio.run(wh.processar_mensagem("5581", "tem Civic?"))
-    hist = historico_do_lead("5581")
+    hist = historico_do_lead("5581", 1)
     assert [(m["direcao"], m["conteudo"], m["canal"]) for m in hist] == [
         ("cliente", "tem Civic?", "whatsapp"),
         ("leo", "Temos um Civic 2019!", "whatsapp"),
@@ -380,19 +383,19 @@ def test_guarda_grava_a_mensagem_segura_e_nao_o_preco_inventado(whatsapp):
     asyncio.run(wh.processar_mensagem("5581", "quanto é o Civic?"))
 
     assert saidas.respostas == [("5581", MENSAGEM_SEGURA)]
-    hist = historico_do_lead("5581")
+    hist = historico_do_lead("5581", 1)
     assert hist[-1]["direcao"] == "leo" and hist[-1]["conteudo"] == MENSAGEM_SEGURA
     assert all("77.000" not in m["conteudo"] for m in hist)
-    assert estado_do_handoff("5581") == "aguardando_humano"
+    assert estado_do_handoff("5581", 1) == "aguardando_humano"
 
 
 def test_historico_vem_em_ordem_e_separado_por_lead_e_loja(banco_temporario):
     from app.mensagens import salvar_mensagem, historico_do_lead
-    salvar_mensagem("A", "cliente", "um", canal="whatsapp")
-    salvar_mensagem("A", "leo", "dois", canal="whatsapp")
-    salvar_mensagem("B", "cliente", "outro lead", canal="whatsapp")
+    salvar_mensagem("A", "cliente", "um", canal="whatsapp", loja_id=1)
+    salvar_mensagem("A", "leo", "dois", canal="whatsapp", loja_id=1)
+    salvar_mensagem("B", "cliente", "outro lead", canal="whatsapp", loja_id=1)
     salvar_mensagem("A", "cliente", "outra loja", canal="whatsapp", loja_id=2)
-    assert [m["conteudo"] for m in historico_do_lead("A")] == ["um", "dois"]
+    assert [m["conteudo"] for m in historico_do_lead("A", 1)] == ["um", "dois"]
     assert [m["conteudo"] for m in historico_do_lead("A", loja_id=2)] == ["outra loja"]
 
 
@@ -400,16 +403,16 @@ def test_salvar_mensagem_nunca_derruba_a_conversa(monkeypatch, tmp_path):
     """Banco inacessível: salvar_mensagem só registra no log, não levanta erro."""
     from app.mensagens import salvar_mensagem
     monkeypatch.setattr(banco, "CAMINHO_BANCO", str(tmp_path / "nao_existe" / "x.db"))
-    salvar_mensagem("A", "cliente", "oi", canal="whatsapp")  # não pode levantar
+    salvar_mensagem("A", "cliente", "oi", canal="whatsapp", loja_id=1)  # não pode levantar
 
 
 def test_listar_leads_inclui_quem_conversou_sem_handoff(banco_temporario):
     """A tela de resultado precisa mostrar quem comprou SEM ter escalado."""
     from app.mensagens import salvar_mensagem, listar_leads
-    salvar_mensagem("sem_handoff", "cliente", "oi", canal="whatsapp")
-    salvar_mensagem("sem_handoff", "leo", "olá", canal="whatsapp")
-    salvar_mensagem("outro", "cliente", "bom dia", canal="telegram")
-    leads = {l["lead_id"]: l["total_mensagens"] for l in listar_leads()}
+    salvar_mensagem("sem_handoff", "cliente", "oi", canal="whatsapp", loja_id=1)
+    salvar_mensagem("sem_handoff", "leo", "olá", canal="whatsapp", loja_id=1)
+    salvar_mensagem("outro", "cliente", "bom dia", canal="telegram", loja_id=1)
+    leads = {l["lead_id"]: l["total_mensagens"] for l in listar_leads(1)}
     assert leads == {"sem_handoff": 2, "outro": 1}
 
 
@@ -419,22 +422,22 @@ def test_listar_leads_inclui_quem_conversou_sem_handoff(banco_temporario):
 
 def test_lead_sem_resultado_devolve_none(banco_temporario):
     from app.resultados import resultado_do_lead
-    assert resultado_do_lead("5581") is None
+    assert resultado_do_lead("5581", 1) is None
 
 
 def test_registrar_resultado_e_consultar(banco_temporario):
     from app.resultados import registrar_resultado, resultado_do_lead
-    registrar_resultado("5581", "comprou", motivo="fechou à vista", vendedor="Ana")
-    r = resultado_do_lead("5581")
+    registrar_resultado("5581", "comprou", motivo="fechou à vista", vendedor="Ana", loja_id=1)
+    r = resultado_do_lead("5581", 1)
     assert (r["resultado"], r["motivo"], r["vendedor"]) == ("comprou", "fechou à vista", "Ana")
 
 
 def test_remarcar_mantem_historico_e_vale_o_mais_recente(banco_temporario):
     from app.resultados import registrar_resultado, resultado_do_lead, listar_resultados
-    registrar_resultado("5581", "compareceu", vendedor="Ana")
-    registrar_resultado("5581", "perdeu", motivo="foi para a concorrência", vendedor="Ana")
-    assert resultado_do_lead("5581")["resultado"] == "perdeu"
-    assert [r["resultado"] for r in listar_resultados()] == ["perdeu", "compareceu"]
+    registrar_resultado("5581", "compareceu", vendedor="Ana", loja_id=1)
+    registrar_resultado("5581", "perdeu", motivo="foi para a concorrência", vendedor="Ana", loja_id=1)
+    assert resultado_do_lead("5581", 1)["resultado"] == "perdeu"
+    assert [r["resultado"] for r in listar_resultados(1)] == ["perdeu", "compareceu"]
 
 
 def test_resultados_nao_se_misturam_entre_lojas(banco_temporario):
@@ -456,17 +459,17 @@ def test_opcoes_de_resultado_sao_as_do_documento():
 
 def test_adicionar_e_buscar_carro(banco_temporario):
     from app.estoque import adicionar_carro, buscar_carro
-    novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0)
-    carro = buscar_carro(novo)
+    novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=1)
+    carro = buscar_carro(novo, 1)
     assert (carro["modelo"], carro["preco"], carro["status"]) == ("Argo", 62000.0, "disponivel")
 
 
 def test_atualizar_carro(banco_temporario):
     from app.estoque import adicionar_carro, atualizar_carro, buscar_carro
-    novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0)
+    novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=1)
     atualizar_carro(novo, "Fiat", "Argo", 2021, 31000, "Prata", "Manual", 60500.0,
-                    "disponivel", "http://x/argo.jpg")
-    carro = buscar_carro(novo)
+                    "disponivel", "http://x/argo.jpg", loja_id=1)
+    carro = buscar_carro(novo, 1)
     assert (carro["km"], carro["preco"], carro["fotos"]) == (31000, 60500.0, "http://x/argo.jpg")
 
 
@@ -474,21 +477,21 @@ def test_marcar_vendido_tira_o_carro_da_oferta_do_leo(banco_temporario):
     """A baixa no painel muda o que o Léo oferece NA HORA (seção 7 do doc)."""
     from app.estoque import adicionar_carro, marcar_status
     from tools import consultar_estoque
-    novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0)
+    novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=1)
     assert "Argo" in consultar_estoque.invoke({"modelo": "Argo"})
-    marcar_status(novo, "vendido")
+    marcar_status(novo, "vendido", 1)
     assert "Argo" not in consultar_estoque.invoke({"modelo": "Argo"})
-    marcar_status(novo, "disponivel")
+    marcar_status(novo, "disponivel", 1)
     assert "Argo" in consultar_estoque.invoke({"modelo": "Argo"})
 
 
 def test_listar_estoque_pode_esconder_vendidos(banco_temporario):
     from app.estoque import adicionar_carro, marcar_status, listar_estoque
     popular_estoque_exemplo()
-    novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0)
-    marcar_status(novo, "vendido")
-    todos = listar_estoque()
-    sem_vendidos = listar_estoque(incluir_vendidos=False)
+    novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=1)
+    marcar_status(novo, "vendido", 1)
+    todos = listar_estoque(1)
+    sem_vendidos = listar_estoque(1, incluir_vendidos=False)
     assert any(c["id"] == novo for c in todos)
     assert all(c["id"] != novo for c in sem_vendidos)
 
@@ -500,5 +503,3 @@ def test_estoque_de_uma_loja_nao_vaza_para_outra(banco_temporario):
     assert listar_estoque(loja_id=1) == []
     marcar_status(novo, "vendido", loja_id=1)          # loja errada: não pode afetar
     assert buscar_carro(novo, loja_id=2)["status"] == "disponivel"
-
-    
