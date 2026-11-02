@@ -1,4 +1,16 @@
+"""
+Handoff: o Léo passa a conversa para um vendedor; o vendedor assume e devolve.
+
+P6: assumir e devolver são ações de PESSOA e exigem o ator (app/ator.py).
+Cada uma grava no Registro (registro_acoes) na MESMA transação da mudança no
+handoff. Sem ator (ou ator de outra loja), nada muda.
+Tentativa que não muda nada (já estava com você, já assumido por outro,
+nada aberto) não grava.
+O Léo abrir um handoff (tools/acionar_handoff.py) e o encerrar_handoff
+ficam como estavam.
+"""
 from banco import conectar
+from app.registro import conferir_ator, registrar
 
 
 def _handoff_aberto(cursor, lead_id, loja_id):
@@ -43,37 +55,41 @@ def assumir_handoff(lead_id, vendedor, loja_id):
     Trava para dois vendedores: o UPDATE só vale se o lead ainda estiver
     'aguardando_humano'. Se outro vendedor já assumiu, devolve quem está no comando.
     """
+    conferir_ator(loja_id)          # P6: sem autor (ou autor de outra loja), nada muda
     conexao = conectar()
-    cursor = conexao.cursor()
-    aberto = _handoff_aberto(cursor, lead_id, loja_id)
-    if aberto is None:
-        conexao.close()
-        return "Nenhum handoff aberto para assumir."
+    try:
+        cursor = conexao.cursor()
+        aberto = _handoff_aberto(cursor, lead_id, loja_id)
+        if aberto is None:
+            return "Nenhum handoff aberto para assumir."
 
-    if aberto["estado"] == "humano_assumiu" and aberto["vendedor"] == vendedor:
-        conexao.close()
-        return f"Lead já estava com você, {vendedor}."
+        if aberto["estado"] == "humano_assumiu" and aberto["vendedor"] == vendedor:
+            return f"Lead já estava com você, {vendedor}."
 
-    cursor.execute(
-        """
-        UPDATE handoffs
-        SET estado = 'humano_assumiu',
-            vendedor = ?,
-            assumido_em = CURRENT_TIMESTAMP
-        WHERE id = ? AND estado = 'aguardando_humano'
-        """,
-        (vendedor, aberto["id"]),
-    )
+        cursor.execute(
+            """
+            UPDATE handoffs
+            SET estado = 'humano_assumiu',
+                vendedor = ?,
+                assumido_em = CURRENT_TIMESTAMP
+            WHERE id = ? AND estado = 'aguardando_humano'
+            """,
+            (vendedor, aberto["id"]),
+        )
 
-    if cursor.rowcount == 0:
+        if cursor.rowcount == 0:
+            conexao.commit()
+            atual = _handoff_aberto(cursor, lead_id, loja_id)
+            dono = atual["vendedor"] if atual and atual["vendedor"] else "outro vendedor"
+            return f"Lead já assumido por {dono}."
+
+        registrar("assumir_atendimento", loja_id,
+                  {"estado": aberto["estado"], "vendedor": aberto["vendedor"]},
+                  {"estado": "humano_assumiu", "vendedor": vendedor, "handoff_id": aberto["id"]},
+                  conexao=conexao, alvo=f"lead:{lead_id}")
         conexao.commit()
-        atual = _handoff_aberto(cursor, lead_id, loja_id)
+    finally:
         conexao.close()
-        dono = atual["vendedor"] if atual and atual["vendedor"] else "outro vendedor"
-        return f"Lead já assumido por {dono}."
-
-    conexao.commit()
-    conexao.close()
     return f"Lead assumido por {vendedor}."
 
 
@@ -85,43 +101,55 @@ def assumir_conversa(lead_id, vendedor, loja_id):
     - Nada aberto: abre um handoff já assumido (origem 'painel'). O
       avisado_em fica preenchido para o 7B não avisar ninguém à toa.
     """
+    conferir_ator(loja_id)          # P6: sem autor (ou autor de outra loja), nada muda
     conexao = conectar()
-    cursor = conexao.cursor()
-    aberto = _handoff_aberto(cursor, lead_id, loja_id)
-    if aberto is not None:
+    try:
+        cursor = conexao.cursor()
+        aberto = _handoff_aberto(cursor, lead_id, loja_id)
+        if aberto is None:
+            novo_id = cursor.execute(
+                """
+                INSERT INTO handoffs (loja_id, lead_id, motivo, resumo, estado, vendedor,
+                                      assumido_em, avisado_em, origem)
+                VALUES (?, ?, 'Assumido pelo painel', '', 'humano_assumiu', ?,
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'painel')
+                """,
+                (loja_id, lead_id, vendedor),
+            ).lastrowid
+            registrar("assumir_conversa", loja_id,
+                      {"estado": "ativo"},
+                      {"estado": "humano_assumiu", "vendedor": vendedor, "handoff_id": novo_id},
+                      conexao=conexao, alvo=f"lead:{lead_id}")
+            conexao.commit()
+            return f"Lead assumido por {vendedor}."
+    finally:
         conexao.close()
-        if aberto["estado"] == "humano_assumiu" and aberto["vendedor"] != vendedor:
-            return f"Lead já assumido por {aberto['vendedor'] or 'outro vendedor'}."
-        return assumir_handoff(lead_id, vendedor, loja_id)
 
-    cursor.execute(
-        """
-        INSERT INTO handoffs (loja_id, lead_id, motivo, resumo, estado, vendedor,
-                              assumido_em, avisado_em, origem)
-        VALUES (?, ?, 'Assumido pelo painel', '', 'humano_assumiu', ?,
-                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'painel')
-        """,
-        (loja_id, lead_id, vendedor),
-    )
-    conexao.commit()
-    conexao.close()
-    return f"Lead assumido por {vendedor}."
+    if aberto["estado"] == "humano_assumiu" and aberto["vendedor"] != vendedor:
+        return f"Lead já assumido por {aberto['vendedor'] or 'outro vendedor'}."
+    return assumir_handoff(lead_id, vendedor, loja_id)
 
 
 def devolver_ao_agente(lead_id, loja_id):
     """Encerra o handoff atual para que o Léo volte a responder o lead."""
+    conferir_ator(loja_id)          # P6: sem autor (ou autor de outra loja), nada muda
     conexao = conectar()
-    cursor = conexao.cursor()
-    aberto = _handoff_aberto(cursor, lead_id, loja_id)
-    if aberto is None:
+    try:
+        cursor = conexao.cursor()
+        aberto = _handoff_aberto(cursor, lead_id, loja_id)
+        if aberto is None:
+            return "Nenhum handoff aberto para devolver."
+        cursor.execute(
+            "UPDATE handoffs SET estado = 'encerrado', encerrado_em = CURRENT_TIMESTAMP WHERE id = ?",
+            (aberto["id"],),
+        )
+        registrar("devolver_ao_agente", loja_id,
+                  {"estado": aberto["estado"], "vendedor": aberto["vendedor"]},
+                  {"estado": "encerrado", "handoff_id": aberto["id"]},
+                  conexao=conexao, alvo=f"lead:{lead_id}")
+        conexao.commit()
+    finally:
         conexao.close()
-        return "Nenhum handoff aberto para devolver."
-    cursor.execute(
-        "UPDATE handoffs SET estado = 'encerrado', encerrado_em = CURRENT_TIMESTAMP WHERE id = ?",
-        (aberto["id"],),
-    )
-    conexao.commit()
-    conexao.close()
     return "Lead devolvido ao agente."
 
 

@@ -1,5 +1,5 @@
 """
-P6b do Plano Mestre: as ações relevantes deixam rastro (quem, quando, antes e depois).
+P6b/P6c do Plano Mestre: as ações relevantes deixam rastro (quem, quando, antes e depois).
 - toda ação de ACOES_RELEVANTES tem um cenário aqui (ação nova sem teste = falha);
 - cada ação grava com o nome do ATOR, não com o nome que a função recebe;
 - sem ator, a ação falha e nada fica (nem a ação, nem o registro);
@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from banco import conectar
-from app import bloqueios, importacao, pausa, reativacao, vendas
+from app import bloqueios, handoff, importacao, pausa, reativacao, vendas
 from app.ator import AtorInvalido, SemAtor, como, sem_ator
 from app.lojas import criar_loja, salvar_config
 from app.registro import ACOES_RELEVANTES, HISTORICO_PROPRIO
@@ -101,6 +101,19 @@ def _prep_fila_montada():
     return {}
 
 
+def _prep_handoff():
+    """O Léo passou a conversa (handoff esperando vendedor)."""
+    conexao = conectar()
+    try:
+        conexao.execute(
+            "INSERT INTO handoffs (loja_id, lead_id, motivo, resumo, estado) "
+            "VALUES (1, ?, 'teste', '', 'aguardando_humano')", (LEAD,))
+        conexao.commit()
+    finally:
+        conexao.close()
+    return {}
+
+
 CENARIOS = {
     "pausar_envios": (
         _prep_nada,
@@ -139,6 +152,23 @@ CENARIOS = {
         _prep_fila_montada,
         lambda s: reativacao.cancelar_fila(1, agora=AGORA),
         "SELECT COUNT(*) FROM reativacao WHERE estado = 'cancelado'"),
+    # P6c
+    "assumir_atendimento": (
+        _prep_handoff,
+        lambda s: handoff.assumir_handoff(LEAD, "Ana", 1),
+        "SELECT COUNT(*) FROM handoffs WHERE estado = 'humano_assumiu'"),
+    "assumir_conversa": (
+        _prep_nada,
+        lambda s: handoff.assumir_conversa(LEAD, "Ana", 1),
+        "SELECT COUNT(*) FROM handoffs WHERE estado = 'humano_assumiu'"),
+    "devolver_ao_agente": (
+        _prep_handoff,
+        lambda s: handoff.devolver_ao_agente(LEAD, 1),
+        "SELECT COUNT(*) FROM handoffs WHERE estado = 'encerrado'"),
+    "salvar_configuracao": (
+        _prep_nada,
+        lambda s: salvar_config(1, {"cidade": "Recife"}, "Ana", papel="cliente"),
+        "SELECT COUNT(*) FROM config_historico"),
 }
 
 

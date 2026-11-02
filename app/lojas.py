@@ -229,7 +229,8 @@ EDITAVEIS: dict[str, Callable] = {
     "remarketing.max_toques": _int(1, TETO_TOQUES_REMARKETING),
     "remarketing.horario_envio": _faixa_horario("08:00", "21:00"),
     "remarketing.dias_envio": _dias,
-"remarketing.limite_mensal": _opcional(_int(0, 100_000)), "remarketing.carencia_dias": _int(0, 90),
+    "remarketing.limite_mensal": _opcional(_int(0, 100_000)),
+    "remarketing.carencia_dias": _int(0, 90),
     "pos_venda.revisao_meses": _int(1, 24),
     "pos_venda.revisao_km": _int(1000, 50_000),
     "pos_venda.troca_avista_meses": _int(3, 60),
@@ -405,8 +406,16 @@ def salvar_config(loja_id: int, mudancas: dict[str, Any], usuario: str,
     papel: "operador" pode tudo; "cliente" só as chaves dele. Se o cliente
     tentar mexer em chave do operador, NADA é gravado (SemPermissao).
     O padrão é "operador" para scripts e testes antigos; as páginas do
-    painel sempre passam o papel explicitamente."""
+    painel sempre passam o papel explicitamente.
+
+    P6: exige o ator (app/ator.py). Sem ator, ou ator de outra loja, nada é
+    gravado. Ator do painel da loja (papel 'cliente') salva SEMPRE como
+    cliente, mesmo que alguém passe papel="operador". O histórico continua
+    só em config_historico (não duplica no registro_acoes)."""
     _validar_papel(papel)
+    from app.registro import conferir_ator   # aqui dentro: evita import circular
+    if conferir_ator(loja_id).papel == "cliente":
+        papel = "cliente"
     if not mudancas:
         raise ConfigInvalida(["nenhuma mudança enviada"])
 
@@ -520,6 +529,7 @@ def historico_config(loja_id: int, limite: int = 50) -> list[dict]:
     finally:
         conexao.close()
     return [dict(l) for l in linhas]
+
 
 def __getattr__(nome: str):
     """Compatibilidade: SEGMENTOS deixou de ser lista fixa (Etapa 2, Bloco 1).

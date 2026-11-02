@@ -7,7 +7,7 @@ from app.apresentacao import horario_para_tela, nomes_dos_clientes
 from app.handoff import assumir_handoff, devolver_ao_agente, listar_handoffs
 from app.lojas import carregar_loja
 from app.mensagens import historico_do_lead
-from paginas.comum import loja_atual, para_streamlit, usuario_atual
+from paginas.comum import definir_ator_da_sessao, loja_atual, para_streamlit, usuario_atual
 
 INTERVALO_REFRESH = "30s"
 
@@ -51,6 +51,9 @@ st.button("🔄 Atualizar agora")
 
 @st.fragment(run_every=INTERVALO_REFRESH)
 def mostrar_fila(loja_id, vendedor):
+    # P6: clique aqui dentro reroda SÓ este pedaço (a entrada operador.py /
+    # painel.py não roda). Por isso o ator é definido de novo aqui.
+    definir_ator_da_sessao()
     handoffs = listar_handoffs(loja_id=loja_id, apenas_abertos=True)
     if not handoffs:
         st.success("Nenhum lead na fila agora. Tudo tranquilo. 👍")

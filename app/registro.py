@@ -41,6 +41,11 @@ ACOES_RELEVANTES = {
     "desfazer_importacao": "app.importacao.desfazer_importacao",
     "montar_fila_reativacao": "app.reativacao.montar_fila",
     "cancelar_fila_reativacao": "app.reativacao.cancelar_fila",
+    # P6c
+    "assumir_atendimento": "app.handoff.assumir_handoff",
+    "assumir_conversa": "app.handoff.assumir_conversa",
+    "devolver_ao_agente": "app.handoff.devolver_ao_agente",
+    "salvar_configuracao": "app.lojas.salvar_config",
 }
 
 # Ações que já tinham histórico próprio (quem, quando, na mesma transação).
@@ -49,6 +54,13 @@ ACOES_RELEVANTES = {
 HISTORICO_PROPRIO = {
     "pausar_envios": "pausas_envio",
     "retomar_envios": "pausas_envio",
+    "salvar_configuracao": "config_historico",
+}
+
+# Eventos de SISTEMA (sem pessoa): gravam com ator de sistema e nunca
+# derrubam quem chamou. Não entram em ACOES_RELEVANTES (lá, sem ator falha).
+EVENTOS_DE_SISTEMA = {
+    "mensagem_canal_sem_cadastro": "app.logs.registrar_canal_desconhecido",
 }
 
 
