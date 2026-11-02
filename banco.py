@@ -526,8 +526,27 @@ CREATE INDEX IF NOT EXISTS idx_pausas_loja ON pausas_envio(loja_id, id);
 """
 
 
+_MIGRACAO_9 = """
+-- P5 (Plano Mestre): "Não enviar" e "Não procurar mais", escolha da LOJA.
+-- Não é opt-out (optouts é o pedido do cliente). Desfazer não apaga a linha:
+-- grava quem desfez e quando.
+CREATE TABLE IF NOT EXISTS bloqueios_envio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    lead_id TEXT NOT NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('remarketing','pos_venda','reativacao','todos')),
+    passo INTEGER,
+    criado_por TEXT NOT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    desfeito_por TEXT,
+    desfeito_em TIMESTAMP,
+    CHECK (tipo != 'todos' OR passo IS NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_bloqueios_loja ON bloqueios_envio(loja_id, lead_id, desfeito_em);
+"""
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8}
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

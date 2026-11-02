@@ -1,5 +1,5 @@
 """
-Quem a loja pode procurar AGORA (Etapa 2, Bloco 2).
+Quem a loja pode procurar AGORA (Etapa 2, Bloco 2; P5 do Plano Mestre).
 
 Uma função decide: avaliar(loja_id, lead_id, canal, agora) -> Decisao.
 Não envia nem grava nada: o job (Bloco 3) e a tela (Bloco 6) perguntam aqui.
@@ -9,7 +9,8 @@ Ordem das conferências (a primeira que barrar decide o motivo):
   loja : desativada, módulo desligado, limite do contrato não definido,
          canal sem envio por iniciativa da loja
   lead : não quer contato / sem interesse, já comprou, teto de toques,
-         conversa com vendedor, pediu um tempo
+         a loja marcou "não enviar" (P5), conversa com vendedor,
+         carência depois do atendimento (P5)
   tempo: nunca conversou, respondeu depois do último toque, intervalo
          ainda não passou, limite do mês, fora do horário de envio
 
@@ -18,6 +19,10 @@ o teto nem o limite). Teto vale por lead e canal (UNIQUE da migração 5).
 Intervalos: o 1º toque usa remarketing.primeiro_toque_h, contado da última
 mensagem da conversa (de qualquer lado); o toque N usa intervalos_h[N-1],
 contado do toque anterior. Nunca antes de 24 h da última fala do cliente.
+
+Carência (P5): sem retomada por remarketing.carencia_dias depois que um
+vendedor atendeu ou uma visita foi marcada (a visita conta do dia em que
+foi marcada: a data combinada é texto livre; decisão A7). 0 = desligada.
 """
 from __future__ import annotations
 
@@ -25,6 +30,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 
 from banco import conectar
+from app.bloqueios import bloqueado
 from app.chaves import exigir_loja
 from app.interesse import pode_contatar, situacao_do_lead
 from app.janela import janela_aberta, ultima_mensagem_do_cliente
@@ -38,6 +44,7 @@ HORARIO_ENVIO_PADRAO = "09:00-19:00"
 DIAS_ENVIO_PADRAO = (0, 1, 2, 3, 4, 5)
 PRIMEIRO_TOQUE_PADRAO_H = 48
 INTERVALOS_PADRAO_H = (48, 120, 288)
+CARENCIA_PADRAO_DIAS = 7
 
 ROTULOS = {
     "elegivel": "Pode receber agora",
@@ -50,7 +57,9 @@ ROTULOS = {
     "pediu_tempo": "Pediu um tempo",
     "ja_comprou": "Já comprou",
     "teto_atingido": "Já recebeu o número máximo de contatos",
+    "bloqueado_pela_loja": "A loja marcou para não enviar",
     "com_vendedor": "Conversa com vendedor",
+    "carencia": "Pausa depois do atendimento com vendedor ou da visita marcada",
     "sem_conversa": "Nunca conversou com a loja neste canal",
     "respondeu": "Respondeu depois do último contato",
     "aguardando_intervalo": "Ainda não deu o tempo do próximo contato",
@@ -166,6 +175,26 @@ def _com_vendedor(loja_id: int, lead_id: str) -> bool:
     ))
 
 
+def _fim_da_carencia(loja, loja_id: int, lead_id: str) -> datetime | None:
+    """P5: quando acaba a pausa depois do atendimento (vendedor atendeu ou
+    visita marcada). None = sem pausa."""
+    dias = loja.get("remarketing.carencia_dias", CARENCIA_PADRAO_DIAS)
+    dias = CARENCIA_PADRAO_DIAS if dias is None else int(dias)
+    if dias <= 0:
+        return None
+    linha = _consulta(
+        "SELECT MAX(quando) AS quando FROM ("
+        " SELECT COALESCE(encerrado_em, assumido_em) AS quando FROM handoffs"
+        " WHERE loja_id = ? AND lead_id = ? AND assumido_em IS NOT NULL"
+        " UNION ALL"
+        " SELECT criado_em AS quando FROM agendamentos WHERE loja_id = ? AND lead_id = ?)",
+        (loja_id, lead_id, loja_id, lead_id),
+    )
+    if not linha or not linha[0]["quando"]:
+        return None
+    return do_banco(linha[0]["quando"]) + timedelta(days=dias)
+
+
 def _ultima_atividade(loja_id: int, lead_id: str, canal: str) -> datetime | None:
     linha = _consulta(
         "SELECT MAX(criado_em) AS quando FROM mensagens "
@@ -249,8 +278,13 @@ def avaliar(loja_id, lead_id, canal: str, agora: datetime) -> Decisao:
     if len(toques) >= _max_toques(loja):
         return nao("teto_atingido")
     toque = len(toques) + 1
+    if bloqueado(loja_id, lead_id, "remarketing", toque):
+        return nao("bloqueado_pela_loja", toque=toque)
     if _com_vendedor(loja_id, lead_id):
         return nao("com_vendedor", toque=toque)
+    fim_carencia = _fim_da_carencia(loja, loja_id, lead_id)
+    if fim_carencia and agora < fim_carencia:
+        return nao("carencia", proxima_abertura(loja, fim_carencia), toque)
 
     # --- tempo
     ultima_cliente = ultima_mensagem_do_cliente(loja_id, lead_id, canal)

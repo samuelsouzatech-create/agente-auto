@@ -35,7 +35,7 @@ from zoneinfo import ZoneInfo
 import banco
 from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
-from app import base_pos_venda, regua, vendas
+from app import base_pos_venda, bloqueios, regua, vendas
 from app.pausa import pausado
 from app.modo_envio import real_para
 from app.custos import Uso, registrar_uso
@@ -250,6 +250,9 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
             print(f"[Pós-venda][loja {loja.id}] {lead_id} relatou problema: {n} passo(s) cancelado(s).")
             return "cancelado"
         return "adiado"                    # vendedor no meio: tenta no próximo ciclo
+    if bloqueios.bloqueado(loja.id, lead_id, "pos_venda", e["id"]):
+        return "adiado"                    # P5: a loja marcou "Não enviar"
+
     if not no_horario_de_envio(loja, agora):
         return "adiado"
 
@@ -324,7 +327,7 @@ def rodar_pos_venda(agora: datetime | None = None, *, envio_real: bool | None = 
             if not loja.ativo or not modulo_ativo(loja, "pos_venda") or pausado(loja_id):
                 continue
             real = real_para(loja, "pos_venda", envio_real)
-            fila = regua.vencidas(loja_id, agora, max_por_loja)
+            fila = regua.vencidas(loja_id, agora, max_por_loja + bloqueios.total_ativos(loja_id))
         except Exception as erro:          # uma loja com problema não trava as outras
             print(f"[Pós-venda] Erro na loja {loja_id}: {erro!r}")
             continue
@@ -379,4 +382,3 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-    

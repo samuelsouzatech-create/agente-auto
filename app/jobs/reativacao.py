@@ -43,7 +43,7 @@ MAX_POR_RODADA = 10
 PAUSA_ENTRE_ENVIOS_S = 3
 MAX_TENTATIVAS = 3
 REPETIR_FALHA_APOS = timedelta(hours=6)
-ADIAR = {"com_vendedor"}               # volta a tentar depois
+ADIAR = {"com_vendedor", "bloqueado_pela_loja"}
 ESTADOS = ("enviado", "simulado", "falhou", "bloqueado", "cancelado", "adiado", "erro")
 _ROTULO = {"enviado": "ENVIADO", "simulado": "SIMULADO (nada saiu)", "falhou": "FALHOU",
            "bloqueado": "BLOQUEADO", "cancelado": "CANCELADO"}
