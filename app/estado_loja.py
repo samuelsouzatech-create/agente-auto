@@ -14,6 +14,10 @@ com o roteamento dos canais (app/canais.py): são três coisas separadas.
 Só o operador coloca no ar, e isso vai para o Registro na mesma transação.
 Só o operador cadastra números de teste. Sem Streamlit: as telas (S2 e S4b)
 só mostram e chamam estas funções.
+
+P7c: inicio_da_contagem() diz de quando os números da loja valem. Só tem
+corte a loja que passou por colocar_no_ar (está no Registro). As lojas que
+entraram no ar pela migração 11 contam tudo, como antes.
 """
 from __future__ import annotations
 
@@ -30,6 +34,7 @@ ROTULOS = {EM_TESTE: "Em teste", NO_AR: "No ar"}
 TIPOS_DE_CANAL = ("whatsapp", "telegram", "instagram")
 CANAL_SIMULADOR = "simulador"
 MAX_NOME = 80
+ACAO_NO_AR = "colocar_no_ar"
 
 
 class SoOperador(PermissionError):
@@ -80,6 +85,25 @@ def esta_no_ar(loja_id) -> bool:
         return False
 
 
+def inicio_da_contagem(loja_id) -> str | None:
+    """P7c: a partir de quando (UTC, formato do banco) os números da loja contam.
+    None = conta tudo. Só tem corte a loja que está no ar E passou por
+    colocar_no_ar (fica no Registro). Loja em teste: None (os números aparecem,
+    com aviso, na tela). Loja que já existia antes do P7: None."""
+    loja_id = exigir_loja(loja_id)
+    conexao = conectar()
+    try:
+        linha = conexao.execute(
+            "SELECT e.no_ar_em FROM estado_lojas e "
+            "WHERE e.loja_id = ? AND e.estado = ? AND e.no_ar_em IS NOT NULL "
+            "AND EXISTS (SELECT 1 FROM registro_acoes r "
+            "            WHERE r.loja_id = e.loja_id AND r.acao = ?)",
+            (loja_id, NO_AR, ACAO_NO_AR)).fetchone()
+    finally:
+        conexao.close()
+    return str(linha["no_ar_em"])[:19] if linha else None
+
+
 def colocar_no_ar(loja_id, agora=None) -> bool:
     """Só o operador. Devolve True se mudou; False se a loja já estava no ar
     (nesse caso nada é gravado). Estado e Registro na mesma transação."""
@@ -101,7 +125,7 @@ def colocar_no_ar(loja_id, agora=None) -> bool:
             (loja_id, NO_AR, momento, ator.pessoa, momento))
         if cursor.rowcount == 0:
             return False                         # já estava no ar: nada gravado
-        registrar("colocar_no_ar", loja_id, {"estado": EM_TESTE},
+        registrar(ACAO_NO_AR, loja_id, {"estado": EM_TESTE},
                   {"estado": NO_AR, "no_ar_em": momento},
                   conexao=conexao, alvo="loja", agora=agora)
         conexao.commit()

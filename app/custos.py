@@ -8,6 +8,9 @@ Nada aqui pode derrubar a conversa.
 
 Nome no banco: a coluna se chama custo_llm (LLM = modelo de linguagem,
 qualquer fornecedor). No código, na tela e no log chamamos de custo_ia.
+
+P7c: resumo_implantacao() separa o custo do período de teste da loja.
+O total do mês (resumo_mes) não muda: é o que o fornecedor cobra.
 """
 from __future__ import annotations
 
@@ -21,6 +24,9 @@ from langchain_core.messages import ToolMessage
 
 from app import logs, precos, relogio
 from banco import conectar
+
+# P7c: loja ainda em teste = todo o custo dela até agora é implantação.
+FIM_SEM_CORTE = "9999-12-31 23:59:59"
 
 
 @dataclass
@@ -222,6 +228,38 @@ def resumo_mes(loja_id: int, ano: int, mes: int) -> dict:
     resumo["custo_total"] = round(resumo["custo_ia"] + resumo["custo_meta"], 6)
     resumo["custo_medio_conversa"] = (
         round(resumo["custo_total"] / resumo["conversas"], 6) if resumo["conversas"] else 0.0)
+    return resumo
+
+
+def resumo_implantacao(loja_id: int) -> dict:
+    """P7c: custo do período de teste da loja, separado ("implantação").
+    - loja em teste: tudo até agora é implantação (ate = None);
+    - loja que entrou no ar pelo botão: o que veio antes de no_ar_em;
+    - loja que já existia antes do P7: não tem implantação (tudo zero).
+    Só lê. Nada é apagado nem tirado do total do mês."""
+    from app.estado_loja import esta_no_ar, inicio_da_contagem   # evita import circular
+    em_teste = not esta_no_ar(loja_id)
+    ate = None if em_teste else inicio_da_contagem(loja_id)
+    resumo = {"em_teste": em_teste, "ate": ate, "conversas": 0,
+              "custo_ia": 0.0, "custo_meta": 0.0, "custo_total": 0.0}
+    if not em_teste and ate is None:
+        return resumo
+    limite = FIM_SEM_CORTE if em_teste else ate
+    conexao = conectar()
+    try:
+        l = conexao.execute(
+            """SELECT COUNT(DISTINCT lead_id) AS conversas,
+                      COALESCE(SUM(custo_llm), 0) AS custo_ia,
+                      COALESCE(SUM(custo_meta), 0) AS custo_meta
+               FROM uso_custos WHERE loja_id = ? AND criado_em < ?""",
+            (loja_id, limite),
+        ).fetchone()
+    finally:
+        conexao.close()
+    resumo["conversas"] = l["conversas"]
+    resumo["custo_ia"] = round(l["custo_ia"], 6)
+    resumo["custo_meta"] = round(l["custo_meta"], 6)
+    resumo["custo_total"] = round(l["custo_ia"] + l["custo_meta"], 6)
     return resumo
 
 

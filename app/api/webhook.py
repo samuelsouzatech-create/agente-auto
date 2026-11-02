@@ -7,6 +7,9 @@ O atendimento em si é o executar_turno() (app/core/turno.py).
 
 Revisão da Etapa 1: toda função daqui exige a loja (nada de "loja 1 por
 reserva") e todo envio sai pelo número da loja (app/credenciais.py).
+
+P7c: áudio de quem não é número de teste, numa loja em teste, nem é
+transcrito (a transcrição custa). A porta grava o evento no Registro.
 """
 import hashlib
 import hmac
@@ -17,7 +20,7 @@ from fastapi import FastAPI, Request, Response, Query, BackgroundTasks
 from app.config import WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET
 from app.core.agent import agente_grafo
 from app.core.turno import (
-    executar_turno, aguardar_vez, turno_midia_nao_suportada, turno_audio_falhou,
+    executar_turno, aguardar_vez, porta_fechada, turno_midia_nao_suportada, turno_audio_falhou,
 )
 from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
 from app.api.receber_audio import transcrever_audio, pegar_uso_da_transcricao
@@ -98,6 +101,9 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
     """Segundo plano: (áudio) -> debounce + lock -> executar_turno -> envio."""
     loja_id = exigir_loja(loja_id)
     if id_audio:
+        # P7c: loja em teste e não é número de teste: nem transcreve (custo).
+        if porta_fechada(loja_id, CANAL, numero):
+            return
         print(f"[WhatsApp][loja {loja_id}] Cliente {numero} mandou um áudio. Transcrevendo...")
         texto = await transcrever_audio(id_audio, loja_id=loja_id)
         uso_audio = pegar_uso_da_transcricao(id_audio)

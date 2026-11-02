@@ -20,6 +20,9 @@ Decisões do Samuel (A7, 02/11/2026): a visita conta 7 dias desde que foi
 marcada (a data combinada é texto livre, ex.: "sábado 10h"); quem some há
 mais de 7 dias vai para "Não seguiu"; uma frase de "próximo passo" por etapa.
 "Novo" fica antes de "Em conversa" (senão nunca apareceria).
+
+P7c: o Resultado de uma loja que entrou no ar pelo botão conta só a partir
+desse momento (app/estado_loja.inicio_da_contagem). Nada é apagado.
 """
 from __future__ import annotations
 
@@ -32,6 +35,7 @@ from app.apresentacao import (
     nome_do_canal, nomes_dos_clientes,
 )
 from app.chaves import exigir_loja
+from app.estado_loja import esta_no_ar, inicio_da_contagem
 from app.interesse import ROTULOS as ROTULOS_SITUACAO
 from app.lojas import carregar_loja, modulo_ativo
 from app.relogio import (
@@ -320,7 +324,13 @@ def etapas_dos_leads(loja_id, desde_dias, busca=None, *, agora: datetime | None 
 
 def resultado_do_periodo(loja_id, inicio, fim) -> dict:
     """Números da tela Resultado entre dois dias (inclusive), no fuso da loja.
-    Venda conta pela data da venda, não pela data do registro."""
+    Venda conta pela data da venda, não pela data do registro.
+
+    P7c: loja que entrou no ar pelo botão conta só a partir de no_ar_em (o
+    período de teste fica de fora; nada é apagado). Venda: registrada depois
+    de entrar no ar E com data da venda desse dia em diante. Loja ainda em
+    teste mostra os números com dados_de_teste=True. Loja que já existia
+    antes do P7 conta tudo, como antes."""
     loja_id = exigir_loja(loja_id)
     loja = carregar_loja(loja_id)
     inicio, fim = _dia(inicio), _dia(fim)
@@ -331,6 +341,12 @@ def resultado_do_periodo(loja_id, inicio, fim) -> dict:
         raise ValueError(f"Período muito longo (máximo {MAX_DIAS_PERIODO} dias).")
     de, _ = limites_do_dia_em_utc(loja.get("fuso"), inicio)
     _, ate = limites_do_dia_em_utc(loja.get("fuso"), fim)
+
+    contando_desde = inicio_da_contagem(loja_id)
+    inicio_vendas = inicio
+    if contando_desde:
+        de = max(de, contando_desde)
+        inicio_vendas = max(inicio, hora_local(loja, _dt(contando_desde)).date())
 
     conexao = _ler()
     try:
@@ -356,8 +372,10 @@ def resultado_do_periodo(loja_id, inicio, fim) -> dict:
             "SELECT lead_id FROM agendamentos WHERE loja_id = ? AND criado_em >= ? AND criado_em < ?",
             (loja_id, de, ate)).fetchall()
         vendas = conexao.execute(
-            "SELECT lead_id FROM vendas WHERE loja_id = ? AND data_venda >= ? AND data_venda <= ?",
-            (loja_id, inicio.isoformat(), fim.isoformat())).fetchall()
+            "SELECT lead_id FROM vendas WHERE loja_id = ? AND data_venda >= ? AND data_venda <= ? "
+            "AND (? IS NULL OR criado_em >= ?)",
+            (loja_id, inicio_vendas.isoformat(), fim.isoformat(),
+             contando_desde, contando_desde)).fetchall()
         conversas = list(dict.fromkeys(l["lead_id"] for l in do_cliente))
         qualificados = {l["lead_id"] for l in _por_lead(
             conexao,
@@ -408,6 +426,10 @@ def resultado_do_periodo(loja_id, inicio, fim) -> dict:
         "funil": [{"etapa": k, "rotulo": ROTULOS_FUNIL[k], "total": v} for k, v in funil.items()],
         "por_dia": [{"dia": d.isoformat(), "dia_texto": d.strftime("%d/%m"), **v}
                     for d, v in por_dia.items()],
+        # P7c: a tela avisa quando os números são do período de teste e
+        # mostra (no fuso da loja) desde quando está contando.
+        "dados_de_teste": not esta_no_ar(loja_id),
+        "contando_desde": contando_desde,
     }
 
 
