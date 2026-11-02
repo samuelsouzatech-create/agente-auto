@@ -566,8 +566,41 @@ CREATE TABLE IF NOT EXISTS registro_acoes (
 CREATE INDEX IF NOT EXISTS idx_registro_loja ON registro_acoes(loja_id, quando);
 """
 
+_MIGRACAO_11 = """
+-- P7 (Plano Mestre): estado da loja. 'em_teste' = nada proativo sai de verdade
+-- e o assistente só responde aos números de teste; 'no_ar' = funciona normal.
+-- Não se confunde com 'ativo' (loja desligada) nem com o roteamento dos canais.
+-- Tabela própria (e não ALTER TABLE lojas): toda migração precisa poder rodar
+-- de novo, e o SQLite não tem "ADD COLUMN IF NOT EXISTS" (mesmo motivo da 5).
+-- Loja SEM linha aqui = em teste. Assim toda loja nova nasce em teste.
+CREATE TABLE IF NOT EXISTS estado_lojas (
+    loja_id INTEGER PRIMARY KEY,
+    estado TEXT NOT NULL CHECK (estado IN ('em_teste','no_ar')),
+    no_ar_em TIMESTAMP,
+    alterado_por TEXT,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+-- As lojas que JÁ existiam continuam como hoje: entram no ar. Só na primeira
+-- vez (tabela vazia); rodar de novo não muda o estado de ninguém.
+INSERT INTO estado_lojas (loja_id, estado, no_ar_em, alterado_por)
+    SELECT id, 'no_ar', CURRENT_TIMESTAMP, 'Sistema' FROM lojas
+    WHERE NOT EXISTS (SELECT 1 FROM estado_lojas);
+-- Quem pode conversar com uma loja em teste (id_externo já normalizado).
+CREATE TABLE IF NOT EXISTS numeros_de_teste (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    tipo_de_canal TEXT NOT NULL CHECK (tipo_de_canal IN ('whatsapp','telegram','instagram')),
+    id_externo TEXT NOT NULL,
+    nome TEXT,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (loja_id, tipo_de_canal, id_externo)
+);
+CREATE INDEX IF NOT EXISTS idx_numeros_teste_loja ON numeros_de_teste(loja_id, tipo_de_canal, ativo);
+"""
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10}
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

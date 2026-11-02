@@ -1,5 +1,5 @@
 """
-P6b/P6c do Plano Mestre: as ações relevantes deixam rastro (quem, quando, antes e depois).
+P6b/P6c/P7a do Plano Mestre: as ações relevantes deixam rastro (quem, quando, antes e depois).
 - toda ação de ACOES_RELEVANTES tem um cenário aqui (ação nova sem teste = falha);
 - cada ação grava com o nome do ATOR, não com o nome que a função recebe;
 - sem ator, a ação falha e nada fica (nem a ação, nem o registro);
@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from banco import conectar
-from app import bloqueios, handoff, importacao, pausa, reativacao, vendas
+from app import bloqueios, estado_loja, handoff, importacao, pausa, reativacao, vendas
 from app.ator import AtorInvalido, SemAtor, como, sem_ator
 from app.lojas import criar_loja, salvar_config
 from app.registro import ACOES_RELEVANTES, HISTORICO_PROPRIO
@@ -114,6 +114,17 @@ def _prep_handoff():
     return {}
 
 
+def _prep_loja_em_teste():
+    """A loja 1 entrou no ar na migração 11; aqui volta a 'em teste' só para o cenário."""
+    conexao = conectar()
+    try:
+        conexao.execute("DELETE FROM estado_lojas WHERE loja_id = 1")
+        conexao.commit()
+    finally:
+        conexao.close()
+    return {}
+
+
 CENARIOS = {
     "pausar_envios": (
         _prep_nada,
@@ -169,6 +180,11 @@ CENARIOS = {
         _prep_nada,
         lambda s: salvar_config(1, {"cidade": "Recife"}, "Ana", papel="cliente"),
         "SELECT COUNT(*) FROM config_historico"),
+    # P7a
+    "colocar_no_ar": (
+        _prep_loja_em_teste,
+        lambda s: estado_loja.colocar_no_ar(1, agora=AGORA),
+        "SELECT COUNT(*) FROM estado_lojas WHERE loja_id = 1 AND estado = 'no_ar'"),
 }
 
 

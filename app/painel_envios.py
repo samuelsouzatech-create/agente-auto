@@ -84,7 +84,8 @@ def _texto(contexto) -> str:
 
 
 ROTULOS_MODO = {"real": "Real", "teste_loja": "Simulação (loja em teste)",
-                "teste_servidor": "Simulação (servidor em teste)", "teste": "Simulação"}
+                "teste_servidor": "Simulação (servidor em teste)", "teste": "Simulação", "loja_em_teste": "Bloqueado: loja em teste"}
+
 
 
 def modo_de_envio(loja=None) -> dict[str, bool]:
