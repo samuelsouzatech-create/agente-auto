@@ -26,7 +26,7 @@ def _percentual(taxa: float) -> str:
 
 @tool
 def simular_financiamento(valor_carro: float, entrada: float, parcelas: int,
-                          loja_id: Annotated[int, InjectedToolArg] = 1) -> str:
+                          *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Faz uma ESTIMATIVA de financiamento. Deixe claro ao cliente que é
     apenas uma simulação aproximada, e que as condições reais dependem de
     análise de crédito feita por um vendedor.

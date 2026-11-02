@@ -6,7 +6,7 @@ from banco import conectar
 @tool
 def agendar_visita(nome_cliente: str, tipo: str, data_hora: str,
                    lead_id: Annotated[str, InjectedToolArg] = "",
-                   loja_id: Annotated[int, InjectedToolArg] = 1) -> str:
+                   *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Agenda uma visita, test-drive ou ligação com vendedor.
     Se o cliente já tiver um agendamento desse tipo, ATUALIZA o horário
     (o cliente pode remarcar). Não cria agendamentos duplicados.

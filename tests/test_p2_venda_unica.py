@@ -76,9 +76,9 @@ def test_reservado_e_indisponivel_saem_da_oferta_do_leo():
     carro = _carro(1)
     for situacao in ("reservado", "indisponivel"):
         marcar_status(carro, situacao, 1)
-        assert "Argo" not in consultar_estoque.invoke({"modelo": "Argo"})
+        assert "Argo" not in consultar_estoque.invoke({"modelo": "Argo", "loja_id": 1})
     marcar_status(carro, "disponivel", 1)
-    assert "Argo" in consultar_estoque.invoke({"modelo": "Argo"})
+    assert "Argo" in consultar_estoque.invoke({"modelo": "Argo", "loja_id": 1})
 
 
 def test_carro_novo_nao_nasce_vendido():

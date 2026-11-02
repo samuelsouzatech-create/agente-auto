@@ -62,7 +62,7 @@ def test_registrar_lead_cria_uma_linha(banco_temporario):
     registrar_lead.invoke({
         "nome": "João",
         "interesse": "Civic",
-        "lead_id": "conversa-1"
+        "loja_id": 1, "lead_id": "conversa-1"
     })
     assert contar_linhas(banco_temporario, "leads") == 1
 
@@ -70,11 +70,11 @@ def test_registrar_lead_cria_uma_linha(banco_temporario):
 def test_registrar_lead_nao_duplica_mesma_conversa(banco_temporario):
     # Duas chamadas com o MESMO lead_id devem gerar UMA linha só
     registrar_lead.invoke({
-        "nome": "João", "interesse": "Civic", "lead_id": "conversa-1"
+        "nome": "João", "interesse": "Civic", "loja_id": 1, "lead_id": "conversa-1"
     })
     registrar_lead.invoke({
         "nome": "João", "interesse": "Civic",
-        "forma_pagamento": "financiado", "lead_id": "conversa-1"
+        "forma_pagamento": "financiado", "loja_id": 1, "lead_id": "conversa-1"
     })
     assert contar_linhas(banco_temporario, "leads") == 1
 
@@ -82,12 +82,12 @@ def test_registrar_lead_nao_duplica_mesma_conversa(banco_temporario):
 def test_registrar_lead_completa_campos(banco_temporario):
     # Primeira chamada sem forma de pagamento
     registrar_lead.invoke({
-        "nome": "Maria", "interesse": "Onix", "lead_id": "conversa-2"
+        "nome": "Maria", "interesse": "Onix", "loja_id": 1, "lead_id": "conversa-2"
     })
     # Segunda chamada adiciona forma de pagamento, sem repetir o resto
     registrar_lead.invoke({
         "nome": "", "interesse": "", "forma_pagamento": "à vista",
-        "lead_id": "conversa-2"
+        "loja_id": 1, "lead_id": "conversa-2"
     })
     lead = buscar_lead(banco_temporario, "conversa-2")
     # O nome antigo deve ser preservado (não apagado pela string vazia)
@@ -99,10 +99,10 @@ def test_registrar_lead_completa_campos(banco_temporario):
 
 def test_registrar_lead_conversas_diferentes_sao_separadas(banco_temporario):
     registrar_lead.invoke({
-        "nome": "João", "interesse": "Civic", "lead_id": "conversa-1"
+        "nome": "João", "interesse": "Civic", "loja_id": 1, "lead_id": "conversa-1"
     })
     registrar_lead.invoke({
-        "nome": "Maria", "interesse": "Onix", "lead_id": "conversa-2"
+        "nome": "Maria", "interesse": "Onix", "loja_id": 1, "lead_id": "conversa-2"
     })
     # Dois lead_id diferentes = duas linhas
     assert contar_linhas(banco_temporario, "leads") == 2
@@ -113,7 +113,7 @@ def test_registrar_lead_conversas_diferentes_sao_separadas(banco_temporario):
 def test_registrar_troca_grava_com_lead_id(banco_temporario):
     resultado = registrar_troca.invoke({
         "modelo": "Gol", "ano": 2015, "km": 90000,
-        "estado": "bom", "lead_id": "conversa-1"
+        "estado": "bom", "loja_id": 1, "lead_id": "conversa-1"
     })
     assert contar_linhas(banco_temporario, "trocas") == 1
     # A tool NUNCA pode dar valor de avaliação
@@ -123,7 +123,7 @@ def test_registrar_troca_grava_com_lead_id(banco_temporario):
 def test_agendar_visita_grava(banco_temporario):
     agendar_visita.invoke({
         "nome_cliente": "João", "tipo": "visita",
-        "data_hora": "sábado 10h", "lead_id": "conversa-1"
+        "data_hora": "sábado 10h", "loja_id": 1, "lead_id": "conversa-1"
     })
     assert contar_linhas(banco_temporario, "agendamentos") == 1
     # Confere que os dados foram realmente gravados, não só a linha criada
@@ -139,7 +139,7 @@ def test_agendar_visita_grava(banco_temporario):
 def test_acionar_handoff_grava_aguardando_humano(banco_temporario):
     acionar_handoff.invoke({
         "motivo": "cliente pediu desconto",
-        "resumo": "lead quente", "lead_id": "conversa-1"
+        "resumo": "lead quente", "loja_id": 1, "lead_id": "conversa-1"
     })
     assert contar_linhas(banco_temporario, "handoffs") == 1
 
@@ -149,11 +149,11 @@ def test_agendar_visita_remarcar_nao_duplica(banco_temporario):
     # Mesmo lead, mesmo tipo, horário diferente = remarcação, NÃO duplicação.
     agendar_visita.invoke({
         "nome_cliente": "Marina", "tipo": "visita",
-        "data_hora": "sábado 10h", "lead_id": "conversa-rem"
+        "data_hora": "sábado 10h", "loja_id": 1, "lead_id": "conversa-rem"
     })
     agendar_visita.invoke({
         "nome_cliente": "Marina", "tipo": "visita",
-        "data_hora": "sábado 11h", "lead_id": "conversa-rem"
+        "data_hora": "sábado 11h", "loja_id": 1, "lead_id": "conversa-rem"
     })
     # Deve existir UMA linha só...
     assert contar_linhas(banco_temporario, "agendamentos") == 1
@@ -171,11 +171,11 @@ def test_agendar_visita_tipos_diferentes_sao_separados(banco_temporario):
     # Mesmo lead, mas tipos diferentes = agendamentos separados (visita + ligação).
     agendar_visita.invoke({
         "nome_cliente": "Marina", "tipo": "visita",
-        "data_hora": "sábado 10h", "lead_id": "conversa-tipos"
+        "data_hora": "sábado 10h", "loja_id": 1, "lead_id": "conversa-tipos"
     })
     agendar_visita.invoke({
         "nome_cliente": "Marina", "tipo": "ligacao",
-        "data_hora": "segunda 14h", "lead_id": "conversa-tipos"
+        "data_hora": "segunda 14h", "loja_id": 1, "lead_id": "conversa-tipos"
     })
     assert contar_linhas(banco_temporario, "agendamentos") == 2
 
@@ -186,11 +186,11 @@ def test_acionar_handoff_nao_duplica_mesmo_lead(banco_temporario):
     # Dois pedidos vermelhos do mesmo lead = UMA linha na fila do vendedor.
     acionar_handoff.invoke({
         "motivo": "cliente pediu desconto",
-        "resumo": "lead quente, quer Onix", "lead_id": "conversa-hand"
+        "resumo": "lead quente, quer Onix", "loja_id": 1, "lead_id": "conversa-hand"
     })
     acionar_handoff.invoke({
         "motivo": "cliente quer falar com vendedor",
-        "resumo": "lead quente, quer Onix, insistindo", "lead_id": "conversa-hand"
+        "resumo": "lead quente, quer Onix, insistindo", "loja_id": 1, "lead_id": "conversa-hand"
     })
     # Uma linha só...
     assert contar_linhas(banco_temporario, "handoffs") == 1
@@ -207,10 +207,10 @@ def test_acionar_handoff_nao_duplica_mesmo_lead(banco_temporario):
 
 def test_acionar_handoff_leads_diferentes_sao_separados(banco_temporario):
     acionar_handoff.invoke({
-        "motivo": "desconto", "resumo": "lead A", "lead_id": "lead-a"
+        "motivo": "desconto", "resumo": "lead A", "loja_id": 1, "lead_id": "lead-a"
     })
     acionar_handoff.invoke({
-        "motivo": "reclamação", "resumo": "lead B", "lead_id": "lead-b"
+        "motivo": "reclamação", "resumo": "lead B", "loja_id": 1, "lead_id": "lead-b"
     })
     assert contar_linhas(banco_temporario, "handoffs") == 2
 

@@ -11,7 +11,7 @@ ORIENTACAO = ("Diga ao cliente, com naturalidade e sem anunciar transferência, 
 @tool
 def acionar_handoff(motivo: str, resumo: str,
                     lead_id: Annotated[str, InjectedToolArg] = "",
-                    loja_id: Annotated[int, InjectedToolArg] = 1) -> str:
+                    *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Aciona a passagem da conversa para um vendedor humano (handoff).
     Use quando: o cliente pedir para falar com uma pessoa; pedir desconto
     ou negociar preço; pedir aprovação de crédito; houver reclamação;

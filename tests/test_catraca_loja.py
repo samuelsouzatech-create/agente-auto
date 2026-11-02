@@ -18,45 +18,10 @@ RAIZ = Path(__file__).resolve().parent.parent
 PASTAS = ("app", "tools", "paginas")
 ARQUIVOS_SOLTOS = ("banco.py",)
 
-LEGADO = {
-    # app/mensagens.py
-    #"app/mensagens.py:salvar_mensagem",
-    #"app/mensagens.py:historico_do_lead",
-    #"app/mensagens.py:listar_leads",
-    #"app/mensagens.py:listar_conversas",
-    #"app/mensagens.py:ja_respondeu",
-    #"app/mensagens.py:mensagens_desde_a_ultima_resposta_do_leo",
-    # app/handoff.py
-    #"app/handoff.py:estado_do_handoff",
-    #"app/handoff.py:quem_assumiu",
-    #"app/handoff.py:assumir_handoff",
-    #"app/handoff.py:assumir_conversa",
-    #"app/handoff.py:devolver_ao_agente",
-    #"app/handoff.py:encerrar_handoff",
-    #"app/handoff.py:listar_handoffs",
-    # app/estoque.py
-    #"app/estoque.py:listar_estoque",
-    #"app/estoque.py:buscar_carro",
-    #"app/estoque.py:adicionar_carro",
-    #"app/estoque.py:atualizar_carro",
-    #"app/estoque.py:marcar_status",
-    # app/resultados.py
-    #"app/resultados.py:registrar_resultado",
-    #"app/resultados.py:resultado_do_lead",
-    #"app/resultados.py:listar_resultados",
-    # tools/ (loja_id injetado pelo código, nunca vem da IA)
-    # Pendente: confirmar com o analista se saem no P0 ou em bloco próprio.
-    "tools/acionar_handoff.py:acionar_handoff",
-    "tools/agendar_visita.py:agendar_visita",
-    "tools/buscar_conhecimento.py:buscar_conhecimento",
-    "tools/consultar_estoque.py:consultar_estoque",
-    "tools/detalhes_veiculo.py:detalhes_veiculo",
-    "tools/enviar_fotos.py:enviar_fotos",
-    "tools/registrar_interesse.py:registrar_interesse",
-    "tools/registrar_lead.py:registrar_lead",
-    "tools/registrar_troca.py:registrar_troca",
-    "tools/simular_financiamento.py:simular_financiamento",
-}
+# LEGADO vazio desde o P0 (31 itens: 21 em app/ e 10 em tools/).
+# Agora nenhuma função pode ter loja_id com valor padrão.
+LEGADO: set = set()
+
 
 
 def _arquivos():

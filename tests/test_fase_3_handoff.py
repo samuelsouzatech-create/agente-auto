@@ -120,7 +120,7 @@ def whatsapp(monkeypatch, redis_falso, banco_temporario):
 def abrir_handoff(lead_id="5581", motivo="cliente pediu desconto", resumo="quer o Civic"):
     """Cria um handoff do jeito que o Léo cria: pela tool."""
     from tools import acionar_handoff
-    return acionar_handoff.func(motivo=motivo, resumo=resumo, lead_id=lead_id)
+    return acionar_handoff.func(motivo=motivo, resumo=resumo, lead_id=lead_id, loja_id=1)
 
 
 def linhas_handoff(lead_id="5581"):
@@ -489,13 +489,13 @@ def test_marcar_vendido_tira_o_carro_da_oferta_do_leo(banco_temporario):
     from app.estoque import adicionar_carro, marcar_status
     from tools import consultar_estoque
     novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=1)
-    assert "Argo" in consultar_estoque.invoke({"modelo": "Argo"})
+    assert "Argo" in consultar_estoque.invoke({"modelo": "Argo", "loja_id": 1})
     marcar_status(novo, "reservado", 1)
-    assert "Argo" not in consultar_estoque.invoke({"modelo": "Argo"})
+    assert "Argo" not in consultar_estoque.invoke({"modelo": "Argo", "loja_id": 1})
     marcar_status(novo, "disponivel", 1)
-    assert "Argo" in consultar_estoque.invoke({"modelo": "Argo"})
+    assert "Argo" in consultar_estoque.invoke({"modelo": "Argo", "loja_id": 1})
     _vender_na_loja_1(novo)
-    assert "Argo" not in consultar_estoque.invoke({"modelo": "Argo"})
+    assert "Argo" not in consultar_estoque.invoke({"modelo": "Argo", "loja_id": 1})
 
 
 def test_listar_estoque_pode_esconder_vendidos(banco_temporario):
