@@ -546,7 +546,28 @@ CREATE INDEX IF NOT EXISTS idx_bloqueios_loja ON bloqueios_envio(loja_id, lead_i
 """
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9}
+_MIGRACAO_10 = """
+-- P6 (Plano Mestre): Registro de quem fez o quê. Uma linha por ação relevante.
+-- loja_id vazio = evento sem loja (ex.: mensagem de canal sem cadastro).
+-- papel sem CHECK de propósito: o P8 traz os papéis de verdade.
+-- antes/depois em JSON. quando em UTC, como o resto do banco.
+CREATE TABLE IF NOT EXISTS registro_acoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quando TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    loja_id INTEGER,
+    pessoa TEXT NOT NULL,
+    papel TEXT NOT NULL,
+    acao TEXT NOT NULL,
+    alvo TEXT,
+    antes TEXT,
+    depois TEXT,
+    origem TEXT NOT NULL CHECK (origem IN ('painel','api','job','webhook'))
+);
+CREATE INDEX IF NOT EXISTS idx_registro_loja ON registro_acoes(loja_id, quando);
+"""
+
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

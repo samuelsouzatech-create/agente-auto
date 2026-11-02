@@ -66,7 +66,7 @@ def _redator(*args, **kwargs):
 # ------------------------------------------------------------ migração
 
 def test_migracao_9_cria_a_tabela():
-    assert banco.VERSAO_SCHEMA == 9
+    assert banco.VERSAO_SCHEMA >= 9
     assert _contar("SELECT COUNT(*) FROM sqlite_master WHERE name = 'bloqueios_envio'") == 1
 
 
