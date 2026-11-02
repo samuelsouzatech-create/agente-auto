@@ -14,6 +14,9 @@ Consentimento: marcado na importação inteira por quem importa (nome e data
 ficam gravados). Sem ele, o contato fica guardado e é reconhecido pelo
 assistente, mas a loja não manda nada por iniciativa própria (Bloco 6B).
 Desfazer: apaga as compras daquela importação e os contatos que ela CRIOU.
+
+P6: importar e desfazer gravam no Registro (registro_acoes), na mesma
+transação, com o nome do ator.
 """
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ from datetime import date, datetime, timedelta
 
 from banco import conectar
 from app.chaves import exigir_loja
+from app.registro import registrar
 from app.relogio import agora_utc, para_banco
 from app.telefone import normalizar_telefone_br
 
@@ -314,6 +318,11 @@ def importar(loja_id, previa: Previa, *, usuario: str, consentimento: bool,
         conexao.execute(
             "UPDATE importacoes SET contatos_novos = ?, contatos_atualizados = ?, compras = ? "
             "WHERE id = ?", (novos, atualizados, compras_novas, imp))
+        registrar("importar_base", loja_id, None,
+                  {"arquivo": str(arquivo or "")[:200], "consentimento": bool(marca),
+                   "contatos_novos": novos, "contatos_atualizados": atualizados,
+                   "compras_novas": compras_novas, "recusadas": len(previa.recusadas)},
+                  conexao=conexao, alvo=f"importacao:{imp}")
         conexao.commit()
     except Exception:
         conexao.rollback()
@@ -350,6 +359,9 @@ def desfazer_importacao(loja_id, importacao_id: int, *, agora: datetime | None =
             (loja_id, importacao_id)).rowcount
         conexao.execute("UPDATE importacoes SET desfeita_em = ? WHERE id = ?",
                         (para_banco(agora or agora_utc()), importacao_id))
+        registrar("desfazer_importacao", loja_id, None,
+                  {"contatos_apagados": contatos, "compras_apagadas": compras},
+                  conexao=conexao, alvo=f"importacao:{importacao_id}")
         conexao.commit()
     finally:
         conexao.close()

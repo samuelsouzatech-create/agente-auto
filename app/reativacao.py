@@ -11,6 +11,9 @@ Fica de fora (na montagem E de novo logo antes de enviar):
   já foi reativado nos últimos 6 meses.
 Conta no MESMO limite mensal do remarketing e exige o módulo remarketing ligado.
 Não há segundo toque: se o cliente responder, segue a conversa normal.
+
+P6: montar e cancelar a fila gravam no Registro (registro_acoes), na mesma
+transação, com o nome do ator.
 """
 from __future__ import annotations
 
@@ -22,6 +25,7 @@ from banco import conectar
 from app.bloqueios import leads_bloqueados
 from app.chaves import exigir_loja
 from app.lojas import carregar_loja, modulo_ativo
+from app.registro import registrar
 from app.relogio import agora_utc, dia_local, do_banco, para_banco
 from app.telefone import normalizar_telefone_br
 
@@ -235,6 +239,10 @@ def montar_fila(loja_id, *, meses: int = MESES_PADRAO, publico: str = "todos", m
             "INSERT OR IGNORE INTO reativacao (loja_id, contato_id, telefone, lote, meses_inativo, "
             "criado_por, estado, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, 'na_fila', ?, ?)",
             [(loja_id, c["id"], c["telefone"], lote, meses, usuario, lote, lote) for c in escolhidos])
+        registrar("montar_fila_reativacao", loja_id, None,
+                  {"lote": lote, "na_fila": len(escolhidos), "meses": meses, "publico": publico,
+                   "maximo": int(maximo), "ignorados": dict(ignorados)},
+                  conexao=conexao, alvo="reativacao")
         conexao.commit()
     finally:
         conexao.close()
@@ -249,6 +257,8 @@ def cancelar_fila(loja_id, *, agora: datetime | None = None) -> int:
             "UPDATE reativacao SET estado = 'cancelado', motivo = 'fila_cancelada', atualizado_em = ? "
             "WHERE loja_id = ? AND estado IN ('na_fila', 'simulado', 'falhou')",
             (para_banco(_utc(agora or agora_utc())), loja_id)).rowcount
+        registrar("cancelar_fila_reativacao", loja_id, None, {"cancelados": n},
+                  conexao=conexao, alvo="reativacao")
         conexao.commit()
     finally:
         conexao.close()

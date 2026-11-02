@@ -15,6 +15,9 @@ quem escreve para a loja continua sendo atendido normalmente.
 
 passo: remarketing = número do toque; pos_venda = a linha agendada da régua;
 reativacao = vazio. Bloqueio com passo vazio vale para todas daquele tipo.
+
+P6: bloquear e desfazer gravam no Registro (registro_acoes), na mesma
+transação, com o nome do ator. Marca repetida não grava de novo.
 """
 from __future__ import annotations
 
@@ -22,6 +25,7 @@ from datetime import datetime
 
 from banco import conectar
 from app.chaves import exigir_loja
+from app.registro import registrar
 from app.relogio import agora_utc, do_banco, para_banco
 
 TIPOS = ("remarketing", "pos_venda", "reativacao", "todos")
@@ -73,8 +77,12 @@ def bloquear(loja_id, lead_id, tipo: str, passo, autor: str, *,
             "INSERT INTO bloqueios_envio (loja_id, lead_id, tipo, passo, criado_por, criado_em) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (loja_id, lead_id, tipo, passo, autor, para_banco(agora or agora_utc())))
+        novo_id = int(cursor.lastrowid)
+        registrar("bloquear_envio", loja_id, None,
+                  {"bloqueio_id": novo_id, "tipo": tipo, "passo": passo},
+                  conexao=conexao, alvo=f"lead:{lead_id}")
         conexao.commit()
-        return int(cursor.lastrowid)
+        return novo_id
     finally:
         conexao.close()
 
@@ -87,10 +95,20 @@ def desfazer(loja_id, bloqueio_id, autor: str, *, agora: datetime | None = None)
         raise BloqueioInvalido("Informe quem está desfazendo.")
     conexao = conectar()
     try:
+        marca = conexao.execute(
+            "SELECT lead_id, tipo, passo FROM bloqueios_envio "
+            "WHERE id = ? AND loja_id = ? AND desfeito_em IS NULL",
+            (int(bloqueio_id), loja_id)).fetchone()
         n = conexao.execute(
             "UPDATE bloqueios_envio SET desfeito_por = ?, desfeito_em = ? "
             "WHERE id = ? AND loja_id = ? AND desfeito_em IS NULL",
             (autor, para_banco(agora or agora_utc()), int(bloqueio_id), loja_id)).rowcount
+        if n == 1 and marca is not None:
+            registrar("desfazer_bloqueio", loja_id,
+                      {"bloqueio_id": int(bloqueio_id), "tipo": marca["tipo"],
+                       "passo": marca["passo"], "ativo": True},
+                      {"ativo": False},
+                      conexao=conexao, alvo=f"lead:{marca['lead_id']}")
         conexao.commit()
     finally:
         conexao.close()

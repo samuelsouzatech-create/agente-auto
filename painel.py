@@ -14,7 +14,7 @@ st.set_page_config(page_title="Painel da loja", page_icon="🚗", layout="wide")
 
 from app.acesso import PainelSemLoja, loja_do_cliente  # noqa: E402
 from app.lojas import carregar_loja  # noqa: E402
-from paginas.comum import campo_nome, iniciar_sessao_cliente  # noqa: E402
+from paginas.comum import campo_nome, definir_ator_da_sessao, iniciar_sessao_cliente  # noqa: E402
 from paginas.menu import CLIENTE, montar  # noqa: E402
 
 try:
@@ -29,4 +29,5 @@ loja = carregar_loja(LOJA_DO_CLIENTE)
 navegacao = st.navigation(montar(CLIENTE))
 st.sidebar.markdown(f"### {loja.nome}")
 campo_nome("Vendedor")
+definir_ator_da_sessao()      # P6: quem age nesta execução (antes da página)
 navegacao.run()
