@@ -57,9 +57,14 @@ def redis_falso(monkeypatch):
 
 @pytest.fixture
 def loja_b():
+    """Loja B já NO AR. Desde o P7b, loja nova nasce em teste e só atende
+    números de teste; aqui o assunto é isolamento, então ela entra no ar
+    (como o operador faria). A porta de loja em teste é testada no P7b."""
     conexao = banco.conectar()
     conexao.execute("INSERT OR IGNORE INTO lojas (id, nome, segmento, config) "
                     "VALUES (?, 'Auto Bia', 'veiculos', '{}')", (LOJA_B,))
+    conexao.execute("INSERT OR IGNORE INTO estado_lojas (loja_id, estado, no_ar_em, alterado_por, atualizado_em) "
+                    "VALUES (?, 'no_ar', '2026-10-27 12:00:00', 'Teste', '2026-10-27 12:00:00')", (LOJA_B,))
     conexao.commit()
     conexao.close()
     return LOJA_B

@@ -5,6 +5,8 @@ Cada canal cuida apenas da "porta": receber, juntar a rajada (debounce),
 pegar a vez (lock), chamar executar_turno() e enviar.
 
 Ordem do turno:
+  0. P7: loja em teste? Só número de teste e simulador passam. Os outros:
+     silêncio, nada gravado, evento no Registro (porta_fechada)
   1. separa o que aconteceu enquanto o Léo estava fora (vendedor no comando)
   2. grava a mensagem do cliente
   3. vendedor assumiu? -> Léo em silêncio
@@ -16,10 +18,10 @@ Ordem do turno:
   8. grava a resposta
   9. custo do turno (Bloco 6): uma linha em uso_custos + uma no log
 
-Bloco 7A: não existe opt-out por comando. Quem escreve SEMPRE é atendido.
-O que o cliente pede ("agora não", "não me procure") o Léo anota com a
-ferramenta registrar_interesse, e isso só vale para contatos que a LOJA
-iniciaria (remarketing e pós-venda, Etapa 2).
+Bloco 7A: não existe opt-out por comando. Quem escreve é atendido (exceto
+loja em teste, P7). O que o cliente pede ("agora não", "não me procure") o
+Léo anota com a ferramenta registrar_interesse, e isso só vale para
+contatos que a LOJA iniciaria (remarketing e pós-venda, Etapa 2).
 """
 from __future__ import annotations
 
@@ -30,8 +32,9 @@ from dataclasses import dataclass, field
 
 from langchain_core.messages import HumanMessage, ToolMessage
 
-from app.chaves import thread_id
+from app.chaves import exigir_loja, thread_id
 from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
+from app.estado_loja import pode_responder
 from app.formatacao import limpar_markdown
 from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
 from app.handoff import estado_do_handoff
@@ -66,6 +69,11 @@ CONTEXTO_INICIO = ("[Contexto interno, não repita nem comente com o cliente: en
                    "estava fora, a conversa continuou assim com a equipe da loja. Siga o que "
                    "foi combinado e não contradiga o vendedor.]")
 CONTEXTO_FIM = "[Mensagem atual do cliente:]"
+
+# P7: quem aparece no Registro quando a loja em teste recusa uma mensagem.
+EVENTO_RECUSADA = "mensagem_recusada_loja_em_teste"
+NOME_SISTEMA = "Sistema"
+ORIGEM_SISTEMA = "webhook"
 
 
 @dataclass
@@ -105,6 +113,34 @@ def _texto_custo(r: dict) -> str:
              else "preço não cadastrado (cadastre na tela Custos)")
     return (f"{r['tokens_entrada'] + r['tokens_audio']} tokens de entrada, "
             f"{r['tokens_saida']} de saída, {r['latencia_ms']} ms, {valor}")
+
+
+def _anotar_recusa(loja_id: int, canal: str, lead_id: str) -> None:
+    """P7: a recusa vai para o Registro da loja. Nunca derruba quem chamou."""
+    try:
+        from app.ator import como_sistema      # aqui dentro: evita import circular
+        from app.registro import registrar
+        with como_sistema(NOME_SISTEMA, ORIGEM_SISTEMA):
+            registrar(EVENTO_RECUSADA, loja_id, None, {"canal": canal},
+                      alvo=f"{canal}:{lead_id}")
+    except Exception as erro:
+        print(f"[Turno][loja {loja_id}] Não consegui gravar no Registro: {erro!r}")
+
+
+def porta_fechada(loja_id, canal: str, lead_id) -> bool:
+    """P7: True = loja em teste e quem escreveu não é número de teste.
+    Nada é gravado (nem mensagem, nem custo); só o evento no Registro.
+    Erro ao ler o estado = porta fechada (nunca libera por engano)."""
+    loja_id = exigir_loja(loja_id)
+    try:
+        if pode_responder(loja_id, canal, lead_id):
+            return False
+    except Exception as erro:
+        print(f"[Turno][loja {loja_id}] Não consegui ler o estado da loja ({erro!r}). Porta fechada.")
+    print(f"{_rotulo(canal, loja_id)} Loja em teste: {lead_id} não é número de teste. "
+          f"Mensagem ignorada, nada gravado.")
+    _anotar_recusa(loja_id, canal, str(lead_id))
+    return True
 
 
 def extrair_midias(mensagens) -> list[str]:
@@ -161,6 +197,9 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
                          grafo=None, tipo: str = "texto") -> ResultadoTurno:
     """Roda UM turno do Léo. Não envia nada: quem envia é o canal."""
     inicio = time.perf_counter()
+    # P7: antes de tudo (antes de gravar e de chamar a IA).
+    if porta_fechada(loja_id, canal, lead_id):
+        return ResultadoTurno(silenciado=True)
     if grafo is None:
         from app.core.agent import agente_grafo as grafo   # import tardio (cria a IA)
     rotulo = _rotulo(canal, loja_id)
@@ -172,10 +211,9 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     historico = historico_se_esqueceu(grafo, configuracao, loja_id, lead_id, canal)
     salvar_mensagem(lead_id, "cliente", texto, canal=canal, tipo=tipo, loja_id=loja_id)
 
-        # Rede de segurança: pedido claro de parada é gravado pelo CÓDIGO,
+    # Rede de segurança: pedido claro de parada é gravado pelo CÓDIGO,
     # antes de tudo (vale até com o vendedor no comando).
     registrar_se_pediu_parada(loja_id, lead_id, texto, canal)
-
 
     if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
         print(f"{rotulo} Lead {lead_id} está com um vendedor humano. Léo em silêncio.")
@@ -261,6 +299,8 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
 def turno_resposta_fixa(loja_id: int, canal: str, lead_id: str, registro_cliente: str,
                         resposta: str, tipo: str = "texto") -> ResultadoTurno:
     """Turno sem Léo (resposta pronta, sem IA), respeitando o vendedor no comando."""
+    if porta_fechada(loja_id, canal, lead_id):          # P7
+        return ResultadoTurno(silenciado=True)
     salvar_mensagem(lead_id, "cliente", registro_cliente, canal=canal, tipo=tipo, loja_id=loja_id)
     if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
         return ResultadoTurno(silenciado=True)

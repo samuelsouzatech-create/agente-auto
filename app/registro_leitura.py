@@ -38,7 +38,7 @@ ROTULOS = {
     "assumir_conversa": "Assumiu conversa",
     "devolver_ao_agente": "Devolveu ao assistente",
     "salvar_configuracao": "Mudou configuração","colocar_no_ar": "Colocou a loja no ar",
-    "mensagem_canal_sem_cadastro": "Mensagem de canal sem cadastro",
+    "mensagem_canal_sem_cadastro": "Mensagem de canal sem cadastro", "mensagem_recusada_loja_em_teste": "Mensagem recusada (loja em teste)",
 }
 
 

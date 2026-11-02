@@ -60,7 +60,7 @@ HISTORICO_PROPRIO = {
 # Eventos de SISTEMA (sem pessoa): gravam com ator de sistema e nunca
 # derrubam quem chamou. Não entram em ACOES_RELEVANTES (lá, sem ator falha).
 EVENTOS_DE_SISTEMA = {
-    "mensagem_canal_sem_cadastro": "app.logs.registrar_canal_desconhecido",
+    "mensagem_canal_sem_cadastro": "app.logs.registrar_canal_desconhecido", "mensagem_recusada_loja_em_teste": "app.core.turno.porta_fechada",
 }
 
 
