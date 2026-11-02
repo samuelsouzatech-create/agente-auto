@@ -6,13 +6,15 @@ Quem decide a loja é a ENTRADA, a cada rerun, antes de a página rodar:
 
 P6: a entrada também define QUEM está agindo (definir_ator_da_sessao), a
 cada rerun, antes de a página rodar. As funções de app/ leem o ator.
+P6d: o nome vem do .env (app/identidade.py), não de um campo na tela.
 
 Este arquivo NÃO importa nada do operador (custos, preços, lojas_admin,
 canais). Um teste confere isso.
 """
 import streamlit as st
 
-from app.ator import MAX_PESSOA, definir_ator
+from app.ator import definir_ator
+from app.identidade import SemNomeOperador, nome_do_operador, nome_do_painel
 
 PAPEL_CLIENTE = "cliente"
 PAPEL_OPERADOR = "operador"
@@ -63,25 +65,32 @@ def exigir_operador() -> None:
         st.stop()
 
 
-def campo_nome(padrao: str) -> None:
-    st.sidebar.text_input("Seu nome", value=padrao, key="usuario_nome")
-
-
 def usuario_atual() -> str:
-    padrao = "Operador" if papel_atual() == PAPEL_OPERADOR else "Vendedor"
-    return (st.session_state.get("usuario_nome") or "").strip() or padrao
+    """Quem está usando esta tela. Vem do .env (P6d):
+    operador -> OPERADOR_NOME (obrigatório; sem ele a tela para);
+    painel da loja -> PAINEL_NOME (padrão 'Equipe da loja')."""
+    if papel_atual() == PAPEL_OPERADOR:
+        try:
+            return nome_do_operador()
+        except SemNomeOperador as erro:
+            st.error(f"🔒 {erro}")
+            st.stop()
+    return nome_do_painel()
 
 
 def definir_ator_da_sessao() -> None:
     """P6: quem está agindo nesta execução da tela. Chamada pela entrada
-    (operador.py e painel.py) a cada rerun, antes da página.
-    Ponte até o P6d: o nome ainda vem do campo 'Seu nome'; no P6d passa a
-    vir do .env (OPERADOR_NOME / PAINEL_NOME) e o campo some."""
-    nome = " ".join(usuario_atual().split())[:MAX_PESSOA]
+    (operador.py e painel.py) a cada rerun, antes da página, e pelos pedaços
+    que se atualizam sozinhos (st.fragment)."""
+    nome = usuario_atual()
     if papel_atual() == PAPEL_OPERADOR:
         definir_ator(nome, PAPEL_OPERADOR, "painel")
     else:
         definir_ator(nome, PAPEL_CLIENTE, "painel", loja_id=loja_atual())
+
+
+def mostrar_quem_esta_agindo() -> None:
+    st.sidebar.caption(f"👤 Agindo como: {usuario_atual()}")
 
 
 def trocar_loja(loja_id: int) -> None:
