@@ -96,7 +96,7 @@ with col_acoes:
     st.markdown("---")
     for v in vendas_do_lead(loja.id, lead_id):
         st.caption(f"✅ Comprou {v['carro'] or 'um carro'} em {v['data_venda']}")
-    with st.expander("🏁 Marcar como vendido"):
+    with st.expander("🏁 Registrar venda"):
         carros = listar_estoque(loja_id=loja.id, incluir_vendidos=False)
         if not carros:
             st.caption("Nenhum carro disponível no estoque desta loja.")

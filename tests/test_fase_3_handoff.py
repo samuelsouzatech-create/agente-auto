@@ -473,23 +473,36 @@ def test_atualizar_carro(banco_temporario):
     assert (carro["km"], carro["preco"], carro["fotos"]) == (31000, 60500.0, "http://x/argo.jpg")
 
 
+def _vender_na_loja_1(carro_id, lead_id="5581"):
+    """P2: a venda só acontece por registrar_venda (nunca pelo estoque)."""
+    from datetime import date, datetime, timezone
+    from app import lojas
+    from app.vendas import registrar_venda
+    lojas.limpar_cache()
+    return registrar_venda(1, lead_id, carro_id, date(2026, 11, 2), "avista", vendedor="Ana",
+                           agora=datetime(2026, 11, 3, 13, 0, tzinfo=timezone.utc))
+
+
 def test_marcar_vendido_tira_o_carro_da_oferta_do_leo(banco_temporario):
-    """A baixa no painel muda o que o Léo oferece NA HORA (seção 7 do doc)."""
+    """Carro fora de 'disponível' sai da oferta do Léo NA HORA (seção 7 do doc).
+    Desde o P2, 'vendido' só vem de Registrar venda."""
     from app.estoque import adicionar_carro, marcar_status
     from tools import consultar_estoque
     novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=1)
     assert "Argo" in consultar_estoque.invoke({"modelo": "Argo"})
-    marcar_status(novo, "vendido", 1)
+    marcar_status(novo, "reservado", 1)
     assert "Argo" not in consultar_estoque.invoke({"modelo": "Argo"})
     marcar_status(novo, "disponivel", 1)
     assert "Argo" in consultar_estoque.invoke({"modelo": "Argo"})
+    _vender_na_loja_1(novo)
+    assert "Argo" not in consultar_estoque.invoke({"modelo": "Argo"})
 
 
 def test_listar_estoque_pode_esconder_vendidos(banco_temporario):
-    from app.estoque import adicionar_carro, marcar_status, listar_estoque
+    from app.estoque import adicionar_carro, listar_estoque
     popular_estoque_exemplo()
     novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=1)
-    marcar_status(novo, "vendido", 1)
+    _vender_na_loja_1(novo)
     todos = listar_estoque(1)
     sem_vendidos = listar_estoque(1, incluir_vendidos=False)
     assert any(c["id"] == novo for c in todos)
@@ -501,5 +514,5 @@ def test_estoque_de_uma_loja_nao_vaza_para_outra(banco_temporario):
     novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=2)
     assert buscar_carro(novo, loja_id=1) is None
     assert listar_estoque(loja_id=1) == []
-    marcar_status(novo, "vendido", loja_id=1)          # loja errada: não pode afetar
+    marcar_status(novo, "reservado", loja_id=1)        # loja errada: não pode afetar
     assert buscar_carro(novo, loja_id=2)["status"] == "disponivel"
