@@ -4,8 +4,9 @@ import streamlit as st
 
 from app import painel_envios as pe
 from app import pausa
+from app.apresentacao import horario_para_tela, nomes_dos_clientes
 from app.lojas import carregar_loja, modulo_ativo
-from app.relogio import agora_utc, do_banco, hora_local
+from app.relogio import agora_utc
 from paginas.comum import (
     avisar, formatar_brl, loja_atual, mostrar_aviso, papel_atual, para_streamlit, usuario_atual,
 )
@@ -15,7 +16,7 @@ agora = agora_utc()
 
 
 def _hora(dt):
-    return hora_local(loja, dt).strftime("%d/%m/%Y %H:%M") if dt else ""
+    return horario_para_tela(loja, dt) if dt else ""
 
 
 st.title("📣 Retomadas e pós-venda")
@@ -28,7 +29,7 @@ sit = pausa.situacao(loja.id)
 if sit["pausado"]:
     quem = f"{sit['usuario']} ({pausa.ROTULOS_PAPEL.get(sit['papel'], sit['papel'])})"
     st.error(para_streamlit(
-        f"⏸️ Envios PAUSADOS por {quem} em {_hora(sit['em'])}"
+        f"⏸️ Envios PAUSADOS por {quem} · {_hora(sit['em'])}"
         + (f" — {sit['motivo']}" if sit["motivo"] else "")
         + ". Nenhuma retomada, pós-venda ou reativação sai até alguém retomar. "
           "O assistente continua respondendo quem escrever."))
@@ -91,9 +92,10 @@ itens = pe.fila(loja.id, agora)
 if not itens:
     st.info("Ninguém na fila agora.")
 else:
+    nomes_fila = nomes_dos_clientes(loja.id, [i["lead_id"] for i in itens])
     st.dataframe([{
         "Quando": _hora(i["quando"]) or "na próxima rodada",
-        "Tipo": pe.TIPOS[i["tipo"]], "Cliente": i["lead_id"],
+        "Tipo": pe.TIPOS[i["tipo"]], "Cliente": nomes_fila.get(str(i["lead_id"]), "—"),
         "Situação": i["situacao"], "Detalhe": i["detalhe"],
     } for i in itens], hide_index=True)
 
@@ -104,8 +106,10 @@ hist = pe.historico(loja.id, 100)
 if not hist:
     st.info("Nada enviado ainda.")
 else:
+    nomes_hist = nomes_dos_clientes(loja.id, [h["lead_id"] for h in hist])
     st.dataframe([{
-        "Quando": _hora(h["quando"]), "Tipo": pe.TIPOS[h["tipo"]], "Cliente": h["lead_id"],
+        "Quando": _hora(h["quando"]), "Tipo": pe.TIPOS[h["tipo"]],
+        "Cliente": nomes_hist.get(str(h["lead_id"]), "—"),
         "Situação": pe.ROTULOS_ESTADO.get(h["estado"], h["estado"]),
         "Motivo": h["motivo"], "Detalhe": h["detalhe"], "Mensagem": h["texto"],
     } for h in hist], hide_index=True)
@@ -114,7 +118,7 @@ pausas = pausa.historico(loja.id)
 if pausas:
     with st.expander("Quem pausou e retomou"):
         st.dataframe([{
-            "Quando": _hora(do_banco(p["criado_em"])),
+            "Quando": horario_para_tela(loja, p["criado_em"]),
             "Ação": "Pausou" if p["acao"] == "pausar" else "Retomou",
             "Quem": p["usuario"], "Papel": pausa.ROTULOS_PAPEL.get(p["papel"], p["papel"]),
             "Motivo": p["motivo"] or "",

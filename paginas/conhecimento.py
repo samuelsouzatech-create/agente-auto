@@ -7,6 +7,7 @@ from app.conhecimento import (
     DocumentoInvalido, DocumentoNaoEncontrado, ErroIndexacao,
     apagar_documento, listar_documentos, salvar_documento,
 )
+from app.apresentacao import horario_para_tela
 from app.lojas import carregar_loja
 from paginas.comum import avisar, loja_atual, mostrar_aviso
 
@@ -53,7 +54,7 @@ if not documentos:
             "encontrou a informação.")
 
 for doc in documentos:
-    with st.expander(f"📄 {doc['titulo']}  ·  atualizado em {doc['atualizado_em']} (UTC)"):
+    with st.expander(f"📄 {doc['titulo']}  ·  atualizado {horario_para_tela(loja, doc['atualizado_em'])}"):
         with st.form(f"doc_{doc['id']}"):
             novo_titulo = st.text_input("Título", value=doc["titulo"])
             novo_texto = st.text_area("Texto", value=doc["texto"], height=250)

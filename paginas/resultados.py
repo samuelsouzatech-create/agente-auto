@@ -5,6 +5,7 @@ registrada só em "Registrar venda", na conversa do cliente, que grava a
 venda, o resultado, a baixa no estoque e o pós-venda juntos."""
 import streamlit as st
 
+from app.apresentacao import horario_para_tela, nomes_dos_clientes
 from app.lojas import carregar_loja
 from app.mensagens import historico_do_lead, listar_leads
 from app.resultados import resultado_do_lead
@@ -25,18 +26,20 @@ if not leads:
     st.info("Nenhum lead para mostrar nesta loja.")
     st.stop()
 
+nomes = nomes_dos_clientes(loja.id, [l["lead_id"] for l in leads])
 st.write(f"**{len(leads)} lead(s):**")
 for lead in leads:
     lead_id = lead["lead_id"]
     atual = resultado_do_lead(lead_id, loja_id=loja.id)
     marca = ROTULO.get(atual["resultado"], atual["resultado"]) if atual else "⚪ Sem resultado"
-    with st.expander(f"{marca}  —  Lead: {lead_id}  —  ({lead['total_mensagens']} msgs)"):
-        st.caption(f"Última mensagem: {lead.get('ultima_mensagem') or '—'} (UTC)")
+    cliente = nomes.get(str(lead_id), "Cliente sem nome")
+    with st.expander(f"{marca}  —  {cliente}  —  ({lead['total_mensagens']} msgs)"):
+        st.caption(f"Última mensagem: {horario_para_tela(loja, lead.get('ultima_mensagem'))}")
         if atual and atual.get("motivo"):
             nome_campo = "Carro" if atual["resultado"] == "comprou" else "Motivo"
             st.markdown(f"**{nome_campo}:** {para_streamlit(atual['motivo'])}")
         if atual and atual.get("vendedor"):
-            st.caption(f"Marcado por: {atual['vendedor']} em {atual.get('criado_em') or '—'}")
+            st.caption(f"Marcado por: {atual['vendedor']} · {horario_para_tela(loja, atual.get('criado_em'))}")
         st.markdown("---")
         for m in historico_do_lead(lead_id, loja_id=loja.id):
             with st.chat_message("user" if m["direcao"] == "cliente" else "assistant"):

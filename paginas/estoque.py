@@ -56,7 +56,7 @@ with st.expander("➕ Adicionar carro novo", expanded=False):
                 except StatusInvalido as erro:
                     st.error(str(erro))
                 else:
-                    st.success(f"Carro cadastrado (id {novo_id}).")
+                    st.success("Carro cadastrado.")
                     st.rerun()
 
 carros = listar_estoque(loja_id=loja.id, incluir_vendidos=mostrar_vendidos)
@@ -69,7 +69,7 @@ for carro in carros:
     cid = carro["id"]
     vendido = carro["status"] == VENDIDO
     titulo = (f"{rotulo(carro['status'])}  —  {carro['marca']} "
-              f"{carro['modelo']} {carro['ano']}  —  {formatar_brl(carro['preco'])}  (id {cid})")
+              f"{carro['modelo']} {carro['ano']}  —  {formatar_brl(carro['preco'])}")
     with st.expander(titulo, expanded=False):
         if vendido:
             st.caption("Carro vendido. A venda foi registrada na conversa do cliente; "

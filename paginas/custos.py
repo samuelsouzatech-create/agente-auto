@@ -1,7 +1,10 @@
 """Tela de Custos (Etapa 1, Bloco 6 - item 1.9). Tela do operador."""
+import re
+
 import streamlit as st
 
 from app import custos, precos, relogio
+from app.apresentacao import horario_para_tela, nome_do_canal, nomes_dos_clientes
 from app.lojas import carregar_loja
 from paginas.comum import avisar, exigir_operador, loja_atual, mostrar_aviso
 
@@ -17,7 +20,9 @@ loja = carregar_loja(loja_atual())
 hoje = precos.hoje_utc()
 
 st.title("💰 Custos")
-st.caption(f"{loja.nome} · tela do operador (o lojista não vê o seu custo). Datas em UTC.")
+st.caption(f"{loja.nome} · tela do operador (o lojista não vê o seu custo). "
+           "Atenção: o mês e o gráfico por dia ainda viram às 21h de Brasília "
+           "(meia-noite de Londres). A tela nova de Custos vai corrigir isso.")
 mostrar_aviso()
 
 faltam = precos.faltando(hoje)
@@ -79,12 +84,31 @@ if ferramentas:
     st.dataframe([{"ferramenta": n, "vezes": q} for n, q in ferramentas], hide_index=True)
 
 with st.expander("🏬 Todas as lojas neste mês"):
-    st.dataframe(custos.resumo_todas_lojas(ano, mes), hide_index=True)
+    st.dataframe([{
+        "Loja": re.sub(r"\s*\(id\s\d+\)$", "", str(l["loja"])),
+        "Conversas": l["conversas"],
+        "Custo total": brl(l["custo_total"]),
+        "Custo médio por conversa": brl(l["custo_medio_conversa"], 4),
+        "Com preço faltando": l["incompletas"],
+    } for l in custos.resumo_todas_lojas(ano, mes)], hide_index=True)
 
 with st.expander("🧾 Últimas execuções desta loja"):
     ultimas = custos.ultimas_execucoes(loja.id)
     if ultimas:
-        st.dataframe(ultimas, hide_index=True)
+        nomes_ult = nomes_dos_clientes(loja.id, [u["lead_id"] for u in ultimas if u["lead_id"]])
+        st.dataframe([{
+            "Quando": horario_para_tela(loja, u["criado_em"]),
+            "Cliente": nomes_ult.get(str(u["lead_id"]), "—") if u["lead_id"] else "—",
+            "Canal": nome_do_canal(u["canal"]),
+            "Tipo": u["tipo"],
+            "Modelo de IA": u["modelo"] or "",
+            "Tokens (entrada / saída)":
+                f'{(u["tokens_entrada"] or 0) + (u["tokens_audio"] or 0)} / {u["tokens_saida"] or 0}',
+            "Custo IA": brl(u["custo_ia"], 4),
+            "Custo Meta": brl(u["custo_meta"], 4),
+            "Preço completo": "sim" if u["custo_completo"] else "não",
+            "Tempo": f'{u["latencia_ms"] / 1000:.1f} s'.replace(".", ",") if u["latencia_ms"] else "—",
+        } for u in ultimas], hide_index=True)
     else:
         st.caption("Nenhuma execução registrada ainda.")
 

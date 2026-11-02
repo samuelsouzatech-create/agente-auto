@@ -9,7 +9,11 @@ def escolher_loja():
     if not lojas:
         st.error('Nenhuma loja cadastrada. Rode: python -c "import banco; banco.criar_tabelas()"')
         st.stop()
-    rotulos = {l["id"]: f'{l["nome"]} (id {l["id"]})' for l in lojas}
+    rotulos, vistos = {}, {}
+    for l in lojas:
+        vistos[l["nome"]] = vistos.get(l["nome"], 0) + 1
+        n = vistos[l["nome"]]
+        rotulos[l["id"]] = l["nome"] if n == 1 else f'{l["nome"]} ({n})'
 
     pedida = st.session_state.pop("_trocar_para_loja", None)
     if pedida in rotulos:

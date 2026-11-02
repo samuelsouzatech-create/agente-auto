@@ -5,6 +5,7 @@ from app.canais import TIPOS_DE_CANAL, cadastrar_canal, desativar_canal, listar_
 from app.lojas import carregar_loja, criar_loja
 from app.segmentos import segmentos_disponiveis
 from app.lojas_admin import listar_lojas, renomear_loja
+from app.apresentacao import horario_para_tela
 from paginas.comum import avisar, exigir_operador, loja_atual, mostrar_aviso, trocar_loja
 
 exigir_operador()
@@ -15,7 +16,11 @@ mostrar_aviso()
 
 # ---------------------------------------------------------------- Lojas
 st.subheader("Lojas")
-st.dataframe(listar_lojas(), hide_index=True)
+st.dataframe([{
+    "Loja": l["nome"], "Segmento": l["segmento"],
+    "Situação": "Ativa" if l["ativo"] else "Desligada",
+    "Criada": horario_para_tela(carregar_loja(l["id"]), l["criado_em"]),
+} for l in listar_lojas()], hide_index=True)
 
 with st.expander("➕ Criar loja"):
     with st.form("nova_loja", clear_on_submit=True):
@@ -25,13 +30,13 @@ with st.expander("➕ Criar loja"):
             try:
                 novo_id = criar_loja(nome, segmento)
                 trocar_loja(novo_id)
-                avisar(f"Loja {novo_id} criada com os padrões do produto. Você está vendo ela agora.")
+                avisar(f"Loja {nome.strip()} criada com os padrões do produto. Você está vendo ela agora.")
                 st.rerun()
             except ValueError as erro:
                 st.error(str(erro))
 
 loja = carregar_loja(loja_atual())
-st.subheader(f"Loja selecionada: {loja.nome} (id {loja.id})")
+st.subheader(f"Loja selecionada: {loja.nome}")
 
 with st.form(f"renomear_{loja.id}"):
     novo_nome = st.text_input("Nome", value=loja.nome)
@@ -80,7 +85,7 @@ with st.expander("➕ Cadastrar canal"):
             else:
                 try:
                     cadastrar_canal(loja.id, tipo, id_externo, token_ref.strip())
-                    avisar(f"Canal {tipo} {id_externo} ligado à loja {loja.id}.")
+                    avisar(f"Canal {tipo} {id_externo} ligado à loja {loja.nome}.")
                     st.rerun()
                 except ValueError as erro:
                     st.error(str(erro))
