@@ -9,14 +9,25 @@ para uma pasta temporária (os testes nunca sujam logs/ de verdade).
 A fixture 'ator_de_teste' (P6) também é autouse: todo teste roda com um
 ator definido ("Teste", operador, painel). Os testes de "sem ator falha"
 tiram o ator de propósito com app.ator.sem_ator().
+
+Fase 3 (parecer do analista): app/core/agent.py cria o cliente do Gemini ao
+ser importado e quebrava a suíte num computador sem GOOGLE_API_KEY. Aqui o
+.env é lido primeiro (a chave real continua valendo para os testes de API,
+-m api) e, só se não houver chave nenhuma, entra uma chave falsa. Os testes
+normais usam LLM falso e nunca chamam o Gemini.
 """
 import os
 import sys
 import tempfile
 
 import pytest
+from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+load_dotenv()
+if not os.environ.get("GOOGLE_API_KEY"):
+    os.environ["GOOGLE_API_KEY"] = "chave-falsa-so-para-testes"
 
 import banco
 from banco import criar_tabelas
