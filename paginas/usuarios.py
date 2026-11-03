@@ -4,6 +4,7 @@ import streamlit as st
 from app.lojas import carregar_loja
 from app.usuarios import (
     PAPEIS, UsuarioInvalido, atualizar_usuario, criar_usuario, definir_ativo, listar_usuarios,
+    rotulo_papel,
 )
 from paginas.comum import avisar, loja_atual, mostrar_aviso
 
@@ -31,7 +32,7 @@ def _mostrar_erros(erro):
 with st.expander("➕ Novo usuário", expanded=False):
     with st.form(f"novo_usuario_{loja.id}", clear_on_submit=True):
         nome = st.text_input("Nome")
-        papel = st.selectbox("Papel", PAPEIS)
+        papel = st.selectbox("Papel", PAPEIS, format_func=rotulo_papel)
         telegram = st.text_input("Telegram (número do chat)")
         whatsapp = st.text_input("WhatsApp (com DDI e DDD)", placeholder="5581999998888")
         if st.form_submit_button("💾 Cadastrar"):
@@ -50,11 +51,12 @@ if not pessoas:
 for p in pessoas:
     situacao = "🟢" if p["ativo"] else "⚪ desativado ·"
     contato = "📨 Telegram ok" if p["contato_telegram"] else "sem Telegram (não recebe aviso)"
-    with st.expander(f"{situacao} {p['nome']} · {p['papel']} · {contato}"):
+    with st.expander(f"{situacao} {p['nome']} · {rotulo_papel(p['papel'])} · {contato}"):
         with st.form(f"usuario_{p['id']}"):
             nome = st.text_input("Nome", value=p["nome"])
             papel = st.selectbox("Papel", PAPEIS,
-                                 index=PAPEIS.index(p["papel"]) if p["papel"] in PAPEIS else 0)
+                                 index=PAPEIS.index(p["papel"]) if p["papel"] in PAPEIS else 0,
+                                 format_func=rotulo_papel)
             telegram = st.text_input("Telegram", value=p["contato_telegram"] or "")
             whatsapp = st.text_input("WhatsApp", value=p["contato_whatsapp"] or "")
             if st.form_submit_button("💾 Salvar"):

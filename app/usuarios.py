@@ -4,7 +4,13 @@ import re
 
 from banco import conectar
 
-PAPEIS = ("vendedor", "gestor")
+PAPEIS = ("vendedor", "gestor", "dono")
+ROTULOS_PAPEL = {"vendedor": "Vendedor", "gestor": "Gerente", "dono": "Dono"}
+
+
+def rotulo_papel(papel: str) -> str:
+    """Como o papel aparece na tela (gestor aparece como Gerente)."""
+    return ROTULOS_PAPEL.get(papel, papel)
 _TELEGRAM = re.compile(r"^-?\d{5,20}$")
 
 
@@ -20,7 +26,7 @@ def _normalizar(nome, papel, contato_telegram, contato_whatsapp):
     if not 1 <= len(nome) <= 80:
         erros.append("Nome: precisa ter entre 1 e 80 caracteres")
     if papel not in PAPEIS:
-        erros.append(f"Papel: use {' ou '.join(PAPEIS)}")
+        erros.append(f"Papel: use {' ou '.join(ROTULOS_PAPEL[p] for p in PAPEIS)}")
     telegram = (contato_telegram or "").strip()
     if telegram and not _TELEGRAM.match(telegram):
         erros.append("Telegram: use o número do chat (só dígitos), ex.: 123456789")
