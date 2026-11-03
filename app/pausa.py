@@ -11,6 +11,10 @@ normalmente. Pausar envios não é desligar o assistente.
 Cada pausa e cada retomada fica gravada (quem, papel, quando, motivo).
 Ao retomar, passos de pós-venda que venceram há mais de 3 dias durante a
 pausa são cancelados ("obrigado pela compra" um mês depois soa estranho).
+
+P6: pausar e retomar exigem o ator (app/ator.py) e o ator de uma loja não
+pausa outra. O histórico continua só em pausas_envio (não duplica no
+registro_acoes; a leitura unificada junta os dois).
 """
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ from banco import conectar
 from app.chaves import exigir_loja
 from app.lojas import PAPEIS
 from app.regua import TOLERANCIA_ATRASO
+from app.registro import conferir_ator
 from app.relogio import agora_utc, do_banco, para_banco
 
 MAX_MOTIVO = 200
@@ -73,6 +78,7 @@ def _validar(usuario, papel) -> str:
 def pausar(loja_id, *, usuario: str, papel: str, motivo: str = "",
            agora: datetime | None = None) -> dict:
     loja_id = exigir_loja(loja_id)
+    conferir_ator(loja_id)          # P6: sem autor (ou autor de outra loja), nada é gravado
     usuario = _validar(usuario, papel)
     motivo = " ".join(str(motivo or "").split())[:MAX_MOTIVO]
     if pausado(loja_id):
@@ -91,6 +97,7 @@ def pausar(loja_id, *, usuario: str, papel: str, motivo: str = "",
 
 def retomar(loja_id, *, usuario: str, papel: str, agora: datetime | None = None) -> dict:
     loja_id = exigir_loja(loja_id)
+    conferir_ator(loja_id)          # P6: sem autor (ou autor de outra loja), nada é gravado
     usuario = _validar(usuario, papel)
     if not pausado(loja_id):
         raise PausaInvalida("Os envios desta loja não estão pausados.")

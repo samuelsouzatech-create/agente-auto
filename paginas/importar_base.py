@@ -3,8 +3,10 @@ Nada é enviado a ninguém nesta tela."""
 import streamlit as st
 
 from app import base_pos_venda, importacao, reativacao
+from app.apresentacao import horario_para_tela
 from app.lojas import carregar_loja
 from app.relogio import agora_utc, dia_local
+from app.telefone import formatar_telefone_br
 from paginas.comum import (
     avisar, exigir_operador, loja_atual, mostrar_aviso, para_streamlit, usuario_atual,
 )
@@ -54,7 +56,8 @@ if arquivo is not None:
 
     if previa.linhas:
         st.dataframe([{
-            "Linha": l.linha, "Nome": l.nome, "Telefone": l.telefone, "Compra": l.carro,
+            "Linha": l.linha, "Nome": l.nome, "Telefone": formatar_telefone_br(l.telefone),
+            "Compra": l.carro,
             "Data": l.data_compra.strftime("%d/%m/%Y") if l.data_compra else "",
             "Pagamento": l.pagamento or "", "Meses": l.meses or "",
         } for l in previa.linhas[:50]], hide_index=True)
@@ -91,7 +94,7 @@ lista = importacao.listar_importacoes(loja.id)
 if not lista:
     st.caption("Nenhuma importação ainda.")
 for imp in lista:
-    titulo = (f"#{imp['id']} · {imp['criado_em']} (UTC) · "
+    titulo = (f"{horario_para_tela(loja, imp['criado_em'])} · "
               f"{para_streamlit(imp['arquivo'] or 'sem nome')} · por {para_streamlit(imp['usuario'])}")
     if imp["desfeita_em"]:
         titulo += " · DESFEITA"
@@ -165,9 +168,9 @@ ultimos = reativacao.listar(loja.id)
 if ultimos:
     with st.expander(f"Últimos {len(ultimos)} da reativação"):
         st.dataframe([{
-            "Telefone": l["telefone"],
+            "Telefone": formatar_telefone_br(l["telefone"]) or l["telefone"],
             "Situação": reativacao.ROTULOS_ESTADO.get(l["estado"], l["estado"]),
             "Motivo": reativacao.MOTIVOS.get(l["motivo"] or "", l["motivo"] or ""),
             "Mensagem": l["texto"] or "",
-            "Atualizado (UTC)": l["atualizado_em"] or "",
+            "Atualizado": horario_para_tela(loja, l["atualizado_em"]),
         } for l in ultimos], hide_index=True)

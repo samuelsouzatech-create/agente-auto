@@ -6,7 +6,7 @@ from banco import conectar
 @tool
 def registrar_troca(modelo: str, ano: int, km: int, estado: str,
                     lead_id: Annotated[str, InjectedToolArg] = "",
-                    loja_id: Annotated[int, InjectedToolArg] = 1) -> str:
+                    *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Registra o carro que o cliente quer dar na troca. NÃO dê valor de
     avaliação - isso é feito por um vendedor presencialmente. Apenas colete
     e confirme os dados.

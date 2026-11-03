@@ -16,7 +16,7 @@ LIMITE_CONTEXTO = 20
 
 def salvar_mensagem(lead_id: str, direcao: str, conteudo: str,
                     canal: str = "", tipo: str = "texto",
-                    loja_id: int = 1, autor: str | None = None) -> None:
+                    *, loja_id: int, autor: str | None = None) -> None:
     """Grava uma mensagem. Nunca levanta exceção (não derruba a conversa)."""
     try:
         conexao = conectar()
@@ -31,7 +31,7 @@ def salvar_mensagem(lead_id: str, direcao: str, conteudo: str,
         print(f"[Mensagens] ERRO ao salvar mensagem de {lead_id}: {erro!r}")
 
 
-def historico_do_lead(lead_id: str, loja_id: int = 1) -> list:
+def historico_do_lead(lead_id: str, loja_id: int) -> list:
     """Todas as mensagens do lead, da mais antiga para a mais nova."""
     conexao = conectar()
     linhas = conexao.execute(
@@ -45,7 +45,7 @@ def historico_do_lead(lead_id: str, loja_id: int = 1) -> list:
     return [dict(l) for l in linhas]
 
 
-def listar_leads(loja_id: int = 1) -> list:
+def listar_leads(loja_id: int) -> list:
     """Leads distintos que já trocaram mensagem (mais recente primeiro)."""
     conexao = conectar()
     linhas = conexao.execute(
@@ -62,7 +62,7 @@ def listar_leads(loja_id: int = 1) -> list:
     return [dict(l) for l in linhas]
 
 
-def listar_conversas(loja_id: int = 1) -> list:
+def listar_conversas(loja_id: int) -> list:
     """Uma linha por lead, com o canal e a direção da última mensagem."""
     conexao = conectar()
     linhas = conexao.execute(
@@ -81,7 +81,7 @@ def listar_conversas(loja_id: int = 1) -> list:
     return [dict(l) for l in linhas]
 
 
-def ja_respondeu(lead_id: str, loja_id: int = 1) -> bool:
+def ja_respondeu(lead_id: str, loja_id: int) -> bool:
     """A loja (assistente ou vendedor) já falou com este lead alguma vez?"""
     conexao = conectar()
     linha = conexao.execute(
@@ -94,7 +94,7 @@ def ja_respondeu(lead_id: str, loja_id: int = 1) -> bool:
     return linha is not None
 
 
-def mensagens_desde_a_ultima_resposta_do_leo(lead_id: str, loja_id: int = 1,
+def mensagens_desde_a_ultima_resposta_do_leo(lead_id: str, loja_id: int,
                                              limite: int = LIMITE_CONTEXTO) -> list:
     """O que aconteceu depois da última fala do Léo (cliente e vendedor
     conversando enquanto ele estava em silêncio). Sem fala do Léo: lista vazia."""

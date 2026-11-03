@@ -30,3 +30,14 @@ def normalizar_telefone_br(texto) -> str:
     else:                              # fixo: não é WhatsApp de cliente
         return ""
     return "55" + ddd + numero
+
+
+
+def formatar_telefone_br(texto) -> str:
+    """Telefone para a TELA: "(81) 9 9876-5432". O que não for celular
+    brasileiro volta vazio (""), e quem chama decide o que mostrar."""
+    numero = normalizar_telefone_br(texto)
+    if not numero:
+        return ""
+    ddd, resto = numero[2:4], numero[4:]
+    return f"({ddd}) {resto[0]} {resto[1:5]}-{resto[5:]}"

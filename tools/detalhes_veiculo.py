@@ -6,7 +6,7 @@ from tools.utils import formatar_brl
 
 @tool
 def detalhes_veiculo(id_veiculo: int,
-                     loja_id: Annotated[int, InjectedToolArg] = 1) -> str:
+                     *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Retorna a ficha completa de um carro específico pelo seu ID.
     Use quando o cliente demonstrar interesse em um carro específico
     que já apareceu na conversa e quiser saber mais detalhes.

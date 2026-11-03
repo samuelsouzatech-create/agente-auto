@@ -56,7 +56,7 @@ def test_canal_desativado_nao_cai_na_loja_1(loja_b):
     desativar_canal("whatsapp", "PNID_B")
     assert resolver_loja("whatsapp", "PNID_B") is None
     assert resolver_loja("whatsapp", "OUTRO") is None
-    assert resolver_loja("telegram", "123") == 1        # tipo nunca cadastrado: transição
+    assert resolver_loja("telegram", "123") is None     # tipo nunca cadastrado: ignorado
 
 
 # ------------------------------------------------ loja obrigatória
@@ -97,12 +97,13 @@ def test_sem_credencial_nada_sai_pelo_numero_errado(monkeypatch, loja_b):
         credencial_whatsapp(1)        # já existe WhatsApp cadastrado e a loja 1 não tem
 
 
-def test_modo_transicao_usa_o_env(monkeypatch):
+def test_sem_canal_cadastrado_nao_ha_credencial(monkeypatch):
     monkeypatch.setattr(config, "WHATSAPP_PHONE_NUMBER_ID", "PNID_1")
     monkeypatch.setattr(config, "WHATSAPP_TOKEN", "tok1")
-    assert credencial_whatsapp(1).phone_number_id == "PNID_1"
     with pytest.raises(SemCredencial):
-        credencial_whatsapp(LOJA_B)
+        credencial_whatsapp(1)          # sem canal cadastrado, nem a loja 1 envia
+    cadastrar_canal(1, "whatsapp", "PNID_1")
+    assert credencial_whatsapp(1).phone_number_id == "PNID_1"
 
 
 def test_envio_sai_pelo_numero_da_loja(monkeypatch, loja_b):

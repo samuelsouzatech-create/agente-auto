@@ -45,19 +45,19 @@ def test_formatar_brl_valor_pequeno():
 def test_financiamento_parcelas_zero_nao_quebra():
     # parcelas=0 não pode dar divisão por zero; deve retornar aviso
     resultado = simular_financiamento.invoke(
-        {"valor_carro": 50000, "entrada": 10000, "parcelas": 0}
+        {"loja_id": 1, "valor_carro": 50000, "entrada": 10000, "parcelas": 0}
     )
     assert "válido" in resultado.lower() or "parcela" in resultado.lower()
 
 def test_financiamento_entrada_cobre_total():
     resultado = simular_financiamento.invoke(
-        {"valor_carro": 50000, "entrada": 50000, "parcelas": 48}
+        {"loja_id": 1, "valor_carro": 50000, "entrada": 50000, "parcelas": 48}
     )
     assert "não é necessário financiamento" in resultado.lower()
 
 def test_financiamento_calculo_normal():
     resultado = simular_financiamento.invoke(
-        {"valor_carro": 50000, "entrada": 10000, "parcelas": 48}
+        {"loja_id": 1, "valor_carro": 50000, "entrada": 10000, "parcelas": 48}
     )
     # Deve mencionar o valor financiado e as parcelas
     assert "R$" in resultado
@@ -68,11 +68,11 @@ def test_financiamento_calculo_normal():
 
 def test_estoque_nunca_retorna_vendido(banco_com_estoque):
     # O Civic 2017 preto está marcado como "vendido" no banco de exemplo
-    resultado = consultar_estoque.invoke({"modelo": "Civic"})
+    resultado = consultar_estoque.invoke({"loja_id": 1, "modelo": "Civic"})
     # Deve achar o Civic 2019 (disponível), mas nunca o 2017 (vendido)
     assert "2019" in resultado
     assert "2017" not in resultado
 
 def test_estoque_ferrari_nao_existe(banco_com_estoque):
-    resultado = consultar_estoque.invoke({"marca": "Ferrari"})
+    resultado = consultar_estoque.invoke({"loja_id": 1, "marca": "Ferrari"})
     assert "nenhum carro" in resultado.lower()

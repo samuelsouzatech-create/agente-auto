@@ -7,6 +7,9 @@ executar_turno() (app/core/turno.py), o mesmo do WhatsApp.
 Rodar (o argumento é o NOME da variável do .env, nunca o token):
     python -m app.api.telegram_bot                       bot do TELEGRAM_TOKEN
     python -m app.api.telegram_bot TELEGRAM_TOKEN_LOJA2  bot de outra loja
+
+P7c: áudio de quem não é número de teste, numa loja em teste, nem é
+baixado nem transcrito. A porta grava o evento no Registro.
 """
 import asyncio
 import os
@@ -18,7 +21,8 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from app import config as _config  # noqa: F401  (carrega o .env)
 from app.core.agent import agente_grafo
 from app.core.turno import (
-    ResultadoTurno, executar_turno, aguardar_vez, turno_midia_nao_suportada, turno_audio_falhou,
+    ResultadoTurno, executar_turno, aguardar_vez, porta_fechada,
+    turno_midia_nao_suportada, turno_audio_falhou,
 )
 from app.channels.base import enviar_humanizado, enviar_resultado
 from app.channels.telegram import CanalTelegram
@@ -29,6 +33,7 @@ from app.redis_atraso import calcular_atraso
 from app.dedup import ja_processada
 from app.canais import resolver_loja, id_bot_telegram
 from app.chaves import exigir_loja
+from app.logs import registrar_canal_desconhecido
 
 CANAL = "telegram"
 VARIAVEL_PADRAO = "TELEGRAM_TOKEN"
@@ -68,6 +73,9 @@ async def _responder(canal: CanalTelegram, chat_id: str, texto: str) -> None:
 async def _responder_audio(canal: CanalTelegram, entrada) -> None:
     loja_id = _loja_do_bot()
     chat_id = entrada.lead_id
+    # P7c: loja em teste e não é número de teste: nem baixa nem transcreve (custo).
+    if porta_fechada(loja_id, CANAL, chat_id):
+        return
     print(f"[Telegram][loja {loja_id}] Cliente {chat_id} mandou um áudio. Transcrevendo...")
     bytes_audio = await canal.baixar_midia(entrada)
     texto = None
@@ -117,6 +125,7 @@ def main(argv=None) -> None:
     BOT_ID = id_bot_telegram(token)
     loja = resolver_loja(CANAL, BOT_ID)
     if loja is None:
+        registrar_canal_desconhecido(CANAL, BOT_ID)
         print(f"[Telegram] ERRO: o bot {BOT_ID} não está cadastrado (ou está desativado) em canais.")
         print("  Cadastre em: painel do operador > Lojas e canais.")
         return

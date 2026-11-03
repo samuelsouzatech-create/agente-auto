@@ -1,8 +1,9 @@
 """
-Dados da tela "Retomadas e pós-venda" (Etapa 2, Bloco 7). Só leitura.
+Dados da tela "Retomadas e pós-venda" (Etapa 2, Bloco 7; P5). Só leitura.
 
 Aparece nos DOIS painéis, por isso não importa nada do operador
-(custos e preços) nem os jobs.
+(custos e preços) nem os jobs. P5: a fila mostra também as linhas que a
+loja marcou para não enviar, com quem marcou.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
 from app import reativacao, regua
 from app import modo_envio
+from app.bloqueios import bloqueio_ativo
 from app.chaves import exigir_loja
 from app.elegibilidade import candidatos, enviados_no_mes
 from app.lojas import carregar_loja
@@ -82,7 +84,8 @@ def _texto(contexto) -> str:
 
 
 ROTULOS_MODO = {"real": "Real", "teste_loja": "Simulação (loja em teste)",
-                "teste_servidor": "Simulação (servidor em teste)", "teste": "Simulação"}
+                "teste_servidor": "Simulação (servidor em teste)", "teste": "Simulação", "loja_em_teste": "Bloqueado: loja em teste"}
+
 
 
 def modo_de_envio(loja=None) -> dict[str, bool]:
@@ -110,26 +113,38 @@ def uso_do_limite(loja_id, agora: datetime) -> dict:
 
 # ------------------------------------------------------------ fila
 
+def _com_bloqueio(loja_id: int, item: dict) -> dict:
+    """P5: a linha mostra se a loja marcou 'Não enviar' ou 'Não procurar mais'."""
+    b = bloqueio_ativo(loja_id, item["lead_id"], item["tipo"], item["passo"])
+    item["bloqueio"] = b
+    if b:
+        item["situacao"] = "Não será enviada"
+    return item
+
+
 def fila(loja_id, agora: datetime) -> list[dict]:
-    """Quem será procurado e quando (horas em UTC)."""
+    """Quem será procurado e quando (horas em UTC). As linhas que a loja
+    marcou para não enviar continuam aparecendo, com quem marcou (P5)."""
     loja_id = exigir_loja(loja_id)
     agora = _utc(agora)
     saida = []
     for d in candidatos(loja_id, agora):
-        if d.elegivel or d.proximo_em:
+        if d.elegivel or d.proximo_em or d.motivo == "bloqueado_pela_loja":
+            quando = agora if d.elegivel else (_utc(d.proximo_em) if d.proximo_em else None)
             saida.append({"tipo": "remarketing", "lead_id": d.lead_id, "canal": d.canal,
-                          "quando": agora if d.elegivel else _utc(d.proximo_em),
-                          "situacao": d.rotulo, "detalhe": f"toque {d.toque}" if d.toque else ""})
+                          "passo": d.toque, "quando": quando, "situacao": d.rotulo,
+                          "detalhe": f"toque {d.toque}" if d.toque else ""})
     for p in regua.agendados(loja_id, 100):
         saida.append({"tipo": "pos_venda", "lead_id": p["lead_id"], "canal": "",
-                      "quando": do_banco(p["agendado_para"]), "situacao": "Agendado",
-                      "detalhe": p.get("passo_nome") or ""})
+                      "passo": p["id"], "quando": do_banco(p["agendado_para"]),
+                      "situacao": "Agendado", "detalhe": p.get("passo_nome") or ""})
     for r in reativacao.listar(loja_id, 500):
         if r["estado"] in reativacao.ESTADOS_NA_FILA:
             saida.append({"tipo": "reativacao", "lead_id": r["lead_id"] or r["telefone"],
-                          "canal": "whatsapp", "quando": None,
+                          "canal": "whatsapp", "passo": None, "quando": None,
                           "situacao": reativacao.ROTULOS_ESTADO.get(r["estado"], r["estado"]),
                           "detalhe": f"parado há {r['meses_inativo']} meses"})
+    saida = [_com_bloqueio(loja_id, i) for i in saida]
     minimo = datetime.min.replace(tzinfo=timezone.utc)
     return sorted(saida, key=lambda x: x["quando"] or minimo)
 

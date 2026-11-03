@@ -354,9 +354,11 @@ SEGREDO = "segredo-de-teste"
  
  
 def _payload_texto(wamid, numero="5581999990000", texto="oi, tem Civic?"):
-    return {"entry": [{"changes": [{"value": {"messages": [
-        {"id": wamid, "from": numero, "type": "text", "text": {"body": texto}}
-    ]}}]}]}
+    return {"entry": [{"changes": [{"value": {
+        "metadata": {"phone_number_id": "PNID_TESTE"},
+        "messages": [
+            {"id": wamid, "from": numero, "type": "text", "text": {"body": texto}}
+        ]}}]}]}
  
  
 def _assinar(corpo: bytes, segredo=SEGREDO):
@@ -373,7 +375,9 @@ def _corpo(wamid=None, **kwargs):
 def webhook_http(monkeypatch):
     """Cliente HTTP de teste + lista do que o webhook AGENDOU para processar."""
     from fastapi.testclient import TestClient
+    from app.canais import cadastrar_canal
     wh = importar_webhook()
+    cadastrar_canal(1, "whatsapp", "PNID_TESTE")
     agendadas = []
  
     async def processar_falso(numero, texto, id_audio=None, loja_id=1):

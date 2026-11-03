@@ -2,8 +2,8 @@
 responder pelo mesmo número e devolver ao assistente. O cliente não recebe
 nenhum aviso de troca."""
 import streamlit as st
-from datetime import date
 
+from app.apresentacao import data_para_tela, horario_para_tela, nome_do_canal, nomes_dos_clientes
 from app.estoque import listar_estoque
 from app.vendas import FORMAS, VendaInvalida, registrar_venda, vendas_do_lead
 from app.envio_painel import CANAIS_COM_ENVIO, EnvioRecusado, enviar_pelo_painel
@@ -11,6 +11,7 @@ from app.handoff import assumir_conversa, devolver_ao_agente, estado_do_handoff,
 from app.interesse import ROTULOS, reativar_contato, situacao_do_lead
 from app.lojas import carregar_loja
 from app.mensagens import historico_do_lead, listar_conversas
+from app.relogio import agora_utc, dia_local
 from paginas.comum import avisar, loja_atual, mostrar_aviso, para_streamlit, usuario_atual
 
 INTERVALO_REFRESH = "10s"
@@ -52,13 +53,14 @@ if not conversas:
     st.stop()
 
 por_lead = {c["lead_id"]: c for c in conversas}
+nomes = nomes_dos_clientes(loja.id, list(por_lead))
 
 
 def _rotulo(lead_id):
     c = por_lead[lead_id]
     estado = estado_do_handoff(lead_id, loja.id)
-    return (f"{ESTADOS.get(estado, estado)} · {lead_id} · {c.get('canal') or '—'} · "
-            f"última: {c['ultima_mensagem']} (UTC)")
+    return (f"{ESTADOS.get(estado, estado)} · {nomes.get(lead_id, 'Cliente sem nome')} · "
+            f"{nome_do_canal(c.get('canal'))} · última: {horario_para_tela(loja, c['ultima_mensagem'])}")
 
 
 lead_id = st.selectbox("Conversa", list(por_lead), format_func=_rotulo, key=f"conversa_{loja.id}")
@@ -84,7 +86,7 @@ with col_acoes:
         st.markdown("---")
         texto = ROTULOS.get(situacao["situacao"], situacao["situacao"])
         if situacao.get("retomar_em"):
-            texto += f" · procurar a partir de {situacao['retomar_em']}"
+            texto += f" · procurar a partir de {data_para_tela(situacao['retomar_em'])}"
         st.caption(f"Percebido na conversa: {texto}")
         if situacao.get("motivo"):
             st.caption(f"Motivo: {para_streamlit(situacao['motivo'])}")
@@ -95,16 +97,17 @@ with col_acoes:
             st.rerun()
     st.markdown("---")
     for v in vendas_do_lead(loja.id, lead_id):
-        st.caption(f"✅ Comprou {v['carro'] or 'um carro'} em {v['data_venda']}")
-    with st.expander("🏁 Marcar como vendido"):
+        st.caption(f"✅ Comprou {v['carro'] or 'um carro'} em {data_para_tela(v['data_venda'])}")
+    with st.expander("🏁 Registrar venda"):
         carros = listar_estoque(loja_id=loja.id, incluir_vendidos=False)
         if not carros:
             st.caption("Nenhum carro disponível no estoque desta loja.")
         else:
-            nomes = {c["id"]: f"{c['marca']} {c['modelo']} {c['ano']}" for c in carros}
+            nomes_carros = {c["id"]: f"{c['marca']} {c['modelo']} {c['ano']}" for c in carros}
             with st.form(f"venda_{loja.id}_{lead_id}"):
-                carro_id = st.selectbox("Carro", list(nomes), format_func=nomes.get)
-                data_venda = st.date_input("Data da venda", value=date.today(), format="DD/MM/YYYY")
+                carro_id = st.selectbox("Carro", list(nomes_carros), format_func=nomes_carros.get)
+                data_venda = st.date_input("Data da venda", value=dia_local(loja, agora_utc()),
+                                           format="DD/MM/YYYY")
                 forma = st.radio("Pagamento", FORMAS, horizontal=True,
                                  format_func={"avista": "À vista", "financiado": "Financiado"}.get)
                 meses = st.number_input("Meses de financiamento (0 = não sei)",
@@ -126,7 +129,7 @@ with col_conversa:
     mostrar_historico(lead_id, loja.id)
 
 if estado == "humano_assumiu" and dono == vendedor and canal in CANAIS_COM_ENVIO:
-    texto = st.chat_input(f"Escreva para o cliente (sai pelo {canal} da loja)")
+    texto = st.chat_input(f"Escreva para o cliente (sai pelo {nome_do_canal(canal)} da loja)")
     if texto:
         try:
             enviar_pelo_painel(loja.id, canal, lead_id, texto, vendedor)

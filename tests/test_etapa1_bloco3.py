@@ -57,9 +57,14 @@ def redis_falso(monkeypatch):
 
 @pytest.fixture
 def loja_b():
+    """Loja B já NO AR. Desde o P7b, loja nova nasce em teste e só atende
+    números de teste; aqui o assunto é isolamento, então ela entra no ar
+    (como o operador faria). A porta de loja em teste é testada no P7b."""
     conexao = banco.conectar()
     conexao.execute("INSERT OR IGNORE INTO lojas (id, nome, segmento, config) "
                     "VALUES (?, 'Auto Bia', 'veiculos', '{}')", (LOJA_B,))
+    conexao.execute("INSERT OR IGNORE INTO estado_lojas (loja_id, estado, no_ar_em, alterado_por, atualizado_em) "
+                    "VALUES (?, 'no_ar', '2026-10-27 12:00:00', 'Teste', '2026-10-27 12:00:00')", (LOJA_B,))
     conexao.commit()
     conexao.close()
     return LOJA_B
@@ -179,9 +184,9 @@ def test_dedup_sem_redis_usa_memoria_local(monkeypatch):
 
 # ------------------------------------------------------------- canais
 
-def test_sem_canal_cadastrado_vale_a_loja_1():
-    assert resolver_loja("whatsapp", "qualquer") == 1
-    assert resolver_loja("whatsapp", None) == 1
+def test_sem_canal_cadastrado_nao_vai_para_loja_nenhuma():
+    assert resolver_loja("whatsapp", "qualquer") is None
+    assert resolver_loja("whatsapp", None) is None
 
 
 def test_canal_cadastrado_aponta_para_a_loja_certa(loja_b):
@@ -191,7 +196,7 @@ def test_canal_cadastrado_aponta_para_a_loja_certa(loja_b):
     assert resolver_loja("whatsapp", "PNID_B") == LOJA_B
     assert resolver_loja("whatsapp", "DESCONHECIDO") is None
     assert resolver_loja("whatsapp", None) is None
-    assert resolver_loja("telegram", "123") == 1  # nenhum Telegram cadastrado ainda
+    assert resolver_loja("telegram", "123") is None  # Telegram não cadastrado: ignorado
 
 
 def test_canal_desativado_deixa_de_resolver(loja_b):
@@ -284,10 +289,10 @@ def test_webhook_ignora_numero_nao_cadastrado(webhook_http):
     assert agendadas == []
 
 
-def test_webhook_sem_canais_cadastrados_usa_loja_1(webhook_http):
+def test_webhook_sem_canais_cadastrados_ignora_a_mensagem(webhook_http):
     cliente, agendadas = webhook_http
-    _post(cliente, _corpo("PNID_QUALQUER", texto="oi"))
-    assert agendadas == [("5581999990000", "oi", 1)]
+    assert _post(cliente, _corpo("PNID_QUALQUER", texto="oi")).status_code == 200
+    assert agendadas == []
 
 
 # ------------------------------------- mesmo número em duas lojas

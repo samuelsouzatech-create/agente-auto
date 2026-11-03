@@ -8,6 +8,8 @@ from app.config_tela import (
     mudancas_da_tela, padrao, para_tela, traduzir_erro,
 )
 from app.lojas import ConfigInvalida, ConflitoDeVersao, dono_da_chave, historico_config, pendentes, salvar_config
+from app.apresentacao import horario_para_tela
+from app.config_tela import ROTULO
 from paginas.comum import avisar
 
 
@@ -78,6 +80,12 @@ def mostrar_historico(loja, dono: str) -> None:
         historico = [h for h in historico_config(loja.id, limite=100)
                      if dono_da_chave(h["chave"]) == dono][:30]
         if historico:
-            st.dataframe(historico, hide_index=True)
+            st.dataframe([{
+                "Quando": horario_para_tela(loja, h.get("criado_em")),
+                "Quem": h.get("usuario") or "",
+                "Campo": ROTULO.get(h.get("chave"), h.get("chave")),
+                "Antes": h.get("valor_antigo"),
+                "Depois": h.get("valor_novo"),
+            } for h in historico], hide_index=True)
         else:
             st.caption("Nenhuma mudança registrada ainda.")

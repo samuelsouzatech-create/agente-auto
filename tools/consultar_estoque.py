@@ -7,7 +7,7 @@ from tools.utils import formatar_brl
 @tool
 def consultar_estoque(marca: str = "", modelo: str = "", cor: str = "",
                       cambio: str = "", preco_max: float = 0,
-                      loja_id: Annotated[int, InjectedToolArg] = 1) -> str:
+                      *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Consulta os carros DISPONÍVEIS no estoque da loja.
     Use esta ferramenta sempre que o cliente perguntar sobre carros,
     modelos, preços ou disponibilidade. NUNCA invente carros ou preços.

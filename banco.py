@@ -526,8 +526,194 @@ CREATE INDEX IF NOT EXISTS idx_pausas_loja ON pausas_envio(loja_id, id);
 """
 
 
+_MIGRACAO_9 = """
+-- P5 (Plano Mestre): "Não enviar" e "Não procurar mais", escolha da LOJA.
+-- Não é opt-out (optouts é o pedido do cliente). Desfazer não apaga a linha:
+-- grava quem desfez e quando.
+CREATE TABLE IF NOT EXISTS bloqueios_envio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    lead_id TEXT NOT NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('remarketing','pos_venda','reativacao','todos')),
+    passo INTEGER,
+    criado_por TEXT NOT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    desfeito_por TEXT,
+    desfeito_em TIMESTAMP,
+    CHECK (tipo != 'todos' OR passo IS NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_bloqueios_loja ON bloqueios_envio(loja_id, lead_id, desfeito_em);
+"""
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8}
+
+_MIGRACAO_10 = """
+-- P6 (Plano Mestre): Registro de quem fez o quê. Uma linha por ação relevante.
+-- loja_id vazio = evento sem loja (ex.: mensagem de canal sem cadastro).
+-- papel sem CHECK de propósito: o P8 traz os papéis de verdade.
+-- antes/depois em JSON. quando em UTC, como o resto do banco.
+CREATE TABLE IF NOT EXISTS registro_acoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quando TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    loja_id INTEGER,
+    pessoa TEXT NOT NULL,
+    papel TEXT NOT NULL,
+    acao TEXT NOT NULL,
+    alvo TEXT,
+    antes TEXT,
+    depois TEXT,
+    origem TEXT NOT NULL CHECK (origem IN ('painel','api','job','webhook'))
+);
+CREATE INDEX IF NOT EXISTS idx_registro_loja ON registro_acoes(loja_id, quando);
+"""
+
+_MIGRACAO_11 = """
+-- P7 (Plano Mestre): estado da loja. 'em_teste' = nada proativo sai de verdade
+-- e o assistente só responde aos números de teste; 'no_ar' = funciona normal.
+-- Não se confunde com 'ativo' (loja desligada) nem com o roteamento dos canais.
+-- Tabela própria (e não ALTER TABLE lojas): toda migração precisa poder rodar
+-- de novo, e o SQLite não tem "ADD COLUMN IF NOT EXISTS" (mesmo motivo da 5).
+-- Loja SEM linha aqui = em teste. Assim toda loja nova nasce em teste.
+CREATE TABLE IF NOT EXISTS estado_lojas (
+    loja_id INTEGER PRIMARY KEY,
+    estado TEXT NOT NULL CHECK (estado IN ('em_teste','no_ar')),
+    no_ar_em TIMESTAMP,
+    alterado_por TEXT,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+-- As lojas que JÁ existiam continuam como hoje: entram no ar. Só na primeira
+-- vez (tabela vazia); rodar de novo não muda o estado de ninguém.
+INSERT INTO estado_lojas (loja_id, estado, no_ar_em, alterado_por)
+    SELECT id, 'no_ar', CURRENT_TIMESTAMP, 'Sistema' FROM lojas
+    WHERE NOT EXISTS (SELECT 1 FROM estado_lojas);
+-- Quem pode conversar com uma loja em teste (id_externo já normalizado).
+CREATE TABLE IF NOT EXISTS numeros_de_teste (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    tipo_de_canal TEXT NOT NULL CHECK (tipo_de_canal IN ('whatsapp','telegram','instagram')),
+    id_externo TEXT NOT NULL,
+    nome TEXT,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (loja_id, tipo_de_canal, id_externo)
+);
+CREATE INDEX IF NOT EXISTS idx_numeros_teste_loja ON numeros_de_teste(loja_id, tipo_de_canal, ativo);
+"""
+
+
+# ---------------------------------------------------------------------
+# Migração 12 (P8 do Plano Mestre): usuarios_login.
+# É a primeira migração em Python, e não em texto SQL. Motivo: ela precisa
+# RECRIAR a tabela usuarios (o SQLite não altera um CHECK) e toda migração
+# precisa poder rodar de novo (testes antigos voltam o user_version). Em
+# texto SQL, rodar de novo recriaria a tabela e perderia os e-mails. Aqui a
+# função olha a tabela antes: se a coluna email já existe, não recria.
+# migrar() roda a função numa transação só: erro no meio = nada muda.
+# ---------------------------------------------------------------------
+
+class MigracaoRecusada(RuntimeError):
+    """A migração achou dados que não pode levar sem perder nada: parou e não mudou nada."""
+
+
+_COLUNAS_USUARIOS_V12 = (
+    "id", "loja_id", "nome", "papel", "email", "contato_telegram", "contato_whatsapp",
+    "senha_hash", "ativo", "criado_em", "ultimo_acesso",
+)
+
+# loja_id vazio só para operador e suporte (enxergam todas as lojas);
+# vendedor, gestor ("Gerente" nas telas) e dono sempre têm loja.
+# e-mail é o login: único, sem diferença entre maiúsculas e minúsculas.
+# Usuários antigos ficam sem e-mail (vazio) até o operador cadastrar.
+_TABELA_USUARIOS_V12 = """
+CREATE TABLE usuarios_v12 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER REFERENCES lojas(id),
+    nome TEXT NOT NULL,
+    papel TEXT NOT NULL CHECK (papel IN ('vendedor','gestor','dono','operador','suporte')),
+    email TEXT COLLATE NOCASE UNIQUE,
+    contato_telegram TEXT,
+    contato_whatsapp TEXT,
+    senha_hash TEXT,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ultimo_acesso TIMESTAMP,
+    CHECK ((papel IN ('operador','suporte')) = (loja_id IS NULL))
+)
+"""
+
+# Uma linha por tentativa de login (limite de tentativas e registro de uso).
+# resultado sem CHECK de propósito (como o papel do registro_acoes): o C3
+# (link do vendedor) vai gravar outros resultados aqui. O código valida.
+_TABELA_ACESSOS_V12 = """
+CREATE TABLE IF NOT EXISTS acessos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER,
+    email TEXT NOT NULL,
+    quando TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resultado TEXT NOT NULL
+)
+"""
+_INDICE_ACESSOS_V12 = "CREATE INDEX IF NOT EXISTS idx_acessos_email ON acessos(email, quando)"
+
+
+def _recriar_usuarios_v12(conexao, colunas_antigas) -> None:
+    """Cria a tabela nova, copia TODOS os usuários com os mesmos ids, troca as
+    tabelas e mantém o contador de ids (id apagado não volta a ser usado)."""
+    ruins = [l[0] for l in conexao.execute(
+        "SELECT id FROM usuarios "
+        "WHERE (papel IN ('operador','suporte')) != (loja_id IS NULL) ORDER BY id")]
+    if ruins:
+        raise MigracaoRecusada(
+            "Migração 12 parada, nada foi mudado: usuário(s) com papel e loja que não "
+            f"combinam (ids {', '.join(map(str, ruins))}). Operador fica sem loja; "
+            "vendedor e gestor ficam com loja.")
+    linha = conexao.execute("SELECT seq FROM sqlite_sequence WHERE name = 'usuarios'").fetchone()
+    contador = linha[0] if linha else 0
+    total = conexao.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0]
+    conexao.execute("DROP TABLE IF EXISTS usuarios_v12")
+    conexao.execute(_TABELA_USUARIOS_V12)
+    comuns = ", ".join(c for c in _COLUNAS_USUARIOS_V12 if c in colunas_antigas)
+    conexao.execute(f"INSERT INTO usuarios_v12 ({comuns}) SELECT {comuns} FROM usuarios")
+    if conexao.execute("SELECT COUNT(*) FROM usuarios_v12").fetchone()[0] != total:
+        raise MigracaoRecusada("Migração 12 parada, nada foi mudado: a cópia dos usuários não bateu.")
+    conexao.execute("DROP TABLE usuarios")
+    conexao.execute("ALTER TABLE usuarios_v12 RENAME TO usuarios")
+    maior = conexao.execute("SELECT COALESCE(MAX(id), 0) FROM usuarios").fetchone()[0]
+    contador = max(contador or 0, maior)
+    if contador:
+        atualizou = conexao.execute(
+            "UPDATE sqlite_sequence SET seq = ? WHERE name = 'usuarios'", (contador,)).rowcount
+        if not atualizou:
+            conexao.execute("INSERT INTO sqlite_sequence (name, seq) VALUES ('usuarios', ?)",
+                            (contador,))
+
+
+def _migracao_12(conexao) -> None:
+    colunas = [l[1] for l in conexao.execute("PRAGMA table_info(usuarios)")]
+    if "email" not in colunas:          # primeira vez: recria. Rodando de novo: não mexe.
+        _recriar_usuarios_v12(conexao, colunas)
+    conexao.execute(_TABELA_ACESSOS_V12)
+    conexao.execute(_INDICE_ACESSOS_V12)
+
+
+def _rodar_migracao_python(conexao, versao, passo) -> None:
+    """Migração em Python: tudo numa transação só. Erro no meio = nada muda."""
+    anterior = conexao.isolation_level
+    conexao.isolation_level = None          # aqui nós controlamos BEGIN e COMMIT
+    try:
+        conexao.execute("BEGIN")
+        try:
+            passo(conexao)
+            conexao.execute(f"PRAGMA user_version = {int(versao)}")
+            conexao.execute("COMMIT")
+        except BaseException:
+            if conexao.in_transaction:
+                conexao.execute("ROLLBACK")
+            raise
+    finally:
+        conexao.isolation_level = anterior
+
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 
@@ -544,8 +730,12 @@ def migrar() -> None:
         for versao in sorted(MIGRACOES):
             if versao <= atual:
                 continue
+            passo = MIGRACOES[versao]
+            if callable(passo):              # migração em Python (a partir da 12)
+                _rodar_migracao_python(conexao, versao, passo)
+                continue
             conexao.executescript(
-                "BEGIN;\n" + MIGRACOES[versao]
+                "BEGIN;\n" + passo
                 + f"\nPRAGMA user_version = {versao};\nCOMMIT;"
             )
     finally:

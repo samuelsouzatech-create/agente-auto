@@ -1,3 +1,11 @@
+"""
+Guarda de preço: barra valor em R$ que nem uma ferramenta devolveu nem o
+cliente falou (preço inventado) e chama o vendedor.
+
+Formatos entendidos: R$ 98.000,00 | R$ 98.000 | R$98000 | R$ 98 mil | R$ 10k
+e, no que o cliente escreve: 10 mil | 10k | 10 K | 1,5 mil | 1,5k | 10.000 | 10000.
+"90km" NÃO vira 90 mil: o "k" só conta quando vem sozinho.
+"""
 import re
 from langchain_core.messages import ToolMessage, HumanMessage
 
@@ -8,19 +16,23 @@ MENSAGEM_SEGURA = (
     "nada errado. Já já alguém da equipe continua com você por aqui. 👍"
 )
 
-# Valor em R$ em qualquer formato: R$ 98.000,00 | R$ 98.000 | R$98000 | R$ 98 mil
-_PADRAO_REAIS = re.compile(r"R\$\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?(\s*mil\b)?", re.I)
-# Número solto que o cliente escreveu: 20 mil | 90.000 | 90000
-_PADRAO_NUMERO = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?(\s*mil\b)?", re.I)
+# "mil" ou "k" depois do número (10 mil, 10k, 10 K). "km" não conta.
+_MIL = r"(\s*(?:mil\b|k\b))?"
+# Valor em R$ em qualquer formato: R$ 98.000,00 | R$ 98.000 | R$98000 | R$ 98 mil | R$ 10k
+_PADRAO_REAIS = re.compile(r"R\$\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?" + _MIL, re.I)
+# Número solto que o cliente escreveu: 20 mil | 10k | 90.000 | 90000
+_PADRAO_NUMERO = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?" + _MIL, re.I)
 
 
 def _em_centavos(inteiro, centavos, mil) -> int:
     """Normaliza qualquer formato para centavos (int), para comparar com segurança.
-    'R$ 98.000,00', 'R$ 98.000', 'R$98000' e 'R$ 98 mil' viram todos 9800000."""
+    'R$ 98.000,00', 'R$ 98.000', 'R$98000' e 'R$ 98 mil' viram todos 9800000.
+    '1,5 mil' e '1,5k' viram 150000 (R$ 1.500), não R$ 1.000,50."""
     reais = int(inteiro.replace(".", ""))
+    valor = reais * 100 + int((centavos or "0").ljust(2, "0"))
     if mil:
-        reais *= 1000
-    return reais * 100 + int((centavos or "0").ljust(2, "0"))
+        valor *= 1000
+    return valor
 
 
 def valores_em_reais(texto: str) -> set:

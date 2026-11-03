@@ -3,10 +3,11 @@ from datetime import datetime, timezone
 
 import streamlit as st
 
+from app.apresentacao import horario_para_tela, nomes_dos_clientes
 from app.handoff import assumir_handoff, devolver_ao_agente, listar_handoffs
 from app.lojas import carregar_loja
 from app.mensagens import historico_do_lead
-from paginas.comum import loja_atual, para_streamlit, usuario_atual
+from paginas.comum import definir_ator_da_sessao, loja_atual, para_streamlit, usuario_atual
 
 INTERVALO_REFRESH = "30s"
 
@@ -16,7 +17,7 @@ MIN_VERMELHO = loja.get("handoff.gestor_min", 10)
 
 
 def _minutos_esperando(criado_em):
-    """O SQLite grava CURRENT_TIMESTAMP em UTC; comparamos com o agora em UTC."""
+    """O banco grava no horário universal; a conta compara com o agora universal."""
     if not criado_em:
         return 0.0
     try:
@@ -50,11 +51,15 @@ st.button("🔄 Atualizar agora")
 
 @st.fragment(run_every=INTERVALO_REFRESH)
 def mostrar_fila(loja_id, vendedor):
+    # P6: clique aqui dentro reroda SÓ este pedaço (a entrada operador.py /
+    # painel.py não roda). Por isso o ator é definido de novo aqui.
+    definir_ator_da_sessao()
     handoffs = listar_handoffs(loja_id=loja_id, apenas_abertos=True)
     if not handoffs:
         st.success("Nenhum lead na fila agora. Tudo tranquilo. 👍")
         return
 
+    nomes = nomes_dos_clientes(loja_id, [h["lead_id"] for h in handoffs])
     atrasados = [h for h in handoffs if h["estado"] == "aguardando_humano"
                  and _minutos_esperando(h.get("criado_em")) >= MIN_VERMELHO]
     resumo = f"**{len(handoffs)} lead(s) na fila.**"
@@ -64,12 +69,13 @@ def mostrar_fila(loja_id, vendedor):
 
     for h in handoffs:
         lead_id, estado = h["lead_id"], h["estado"]
+        cliente = nomes.get(str(lead_id), "Cliente sem nome")
         minutos = _minutos_esperando(h.get("criado_em"))
         if estado == "aguardando_humano":
-            titulo = f"{_emoji(minutos)} Aguardando vendedor  —  Lead: {lead_id}  —  {_texto_espera(minutos)}"
+            titulo = f"{_emoji(minutos)} Aguardando vendedor  —  {cliente}  —  {_texto_espera(minutos)}"
             expandir = minutos >= MIN_AMARELO
         else:
-            titulo = f"🟢 Em atendimento humano  —  Lead: {lead_id}"
+            titulo = f"🟢 Em atendimento humano  —  {cliente}"
             expandir = False
 
         with st.expander(titulo, expanded=expandir):
@@ -79,7 +85,7 @@ def mostrar_fila(loja_id, vendedor):
                 st.markdown(f"**Resumo:** {para_streamlit(h.get('resumo') or '—')}")
                 if h.get("vendedor"):
                     st.markdown(f"**Assumido por:** {para_streamlit(h['vendedor'])}")
-                st.caption(f"Aberto em: {h.get('criado_em') or '—'} (UTC)")
+                st.caption(f"Aberto: {horario_para_tela(loja, h.get('criado_em'))}")
             with col_acoes:
                 if estado == "aguardando_humano":
                     if st.button("✋ Assumir", key=f"assumir_{h['id']}"):

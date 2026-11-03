@@ -17,7 +17,7 @@ FINAL = " Não mencione registro, sistema, cadastro, lista ou comandos."
 @tool
 def registrar_interesse(situacao: str, motivo: str, retomar_em_dias: int = 0,
                         lead_id: Annotated[str, InjectedToolArg] = "",
-                        loja_id: Annotated[int, InjectedToolArg] = 1,
+                        *, loja_id: Annotated[int, InjectedToolArg],
                         canal: Annotated[str, InjectedToolArg] = "") -> str:
     """Anota como o cliente está em relação à compra, percebido pela conversa.
     Use SÓ quando o cliente deixar isso claro com as palavras dele:

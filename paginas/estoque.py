@@ -1,17 +1,30 @@
-"""Estoque da loja escolhida: cadastrar, editar e dar baixa."""
+"""Estoque da loja escolhida: cadastrar e editar os carros.
+A venda não é feita aqui: só por "Registrar venda", na conversa do cliente (P2)."""
 import streamlit as st
 
 from app.estoque import (
-    OPCOES_CAMBIO, OPCOES_STATUS, adicionar_carro, atualizar_carro, listar_estoque, marcar_status,
+    OPCOES_CAMBIO, OPCOES_STATUS, VENDIDO, StatusInvalido, adicionar_carro, atualizar_carro,
+    listar_estoque,
 )
 from app.lojas import carregar_loja
 from paginas.comum import formatar_brl, loja_atual
 
-ROTULO_STATUS = {"disponivel": "🟢 Disponível", "reservado": "🟡 Reservado", "vendido": "🔴 Vendido"}
+ROTULO_STATUS = {
+    "disponivel": "🟢 Disponível",
+    "reservado": "🟡 Reservado",
+    "indisponivel": "⚪ Indisponível",
+    "vendido": "🔴 Vendido",
+}
+
+
+def rotulo(status):
+    return ROTULO_STATUS.get(status, status)
+
 
 loja = carregar_loja(loja_atual())
 st.title("🚗 Estoque")
-st.caption(f"{loja.nome} · cadastrar, editar e dar baixa nos carros")
+st.caption(f"{loja.nome} · cadastrar e editar os carros. "
+           "A venda é registrada na conversa do cliente, em \"Registrar venda\".")
 mostrar_vendidos = st.checkbox("Mostrar carros vendidos", value=True)
 
 with st.expander("➕ Adicionar carro novo", expanded=False):
@@ -27,20 +40,24 @@ with st.expander("➕ Adicionar carro novo", expanded=False):
             preco = st.number_input("Preço (R$)", min_value=0.0, value=0.0, step=1000.0, format="%.2f")
         with c3:
             cor = st.text_input("Cor")
-            status = st.selectbox("Status", OPCOES_STATUS)
+            status = st.selectbox("Situação", OPCOES_STATUS, format_func=rotulo)
         fotos = st.text_area("Fotos (URLs separadas por vírgula)",
                              placeholder="https://.../foto1.jpg, https://.../foto2.jpg")
         if st.form_submit_button("💾 Cadastrar carro"):
             if not marca or not modelo or not cor:
                 st.error("Preencha pelo menos marca, modelo e cor.")
             else:
-                novo_id = adicionar_carro(
-                    marca=marca.strip(), modelo=modelo.strip(), ano=int(ano), km=int(km),
-                    cor=cor.strip(), cambio=cambio, preco=float(preco), status=status,
-                    fotos=fotos.strip(), loja_id=loja.id,
-                )
-                st.success(f"Carro cadastrado (id {novo_id}).")
-                st.rerun()
+                try:
+                    novo_id = adicionar_carro(
+                        marca=marca.strip(), modelo=modelo.strip(), ano=int(ano), km=int(km),
+                        cor=cor.strip(), cambio=cambio, preco=float(preco), status=status,
+                        fotos=fotos.strip(), loja_id=loja.id,
+                    )
+                except StatusInvalido as erro:
+                    st.error(str(erro))
+                else:
+                    st.success("Carro cadastrado.")
+                    st.rerun()
 
 carros = listar_estoque(loja_id=loja.id, incluir_vendidos=mostrar_vendidos)
 if not carros:
@@ -50,18 +67,16 @@ if not carros:
 st.write(f"**{len(carros)} carro(s) no estoque:**")
 for carro in carros:
     cid = carro["id"]
-    titulo = (f"{ROTULO_STATUS.get(carro['status'], carro['status'])}  —  {carro['marca']} "
-              f"{carro['modelo']} {carro['ano']}  —  {formatar_brl(carro['preco'])}  (id {cid})")
+    vendido = carro["status"] == VENDIDO
+    titulo = (f"{rotulo(carro['status'])}  —  {carro['marca']} "
+              f"{carro['modelo']} {carro['ano']}  —  {formatar_brl(carro['preco'])}")
     with st.expander(titulo, expanded=False):
-        if carro["status"] != "vendido":
-            if st.button("🔴 Marcar como VENDIDO", key=f"vender_{cid}"):
-                marcar_status(cid, "vendido", loja_id=loja.id)
-                st.rerun()
-        elif st.button("🟢 Voltar para DISPONÍVEL", key=f"voltar_{cid}"):
-            marcar_status(cid, "disponivel", loja_id=loja.id)
-            st.rerun()
+        if vendido:
+            st.caption("Carro vendido. A venda foi registrada na conversa do cliente; "
+                       "por aqui só dá para corrigir os dados do carro.")
+        else:
+            st.caption("Para vender este carro, use \"Registrar venda\" na conversa do cliente.")
 
-        st.markdown("---")
         with st.form(f"form_editar_{cid}"):
             e1, e2, e3 = st.columns(3)
             with e1:
@@ -78,18 +93,26 @@ for carro in carros:
                                            step=1000.0, format="%.2f")
             with e3:
                 ed_cor = st.text_input("Cor", value=carro["cor"])
-                ed_status = st.selectbox(
-                    "Status", OPCOES_STATUS,
-                    index=OPCOES_STATUS.index(carro["status"]) if carro["status"] in OPCOES_STATUS else 0)
+                if vendido:
+                    st.text_input("Situação", value=rotulo(VENDIDO), disabled=True)
+                    ed_status = VENDIDO
+                else:
+                    ed_status = st.selectbox(
+                        "Situação", OPCOES_STATUS, format_func=rotulo,
+                        index=OPCOES_STATUS.index(carro["status"]) if carro["status"] in OPCOES_STATUS else 0)
             ed_fotos = st.text_area("Fotos (URLs separadas por vírgula)", value=carro.get("fotos") or "")
             if st.form_submit_button("💾 Salvar alterações"):
-                atualizar_carro(
-                    cid, marca=ed_marca.strip(), modelo=ed_modelo.strip(), ano=int(ed_ano),
-                    km=int(ed_km), cor=ed_cor.strip(), cambio=ed_cambio, preco=float(ed_preco),
-                    status=ed_status, fotos=ed_fotos.strip(), loja_id=loja.id,
-                )
-                st.success("Alterações salvas.")
-                st.rerun()
+                try:
+                    atualizar_carro(
+                        cid, marca=ed_marca.strip(), modelo=ed_modelo.strip(), ano=int(ed_ano),
+                        km=int(ed_km), cor=ed_cor.strip(), cambio=ed_cambio, preco=float(ed_preco),
+                        status=ed_status, fotos=ed_fotos.strip(), loja_id=loja.id,
+                    )
+                except StatusInvalido as erro:
+                    st.error(str(erro))
+                else:
+                    st.success("Alterações salvas.")
+                    st.rerun()
 
         urls = [u.strip() for u in (carro.get("fotos") or "").split(",") if u.strip()]
         if urls:

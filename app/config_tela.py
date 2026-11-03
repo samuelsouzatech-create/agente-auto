@@ -98,7 +98,10 @@ CAMPOS: tuple[Campo, ...] = (
           "Entre 08:00 e 21:00."),
     Campo("remarketing.dias_envio", "Dias de envio", "dias", "Remarketing"),
     Campo("remarketing.limite_mensal", "Limite mensal de envios", "inteiro_opcional",
-          "Remarketing", "Do contrato. Vazio enquanto não estiver definido.", dono="operador"),
+"Remarketing", "Do contrato. Vazio enquanto não estiver definido.", dono="operador"),
+    Campo("remarketing.carencia_dias", "Dias sem retomada depois do atendimento", "inteiro",
+          "Remarketing", "Conta do dia em que o vendedor atendeu ou a visita foi marcada. "
+          "0 = sem pausa.", dono="operador"),
     Campo("pos_venda.revisao_meses", "Revisão: a cada quantos meses", "inteiro", "Pós-venda"),
     Campo("pos_venda.revisao_km", "Revisão: a cada quantos km", "inteiro", "Pós-venda"),
     Campo("pos_venda.troca_avista_meses", "Reabordar troca (compra à vista) após quantos meses",

@@ -7,6 +7,9 @@ O atendimento em si é o executar_turno() (app/core/turno.py).
 
 Revisão da Etapa 1: toda função daqui exige a loja (nada de "loja 1 por
 reserva") e todo envio sai pelo número da loja (app/credenciais.py).
+
+P7c: áudio de quem não é número de teste, numa loja em teste, nem é
+transcrito (a transcrição custa). A porta grava o evento no Registro.
 """
 import hashlib
 import hmac
@@ -17,7 +20,7 @@ from fastapi import FastAPI, Request, Response, Query, BackgroundTasks
 from app.config import WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET
 from app.core.agent import agente_grafo
 from app.core.turno import (
-    executar_turno, aguardar_vez, turno_midia_nao_suportada, turno_audio_falhou,
+    executar_turno, aguardar_vez, porta_fechada, turno_midia_nao_suportada, turno_audio_falhou,
 )
 from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
 from app.api.receber_audio import transcrever_audio, pegar_uso_da_transcricao
@@ -28,6 +31,7 @@ from app.redis_atraso import calcular_atraso
 from app.dedup import ja_processada
 from app.canais import resolver_loja
 from app.chaves import exigir_loja
+from app.logs import registrar_canal_desconhecido
 
 CANAL = "whatsapp"
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
@@ -97,6 +101,9 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
     """Segundo plano: (áudio) -> debounce + lock -> executar_turno -> envio."""
     loja_id = exigir_loja(loja_id)
     if id_audio:
+        # P7c: loja em teste e não é número de teste: nem transcreve (custo).
+        if porta_fechada(loja_id, CANAL, numero):
+            return
         print(f"[WhatsApp][loja {loja_id}] Cliente {numero} mandou um áudio. Transcrevendo...")
         texto = await transcrever_audio(id_audio, loja_id=loja_id)
         uso_audio = pegar_uso_da_transcricao(id_audio)
@@ -152,7 +159,7 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
     for entrada in canal_whatsapp.ler_webhook(dados):
         loja_id = resolver_loja(CANAL, entrada.id_canal)
         if loja_id is None:
-            print(f"[WhatsApp] phone_number_id {entrada.id_canal} não cadastrado ou desativado. Ignorando.")
+            registrar_canal_desconhecido(CANAL, entrada.id_canal)
             continue
         if await ja_processada(CANAL, entrada.id_externo):
             print(f"[WhatsApp] Mensagem {entrada.id_externo} já processada. Ignorando duplicata.")

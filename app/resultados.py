@@ -16,7 +16,7 @@ from banco import conectar
 OPCOES_RESULTADO = ["compareceu", "comprou", "perdeu"]
 
 
-def registrar_resultado(lead_id, resultado, motivo="", vendedor="", loja_id=1):
+def registrar_resultado(lead_id, resultado, motivo="", vendedor="", *, loja_id):
     """Grava o resultado marcado pelo vendedor. Cada marcação é uma linha
     nova (mantém o histórico; a última é a mais recente)."""
     conexao = conectar()
@@ -33,7 +33,7 @@ def registrar_resultado(lead_id, resultado, motivo="", vendedor="", loja_id=1):
     return f"Resultado '{resultado}' registrado para o lead {lead_id}."
 
 
-def resultado_do_lead(lead_id, loja_id=1):
+def resultado_do_lead(lead_id, loja_id):
     """Retorna o resultado mais recente de um lead, ou None se não houver."""
     conexao = conectar()
     cursor = conexao.cursor()
@@ -51,7 +51,7 @@ def resultado_do_lead(lead_id, loja_id=1):
     return dict(linha) if linha else None
 
 
-def listar_resultados(loja_id=1):
+def listar_resultados(loja_id):
     """Lista todos os resultados marcados (mais recentes primeiro).
     Base pra revisão semanal e, no futuro, métricas."""
     conexao = conectar()

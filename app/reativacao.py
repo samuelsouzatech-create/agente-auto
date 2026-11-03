@@ -11,6 +11,9 @@ Fica de fora (na montagem E de novo logo antes de enviar):
   já foi reativado nos últimos 6 meses.
 Conta no MESMO limite mensal do remarketing e exige o módulo remarketing ligado.
 Não há segundo toque: se o cliente responder, segue a conversa normal.
+
+P6: montar e cancelar a fila gravam no Registro (registro_acoes), na mesma
+transação, com o nome do ator.
 """
 from __future__ import annotations
 
@@ -19,8 +22,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
 from banco import conectar
+from app.bloqueios import leads_bloqueados
 from app.chaves import exigir_loja
 from app.lojas import carregar_loja, modulo_ativo
+from app.registro import registrar
 from app.relogio import agora_utc, dia_local, do_banco, para_banco
 from app.telefone import normalizar_telefone_br
 
@@ -52,6 +57,7 @@ MOTIVOS = {
     "sem_contato": "O contato não está mais na base",
     "sem_consentimento": "Sem autorização para receber mensagens",
     "nao_contatar": "Pediu para não ser procurado",
+    "bloqueado_pela_loja": "A loja marcou para não enviar",
     "com_vendedor": "Conversa com vendedor agora",
     "conversou_recente": "Conversou com a loja há pouco tempo",
     "comprou_recente": "Comprou há pouco tempo",
@@ -95,6 +101,7 @@ class Fotografia:
     reativados: set = field(default_factory=set)
     na_fila: set = field(default_factory=set)
     bloqueados: set = field(default_factory=set)
+    bloqueados_loja: set = field(default_factory=set)   # P5: escolha da loja
 
 
 def fotografia(loja_id, agora: datetime) -> Fotografia:
@@ -134,6 +141,9 @@ def fotografia(loja_id, agora: datetime) -> Fotografia:
             "SELECT telefone FROM reativacao WHERE loja_id = ? "
             "AND estado IN ('na_fila', 'simulado', 'falhou')")
         foto.bloqueados = conjunto("SELECT fone_br(lead_id) FROM optouts WHERE loja_id = ?")
+        # P5: a loja marcou "Não enviar" (reativação) ou "Não procurar mais".
+        foto.bloqueados_loja = {f for f in map(normalizar_telefone_br,
+                                               leads_bloqueados(loja_id, "reativacao")) if f}
         # Mesma regra de app/interesse.py (pode_contatar), lida de uma vez.
         for l in conexao.execute(
                 "SELECT lead_id, situacao, retomar_em FROM situacao_lead WHERE loja_id = ?", (loja_id,)):
@@ -157,6 +167,8 @@ def motivo_para_nao_reativar(foto: Fotografia, contato: dict, agora: datetime, m
         return "sem_consentimento"
     if fone in foto.bloqueados:
         return "nao_contatar"
+    if fone in foto.bloqueados_loja:
+        return "bloqueado_pela_loja"
     if fone in foto.com_vendedor:
         return "com_vendedor"
     limite = _utc(agora) - timedelta(days=round(meses * DIAS_POR_MES))
@@ -227,6 +239,10 @@ def montar_fila(loja_id, *, meses: int = MESES_PADRAO, publico: str = "todos", m
             "INSERT OR IGNORE INTO reativacao (loja_id, contato_id, telefone, lote, meses_inativo, "
             "criado_por, estado, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, 'na_fila', ?, ?)",
             [(loja_id, c["id"], c["telefone"], lote, meses, usuario, lote, lote) for c in escolhidos])
+        registrar("montar_fila_reativacao", loja_id, None,
+                  {"lote": lote, "na_fila": len(escolhidos), "meses": meses, "publico": publico,
+                   "maximo": int(maximo), "ignorados": dict(ignorados)},
+                  conexao=conexao, alvo="reativacao")
         conexao.commit()
     finally:
         conexao.close()
@@ -241,6 +257,8 @@ def cancelar_fila(loja_id, *, agora: datetime | None = None) -> int:
             "UPDATE reativacao SET estado = 'cancelado', motivo = 'fila_cancelada', atualizado_em = ? "
             "WHERE loja_id = ? AND estado IN ('na_fila', 'simulado', 'falhou')",
             (para_banco(_utc(agora or agora_utc())), loja_id)).rowcount
+        registrar("cancelar_fila_reativacao", loja_id, None, {"cancelados": n},
+                  conexao=conexao, alvo="reativacao")
         conexao.commit()
     finally:
         conexao.close()

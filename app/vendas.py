@@ -4,6 +4,9 @@ Vendas da loja (Etapa 2, Bloco 5A): o botão "Vendido".
 Fonte de acontecimentos do segmento de veículos. Cada venda agenda a régua
 de pós-venda da loja (app/regua.py). O motor não conhece carro: quem diz as
 datas (venda e fim do financiamento) é este arquivo.
+
+P6: a venda grava no Registro (registro_acoes) na MESMA transação da venda,
+da baixa no estoque e do resultado, com o nome do ator. Sem ator, nada fica.
 """
 from __future__ import annotations
 
@@ -14,6 +17,7 @@ from banco import conectar
 from app import regua
 from app.chaves import exigir_loja
 from app.lojas import carregar_loja, modulo_ativo
+from app.registro import registrar
 from app.relogio import agora_utc, dia_local
 
 FORMAS = ("avista", "financiado")
@@ -103,6 +107,12 @@ def registrar_venda(loja_id, lead_id, veiculo_id, data_venda, forma_pagamento, *
         conexao.execute(
             "INSERT INTO resultados (lead_id, loja_id, resultado, motivo, vendedor) "
             "VALUES (?, ?, 'comprou', ?, ?)", (lead_id, loja_id, _texto_carro(carro), vendedor))
+        registrar("registrar_venda", loja_id,
+                  {"carro_id": veiculo_id, "status_do_carro": carro["status"]},
+                  {"venda_id": venda_id, "carro": _texto_carro(carro),
+                   "data_venda": dia.isoformat(), "forma_pagamento": forma_pagamento,
+                   "meses": meses},
+                  conexao=conexao, alvo=f"lead:{lead_id}")
         conexao.commit()
     finally:
         conexao.close()

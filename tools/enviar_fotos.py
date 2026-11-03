@@ -26,7 +26,7 @@ def _enviar(carro):
 
 @tool(response_format="content_and_artifact")
 def enviar_fotos(id_veiculo: int = 0, marca: str = "", modelo: str = "",
-                 loja_id: Annotated[int, InjectedToolArg] = 1):
+                 *, loja_id: Annotated[int, InjectedToolArg]):
     """Envia as fotos de um carro para o cliente.
 
     Formas de chamar:

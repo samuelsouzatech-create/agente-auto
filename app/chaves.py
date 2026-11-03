@@ -1,10 +1,9 @@
 """Nomes padronizados de chaves do Redis e da memória (item 1.5).
 
-Tudo que é "por cliente" leva a loja no nome. Revisão da Etapa 1: a loja é
-OBRIGATÓRIA. Se algum caminho esquecer de passar, dá erro em vez de cair
-na loja 1 em silêncio.
+Tudo que é "por cliente" leva a loja no nome. A loja é OBRIGATÓRIA: se
+algum caminho esquecer de passar, dá erro em vez de cair em alguma loja
+em silêncio. Desde o P1 (Plano Mestre) não existe mais loja padrão.
 """
-LOJA_PADRAO = 1   # SÓ para o modo de transição do resolver_loja (app/canais.py)
 
 
 class LojaNaoInformada(ValueError):
@@ -13,7 +12,7 @@ class LojaNaoInformada(ValueError):
 
 def exigir_loja(loja_id) -> int:
     if loja_id is None or isinstance(loja_id, bool):
-        raise LojaNaoInformada("loja_id não informado (nada vai para a loja 1 por engano).")
+        raise LojaNaoInformada("loja_id não informado (nada vai para outra loja por engano).")
     try:
         numero = int(loja_id)
     except (TypeError, ValueError):

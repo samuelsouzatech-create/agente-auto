@@ -7,7 +7,7 @@ from banco import conectar
 def registrar_lead(nome: str, interesse: str, forma_pagamento: str = "",
                    tem_troca: str = "", prazo: str = "",
                    lead_id: Annotated[str, InjectedToolArg] = "",
-                   loja_id: Annotated[int, InjectedToolArg] = 1) -> str:
+                   *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Registra/atualiza os dados de qualificação do lead ao longo da conversa.
     Use quando tiver coletado informações relevantes do cliente. Pode ser
     chamada várias vezes na mesma conversa - os dados vão sendo completados.
