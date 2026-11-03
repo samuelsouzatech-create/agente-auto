@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from banco import conectar
-from app import bloqueios, estado_loja, handoff, importacao, pausa, reativacao, vendas
+from app import autenticacao, bloqueios, estado_loja, handoff, importacao, pausa, reativacao, vendas
 from app.ator import AtorInvalido, SemAtor, como, sem_ator
 from app.lojas import criar_loja, salvar_config
 from app.registro import ACOES_RELEVANTES, HISTORICO_PROPRIO
@@ -125,6 +125,15 @@ def _prep_loja_em_teste():
     return {}
 
 
+SENHA_BOA = "Carro-Azul-2026"
+
+
+def _prep_usuario_antigo():
+    """Usuário de antes do P8: sem e-mail e sem senha."""
+    from app.usuarios import criar_usuario
+    return {"id": criar_usuario(1, "Ana", "vendedor")}
+
+
 CENARIOS = {
     "pausar_envios": (
         _prep_nada,
@@ -185,6 +194,19 @@ CENARIOS = {
         _prep_loja_em_teste,
         lambda s: estado_loja.colocar_no_ar(1, agora=AGORA),
         "SELECT COUNT(*) FROM estado_lojas WHERE loja_id = 1 AND estado = 'no_ar'"),
+    # P8
+    "criar_acesso": (
+        _prep_nada,
+        lambda s: autenticacao.criar_usuario_com_login(1, "Ana", "vendedor", "ana@loja.com", SENHA_BOA),
+        "SELECT COUNT(*) FROM usuarios WHERE email IS NOT NULL"),
+    "definir_email_acesso": (
+        _prep_usuario_antigo,
+        lambda s: autenticacao.definir_email(s["id"], "ana@loja.com"),
+        "SELECT COUNT(*) FROM usuarios WHERE email IS NOT NULL"),
+    "redefinir_senha": (
+        _prep_usuario_antigo,
+        lambda s: autenticacao.definir_senha(s["id"], SENHA_BOA),
+        "SELECT COUNT(*) FROM usuarios WHERE senha_hash IS NOT NULL"),
 }
 
 

@@ -46,6 +46,10 @@ ACOES_RELEVANTES = {
     "assumir_conversa": "app.handoff.assumir_conversa",
     "devolver_ao_agente": "app.handoff.devolver_ao_agente",
     "salvar_configuracao": "app.lojas.salvar_config", "colocar_no_ar": "app.estado_loja.colocar_no_ar",
+    # P8
+    "criar_acesso": "app.autenticacao.criar_usuario_com_login",
+    "definir_email_acesso": "app.autenticacao.definir_email",
+    "redefinir_senha": "app.autenticacao.definir_senha",
 }
 
 # Ações que já tinham histórico próprio (quem, quando, na mesma transação).
