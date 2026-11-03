@@ -600,7 +600,120 @@ CREATE INDEX IF NOT EXISTS idx_numeros_teste_loja ON numeros_de_teste(loja_id, t
 """
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11}
+# ---------------------------------------------------------------------
+# Migração 12 (P8 do Plano Mestre): usuarios_login.
+# É a primeira migração em Python, e não em texto SQL. Motivo: ela precisa
+# RECRIAR a tabela usuarios (o SQLite não altera um CHECK) e toda migração
+# precisa poder rodar de novo (testes antigos voltam o user_version). Em
+# texto SQL, rodar de novo recriaria a tabela e perderia os e-mails. Aqui a
+# função olha a tabela antes: se a coluna email já existe, não recria.
+# migrar() roda a função numa transação só: erro no meio = nada muda.
+# ---------------------------------------------------------------------
+
+class MigracaoRecusada(RuntimeError):
+    """A migração achou dados que não pode levar sem perder nada: parou e não mudou nada."""
+
+
+_COLUNAS_USUARIOS_V12 = (
+    "id", "loja_id", "nome", "papel", "email", "contato_telegram", "contato_whatsapp",
+    "senha_hash", "ativo", "criado_em", "ultimo_acesso",
+)
+
+# loja_id vazio só para operador e suporte (enxergam todas as lojas);
+# vendedor, gestor ("Gerente" nas telas) e dono sempre têm loja.
+# e-mail é o login: único, sem diferença entre maiúsculas e minúsculas.
+# Usuários antigos ficam sem e-mail (vazio) até o operador cadastrar.
+_TABELA_USUARIOS_V12 = """
+CREATE TABLE usuarios_v12 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER REFERENCES lojas(id),
+    nome TEXT NOT NULL,
+    papel TEXT NOT NULL CHECK (papel IN ('vendedor','gestor','dono','operador','suporte')),
+    email TEXT COLLATE NOCASE UNIQUE,
+    contato_telegram TEXT,
+    contato_whatsapp TEXT,
+    senha_hash TEXT,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ultimo_acesso TIMESTAMP,
+    CHECK ((papel IN ('operador','suporte')) = (loja_id IS NULL))
+)
+"""
+
+# Uma linha por tentativa de login (limite de tentativas e registro de uso).
+# resultado sem CHECK de propósito (como o papel do registro_acoes): o C3
+# (link do vendedor) vai gravar outros resultados aqui. O código valida.
+_TABELA_ACESSOS_V12 = """
+CREATE TABLE IF NOT EXISTS acessos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER,
+    email TEXT NOT NULL,
+    quando TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resultado TEXT NOT NULL
+)
+"""
+_INDICE_ACESSOS_V12 = "CREATE INDEX IF NOT EXISTS idx_acessos_email ON acessos(email, quando)"
+
+
+def _recriar_usuarios_v12(conexao, colunas_antigas) -> None:
+    """Cria a tabela nova, copia TODOS os usuários com os mesmos ids, troca as
+    tabelas e mantém o contador de ids (id apagado não volta a ser usado)."""
+    ruins = [l[0] for l in conexao.execute(
+        "SELECT id FROM usuarios "
+        "WHERE (papel IN ('operador','suporte')) != (loja_id IS NULL) ORDER BY id")]
+    if ruins:
+        raise MigracaoRecusada(
+            "Migração 12 parada, nada foi mudado: usuário(s) com papel e loja que não "
+            f"combinam (ids {', '.join(map(str, ruins))}). Operador fica sem loja; "
+            "vendedor e gestor ficam com loja.")
+    linha = conexao.execute("SELECT seq FROM sqlite_sequence WHERE name = 'usuarios'").fetchone()
+    contador = linha[0] if linha else 0
+    total = conexao.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0]
+    conexao.execute("DROP TABLE IF EXISTS usuarios_v12")
+    conexao.execute(_TABELA_USUARIOS_V12)
+    comuns = ", ".join(c for c in _COLUNAS_USUARIOS_V12 if c in colunas_antigas)
+    conexao.execute(f"INSERT INTO usuarios_v12 ({comuns}) SELECT {comuns} FROM usuarios")
+    if conexao.execute("SELECT COUNT(*) FROM usuarios_v12").fetchone()[0] != total:
+        raise MigracaoRecusada("Migração 12 parada, nada foi mudado: a cópia dos usuários não bateu.")
+    conexao.execute("DROP TABLE usuarios")
+    conexao.execute("ALTER TABLE usuarios_v12 RENAME TO usuarios")
+    maior = conexao.execute("SELECT COALESCE(MAX(id), 0) FROM usuarios").fetchone()[0]
+    contador = max(contador or 0, maior)
+    if contador:
+        atualizou = conexao.execute(
+            "UPDATE sqlite_sequence SET seq = ? WHERE name = 'usuarios'", (contador,)).rowcount
+        if not atualizou:
+            conexao.execute("INSERT INTO sqlite_sequence (name, seq) VALUES ('usuarios', ?)",
+                            (contador,))
+
+
+def _migracao_12(conexao) -> None:
+    colunas = [l[1] for l in conexao.execute("PRAGMA table_info(usuarios)")]
+    if "email" not in colunas:          # primeira vez: recria. Rodando de novo: não mexe.
+        _recriar_usuarios_v12(conexao, colunas)
+    conexao.execute(_TABELA_ACESSOS_V12)
+    conexao.execute(_INDICE_ACESSOS_V12)
+
+
+def _rodar_migracao_python(conexao, versao, passo) -> None:
+    """Migração em Python: tudo numa transação só. Erro no meio = nada muda."""
+    anterior = conexao.isolation_level
+    conexao.isolation_level = None          # aqui nós controlamos BEGIN e COMMIT
+    try:
+        conexao.execute("BEGIN")
+        try:
+            passo(conexao)
+            conexao.execute(f"PRAGMA user_version = {int(versao)}")
+            conexao.execute("COMMIT")
+        except BaseException:
+            if conexao.in_transaction:
+                conexao.execute("ROLLBACK")
+            raise
+    finally:
+        conexao.isolation_level = anterior
+
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 
@@ -617,8 +730,12 @@ def migrar() -> None:
         for versao in sorted(MIGRACOES):
             if versao <= atual:
                 continue
+            passo = MIGRACOES[versao]
+            if callable(passo):              # migração em Python (a partir da 12)
+                _rodar_migracao_python(conexao, versao, passo)
+                continue
             conexao.executescript(
-                "BEGIN;\n" + MIGRACOES[versao]
+                "BEGIN;\n" + passo
                 + f"\nPRAGMA user_version = {versao};\nCOMMIT;"
             )
     finally:
