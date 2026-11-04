@@ -110,3 +110,16 @@ def registrar(acao, loja_id, antes, depois, conexao=None, alvo=None, agora=None)
     finally:
         propria.close()
     return novo_id
+
+
+# S4b: Equipe, Canais e números de teste.
+ACOES_RELEVANTES.update({
+    "criar_pessoa_equipe": "app.usuarios.criar_usuario",
+    "alterar_pessoa_equipe": "app.usuarios.atualizar_usuario",
+    "desativar_pessoa_equipe": "app.usuarios.definir_ativo",
+    "reativar_pessoa_equipe": "app.usuarios.definir_ativo",
+    "cadastrar_canal": "app.canais.cadastrar_canal",
+    "desativar_canal": "app.canais.desativar_canal_da_loja",
+    "cadastrar_numero_teste": "app.estado_loja.cadastrar_numero_de_teste",
+    "desativar_numero_teste": "app.estado_loja.desativar_numero_de_teste",
+})

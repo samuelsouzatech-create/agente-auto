@@ -1,10 +1,9 @@
-"""Configuração por assunto (nível Loja), S4a da Fase 3.
+"""Configuração por assunto (nível Loja), S4a e S4b da Fase 3.
 
 Uma tela só, com os assuntos numa lateral. Identidade, Atendimento, Handoff,
-Financiamento e Plano e limites já funcionam (S4a). Equipe e Canais chegam
-no S4b; Estoque e Conhecimento no S4c: até lá, a tela aponta a tela antiga.
-A tela só mostra e chama: o mapa fica em app/config_tela.py e o Desfazer e a
-"última alteração" em app/config_assunto.py.
+Financiamento e Plano e limites (S4a); Equipe e Canais (S4b). Estoque e
+Conhecimento chegam no S4c: até lá, a tela aponta a tela antiga.
+A tela só mostra e chama app/.
 """
 import streamlit as st
 
@@ -15,9 +14,10 @@ from paginas.comum import (
     para_streamlit, usuario_atual,
 )
 from paginas.form_config import mostrar_assunto
+from paginas.operador.config_canais import mostrar_canais
+from paginas.operador.config_equipe import mostrar_equipe
 
-TELA_ANTIGA = {"Equipe": "Usuários", "Conhecimento": "Conhecimento",
-               "Estoque": "Estoque", "Canais": "Lojas e canais"}
+TELA_ANTIGA = {"Conhecimento": "Conhecimento", "Estoque": "Estoque"}
 
 exigir_operador()
 loja = carregar_loja(loja_atual())
@@ -34,6 +34,10 @@ with lateral:
 with conteudo:
     if assunto in ASSUNTOS_COM_CAMPOS:
         mostrar_assunto(loja, assunto, papel_atual(), usuario_atual())
+    elif assunto == "Equipe":
+        mostrar_equipe(loja)
+    elif assunto == "Canais":
+        mostrar_canais(loja)
     else:
         st.subheader(assunto)
         st.info(f"Este assunto chega em breve. Enquanto isso, use \"{TELA_ANTIGA[assunto]}\" "

@@ -270,3 +270,16 @@ def ler_eventos_de_sistema(limite: int = 100) -> list[dict]:
     return [_item(l["quando"], l["pessoa"], l["papel"], l["acao"], l["alvo"],
                   _json(l["antes"]), _json(l["depois"]), l["origem"], "registro_acoes")
             for l in linhas]
+
+
+# S4b
+ROTULOS.update({
+    "criar_pessoa_equipe": "Cadastrou pessoa na equipe",
+    "alterar_pessoa_equipe": "Mudou cadastro da equipe",
+    "desativar_pessoa_equipe": "Desativou pessoa da equipe",
+    "reativar_pessoa_equipe": "Reativou pessoa da equipe",
+    "cadastrar_canal": "Ligou canal",
+    "desativar_canal": "Desativou canal",
+    "cadastrar_numero_teste": "Cadastrou número de teste",
+    "desativar_numero_teste": "Desativou número de teste",
+})

@@ -358,3 +358,55 @@ def test_entradas_definem_o_ator_antes_da_pagina():
         texto = (RAIZ / nome).read_text(encoding="utf-8")
         assert "definir_ator_da_sessao()" in texto
         assert texto.index("definir_ator_da_sessao()") < texto.index("navegacao.run()")
+
+
+# ------------------------------------------------------------ S4b
+from app import canais as _canais, usuarios as _usuarios
+
+
+def _prep_pessoa():
+    return {"id": _usuarios.criar_usuario(1, "Ana", "vendedor")}
+
+
+def _prep_pessoa_desativada():
+    estado = _prep_pessoa()
+    _usuarios.definir_ativo(estado["id"], 1, False)
+    return estado
+
+
+def _prep_canal():
+    _canais.cadastrar_canal(1, "telegram", "777")
+    return {"id": _canais.listar_canais(1)[0]["id"]}
+
+
+def _prep_numero():
+    return {"id": estado_loja.cadastrar_numero_de_teste(1, "telegram", "123456", "Ana")}
+
+
+CENARIOS.update({
+    "criar_pessoa_equipe": (
+        _prep_nada, lambda s: _usuarios.criar_usuario(1, "Ana", "vendedor"),
+        "SELECT COUNT(*) FROM usuarios"),
+    "alterar_pessoa_equipe": (
+        _prep_pessoa, lambda s: _usuarios.atualizar_usuario(s["id"], 1, "Ana Maria", "vendedor"),
+        "SELECT COUNT(*) FROM usuarios WHERE nome = 'Ana Maria'"),
+    "desativar_pessoa_equipe": (
+        _prep_pessoa, lambda s: _usuarios.definir_ativo(s["id"], 1, False),
+        "SELECT COUNT(*) FROM usuarios WHERE ativo = 0"),
+    "reativar_pessoa_equipe": (
+        _prep_pessoa_desativada, lambda s: _usuarios.definir_ativo(s["id"], 1, True),
+        "SELECT COUNT(*) FROM usuarios WHERE ativo = 1"),
+    "cadastrar_canal": (
+        _prep_nada, lambda s: _canais.cadastrar_canal(1, "telegram", "777"),
+        "SELECT COUNT(*) FROM canais"),
+    "desativar_canal": (
+        _prep_canal, lambda s: _canais.desativar_canal_da_loja(1, s["id"]),
+        "SELECT COUNT(*) FROM canais WHERE ativo = 0"),
+    "cadastrar_numero_teste": (
+        _prep_nada,
+        lambda s: estado_loja.cadastrar_numero_de_teste(1, "telegram", "123456", "Ana"),
+        "SELECT COUNT(*) FROM numeros_de_teste"),
+    "desativar_numero_teste": (
+        _prep_numero, lambda s: estado_loja.desativar_numero_de_teste(1, s["id"]),
+        "SELECT COUNT(*) FROM numeros_de_teste WHERE ativo = 0"),
+})
