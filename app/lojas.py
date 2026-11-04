@@ -398,7 +398,7 @@ def pendentes(loja: Loja, papel: str | None = None) -> list[str]:
 
 
 def salvar_config(loja_id: int, mudancas: dict[str, Any], usuario: str,
-                  papel: str = "operador") -> Loja:
+                  papel: str = "operador", versao_esperada: int | None = None) -> Loja:
     """Valida TUDO antes de gravar (ou grava tudo, ou nada), registra cada
     mudança em config_historico e incrementa versao_config.
     Salvar o mesmo valor do padrão é válido e marca a chave como confirmada.
@@ -454,6 +454,12 @@ def salvar_config(loja_id: int, mudancas: dict[str, Any], usuario: str,
         ).fetchone()
         if linha is None:
             raise LojaNaoEncontrada(f"Loja {loja_id} não existe.")
+        # S4a: a tela manda a versão que ela MOSTROU. Se outra pessoa salvou
+        # depois disso, recusa em vez de passar por cima sem avisar.
+        # Sem versao_esperada (telas antigas, scripts), tudo continua igual.
+        if versao_esperada is not None and linha["versao_config"] != versao_esperada:
+            raise ConflitoDeVersao("Outra pessoa salvou esta configuração enquanto "
+                                   "você editava. Nada foi gravado.")
 
         custom = _ler_json(linha["config"], loja_id)
         efetiva_antes = _mesclar(PADROES, custom)
