@@ -41,6 +41,9 @@ ROTULOS = {
     "criar_acesso": "Criou acesso",
     "definir_email_acesso": "Mudou e-mail de acesso",
     "redefinir_senha": "Redefiniu senha",
+    "criar_loja": "Criou a loja",
+    "marcar_item_implantacao": "Marcou item da implantação",
+    "desmarcar_item_implantacao": "Desmarcou item da implantação",
     "mensagem_canal_sem_cadastro": "Mensagem de canal sem cadastro", "mensagem_recusada_loja_em_teste": "Mensagem recusada (loja em teste)",
 }
 

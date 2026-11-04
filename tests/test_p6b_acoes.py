@@ -14,7 +14,8 @@ from pathlib import Path
 import pytest
 
 from banco import conectar
-from app import autenticacao, bloqueios, estado_loja, handoff, importacao, pausa, reativacao, vendas
+from app import (autenticacao, bloqueios, estado_loja, handoff, implantacao, importacao,
+                 lojas_admin, pausa, reativacao, vendas)
 from app.ator import AtorInvalido, SemAtor, como, sem_ator
 from app.lojas import criar_loja, salvar_config
 from app.registro import ACOES_RELEVANTES, HISTORICO_PROPRIO
@@ -134,6 +135,12 @@ def _prep_usuario_antigo():
     return {"id": criar_usuario(1, "Ana", "vendedor")}
 
 
+def _prep_item_marcado():
+    """S2: item manual já marcado, para o cenário de desmarcar."""
+    implantacao.marcar_item(1, "teste_conversa")
+    return {}
+
+
 CENARIOS = {
     "pausar_envios": (
         _prep_nada,
@@ -207,6 +214,19 @@ CENARIOS = {
         _prep_usuario_antigo,
         lambda s: autenticacao.definir_senha(s["id"], SENHA_BOA),
         "SELECT COUNT(*) FROM usuarios WHERE senha_hash IS NOT NULL"),
+    # S2
+    "criar_loja": (
+        _prep_nada,
+        lambda s: lojas_admin.criar_loja("Loja Nova", "Caruaru", "America/Recife", "veiculos"),
+        "SELECT COUNT(*) FROM lojas"),
+    "marcar_item_implantacao": (
+        _prep_nada,
+        lambda s: implantacao.marcar_item(1, "teste_conversa"),
+        "SELECT COUNT(*) FROM checklist_implantacao"),
+    "desmarcar_item_implantacao": (
+        _prep_item_marcado,
+        lambda s: implantacao.desmarcar_item(1, "teste_conversa"),
+        "SELECT -COUNT(*) FROM checklist_implantacao"),   # desmarcar tira a linha
 }
 
 
@@ -231,7 +251,7 @@ def test_cada_acao_deixa_rastro_com_o_ator(acao):
     preparar, executar, efeito = CENARIOS[acao]
     estado = preparar()
     antes = _um(efeito)
-    executar(estado)
+    resultado = executar(estado)
     assert _um(efeito) > antes
     linhas = _registros(acao)
     if acao in HISTORICO_PROPRIO:
@@ -240,7 +260,10 @@ def test_cada_acao_deixa_rastro_com_o_ator(acao):
     assert len(linhas) == 1
     l = linhas[0]
     # A função recebeu "Ana"; quem fica no Registro é o ATOR ("Teste").
-    assert (l["pessoa"], l["papel"], l["origem"], l["loja_id"]) == ("Teste", "operador", "painel", 1)
+    # S2: criar_loja grava na loja que acabou de nascer; as outras, na loja 1.
+    loja_esperada = resultado if acao == "criar_loja" else 1
+    assert (l["pessoa"], l["papel"], l["origem"], l["loja_id"]) == (
+        "Teste", "operador", "painel", loja_esperada)
     assert l["quando"] and l["depois"]
 
 

@@ -713,7 +713,25 @@ def _rodar_migracao_python(conexao, versao, passo) -> None:
         conexao.isolation_level = anterior
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12}
+_MIGRACAO_13 = """
+-- S2 (Fase 3): itens MANUAIS do checklist de implantação (o operador marca,
+-- com autor e data). Os itens automáticos são conferidos na hora por
+-- app/implantacao.py e não ficam aqui. item sem CHECK de propósito: a lista
+-- mora no código. Pode rodar de novo (IF NOT EXISTS): testes antigos voltam
+-- o user_version e rodam tudo outra vez.
+CREATE TABLE IF NOT EXISTS checklist_implantacao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    item TEXT NOT NULL,
+    marcado_por TEXT NOT NULL,
+    marcado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    observacao TEXT,
+    UNIQUE (loja_id, item)
+);
+"""
+
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12, 13: _MIGRACAO_13}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

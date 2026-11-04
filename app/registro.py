@@ -50,6 +50,10 @@ ACOES_RELEVANTES = {
     "criar_acesso": "app.autenticacao.criar_usuario_com_login",
     "definir_email_acesso": "app.autenticacao.definir_email",
     "redefinir_senha": "app.autenticacao.definir_senha",
+    # S2
+    "criar_loja": "app.lojas_admin.criar_loja",
+    "marcar_item_implantacao": "app.implantacao.marcar_item",
+    "desmarcar_item_implantacao": "app.implantacao.desmarcar_item",
 }
 
 # Ações que já tinham histórico próprio (quem, quando, na mesma transação).

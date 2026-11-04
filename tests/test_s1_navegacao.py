@@ -112,9 +112,13 @@ def test_nao_existe_campo_seu_nome():
         assert "seu nome" not in (RAIZ / arquivo).read_text(encoding="utf-8").lower(), arquivo
 
 
-def test_nova_loja_nao_grava_nada():
+def test_nova_loja_cria_pela_camada_app():
+    """S2: a janela cria a loja só por app.lojas_admin.criar_loja (regra em app/)."""
+    fonte = (RAIZ / NOVA_LOJA).read_text(encoding="utf-8")
+    assert "criar_loja(" in fonte
     usados = _imports(RAIZ / NOVA_LOJA)
-    assert usados <= {"streamlit", "paginas.comum", "paginas.comum.exigir_operador"}, usados
+    assert "app.lojas_admin.criar_loja" in usados
+    assert not {n for n in usados if n.split(".")[0] in ("banco", "sqlite3")}, usados
 
 
 def test_entrada_do_operador():
