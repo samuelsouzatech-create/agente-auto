@@ -15,6 +15,7 @@ import asyncio
 from app.credenciais import SemCredencial, credencial_whatsapp, token_telegram
 from app.handoff import estado_do_handoff, quem_assumiu
 from app.mensagens import salvar_mensagem
+from app.permissoes import exigir_pode_agir
 
 CANAIS_COM_ENVIO = ("whatsapp", "telegram")
 LIMITE_CARACTERES = 4000
@@ -45,6 +46,7 @@ async def _despachar(loja_id: int, canal: str, lead_id: str, texto: str) -> bool
 
 
 def enviar_pelo_painel(loja_id: int, canal: str, lead_id: str, texto: str, vendedor: str) -> None:
+    exigir_pode_agir(loja_id)        # S5: loja No ar, operador só vê
     texto = (texto or "").strip()
     if not texto:
         raise EnvioRecusado("Mensagem vazia.")

@@ -6,6 +6,7 @@ import streamlit as st
 from app import bloqueios
 from app import painel_envios as pe
 from app import pausa
+from app.permissoes import AcaoNaoPermitida
 from app.apresentacao import horario_para_tela, nomes_dos_clientes
 from app.lojas import carregar_loja, modulo_ativo
 from app.relogio import agora_utc
@@ -131,7 +132,7 @@ else:
                                        usuario_atual())
                 else:
                     bloqueios.bloquear(loja.id, item["lead_id"], "todos", None, usuario_atual())
-            except bloqueios.BloqueioInvalido as erro:
+            except (bloqueios.BloqueioInvalido, AcaoNaoPermitida) as erro:
                 avisar(str(erro), "error")
             else:
                 avisar("Marcado. Essa mensagem não sai até alguém desfazer." if nao_enviar
