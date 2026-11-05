@@ -123,3 +123,13 @@ ACOES_RELEVANTES.update({
     "cadastrar_numero_teste": "app.estado_loja.cadastrar_numero_de_teste",
     "desativar_numero_teste": "app.estado_loja.desativar_numero_de_teste",
 })
+
+
+# S4c: Estoque e Conhecimento.
+ACOES_RELEVANTES.update({
+    "cadastrar_carro": "app.estoque.adicionar_carro",
+    "alterar_carro": "app.estoque.atualizar_carro",
+    "criar_documento": "app.conhecimento.gravar",
+    "alterar_documento": "app.conhecimento.gravar",
+    "apagar_documento": "app.conhecimento.apagar_documento",
+})

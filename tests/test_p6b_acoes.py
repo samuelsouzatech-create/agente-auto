@@ -410,3 +410,53 @@ CENARIOS.update({
         _prep_numero, lambda s: estado_loja.desativar_numero_de_teste(1, s["id"]),
         "SELECT COUNT(*) FROM numeros_de_teste WHERE ativo = 0"),
 })
+
+
+# ------------------------------------------------------------ S4c: Estoque e Conhecimento
+from app import conhecimento as _conhecimento, estoque as _estoque
+
+
+class _IndiceFalsoS4c:
+    def get(self, where):
+        return {"ids": []}
+
+    def delete(self, ids):
+        pass
+
+    def add_texts(self, texts, metadatas, ids):
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _indice_falso_s4c(monkeypatch):
+    monkeypatch.setattr(_conhecimento, "_indice", lambda: _IndiceFalsoS4c())
+
+
+def _prep_documento():
+    return {"doc": _conhecimento.salvar_documento(1, "Troca", "Aceitamos troca.")}
+
+
+CENARIOS.update({
+    "cadastrar_carro": (
+        _prep_nada,
+        lambda s: _estoque.adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual",
+                                           62000.0, loja_id=1),
+        "SELECT COUNT(*) FROM estoque"),
+    "alterar_carro": (
+        _prep_carro,
+        lambda s: _estoque.atualizar_carro(s["carro"], "Hyundai", "HB20", 2020, 40000, "Prata",
+                                           "Manual", 59000.0, "disponivel", loja_id=1),
+        "SELECT COUNT(*) FROM estoque WHERE preco = 59000"),
+    "criar_documento": (
+        _prep_nada,
+        lambda s: _conhecimento.salvar_documento(1, "Troca", "Aceitamos troca."),
+        "SELECT COUNT(*) FROM conhecimento"),
+    "alterar_documento": (
+        _prep_documento,
+        lambda s: _conhecimento.salvar_documento(1, "Troca", "Não aceitamos.", s["doc"]),
+        "SELECT COUNT(*) FROM conhecimento WHERE texto = 'Não aceitamos.'"),
+    "apagar_documento": (
+        _prep_documento,
+        lambda s: _conhecimento.apagar_documento(1, s["doc"]),
+        "SELECT -COUNT(*) FROM conhecimento"),
+})

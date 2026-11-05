@@ -95,6 +95,10 @@ def _por_acao(item: dict) -> str:
     from app.equipe_canais import ACOES_S4B, detalhe_do_registro  # evita import circular
     if acao in ACOES_S4B:
         return detalhe_do_registro(acao, antes, depois)
+    # S4c: Estoque e Conhecimento.
+    from app.estoque_conhecimento import ACOES_S4C, detalhe_do_registro as detalhe_s4c
+    if acao in ACOES_S4C:
+        return detalhe_s4c(acao, antes, depois)
     if acao == ACAO_DA_CONFIG:
         alvo = str(item["alvo"] or "")
         chave = alvo[len("config:"):] if alvo.startswith("config:") else alvo
