@@ -171,6 +171,10 @@ def cadastrar_numero_de_teste(loja_id, tipo_de_canal: str, id_externo, nome: str
         novo_id = conexao.execute(
             "SELECT id FROM numeros_de_teste WHERE loja_id = ? AND tipo_de_canal = ? "
             "AND id_externo = ?", (loja_id, tipo_de_canal, numero)).fetchone()["id"]
+        from app.registro import registrar      # aqui dentro: evita import circular
+        registrar("cadastrar_numero_teste", loja_id, None,
+                  {"canal": tipo_de_canal, "nome": nome_limpo or None},
+                  conexao=conexao, alvo=f"numero_teste:{novo_id}")
         conexao.commit()
     finally:
         conexao.close()
@@ -186,8 +190,16 @@ def desativar_numero_de_teste(loja_id, numero_id: int) -> bool:
         cursor = conexao.execute(
             "UPDATE numeros_de_teste SET ativo = 0 WHERE id = ? AND loja_id = ? AND ativo = 1",
             (numero_id, loja_id))
+        if cursor.rowcount == 0:
+            return False
+        linha = conexao.execute("SELECT tipo_de_canal, nome FROM numeros_de_teste WHERE id = ?",
+                                (numero_id,)).fetchone()
+        from app.registro import registrar      # aqui dentro: evita import circular
+        registrar("desativar_numero_teste", loja_id, {"ativo": True},
+                  {"ativo": False, "canal": linha["tipo_de_canal"], "nome": linha["nome"]},
+                  conexao=conexao, alvo=f"numero_teste:{numero_id}")
         conexao.commit()
-        return cursor.rowcount > 0
+        return True
     finally:
         conexao.close()
 

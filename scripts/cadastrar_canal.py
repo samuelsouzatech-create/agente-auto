@@ -5,14 +5,18 @@ Exemplos (na raiz do projeto):
   python scripts/cadastrar_canal.py telegram auto 2        # bot do .env -> loja 2
   python scripts/cadastrar_canal.py whatsapp auto 1        # número do .env -> loja 1
   python scripts/cadastrar_canal.py whatsapp 1234567890 2  # phone_number_id -> loja 2
+
+S4b: cadastrar vai para o Registro. Quem age é o OPERADOR_NOME do .env.
 """
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from app.ator import como
 from app.config import TELEGRAM_TOKEN, WHATSAPP_PHONE_NUMBER_ID
 from app.canais import cadastrar_canal, listar_canais, id_bot_telegram
+from app.identidade import SemNomeOperador, nome_do_operador
 
 AUTOMATICOS = {
     "telegram": (lambda: id_bot_telegram(TELEGRAM_TOKEN), "TELEGRAM_TOKEN"),
@@ -46,7 +50,13 @@ def main(argumentos):
             print(f"Não achei {variavel} no .env.")
             return
 
-    cadastrar_canal(loja_id, tipo, id_externo, token_ref)
+    try:
+        operador = nome_do_operador()
+    except SemNomeOperador as erro:
+        print(erro)
+        return
+    with como(operador, "operador", "painel"):
+        cadastrar_canal(loja_id, tipo, id_externo, token_ref)
     print(f"Canal {tipo} {id_externo} ligado à loja {loja_id}.")
 
 

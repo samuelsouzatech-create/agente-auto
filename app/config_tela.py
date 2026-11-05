@@ -6,6 +6,10 @@ Separado do Streamlit para dar para testar a conversão
 Regras (testes cobram):
   - toda chave de EDITAVEIS (app/lojas.py) tem um Campo aqui;
   - os Campos com dono="operador" são exatamente CHAVES_DO_OPERADOR.
+
+S4a (Fase 3): a Configuração do operador é organizada por ASSUNTO
+(ASSUNTOS, GRUPOS_DO_ASSUNTO, campos_do_assunto). O DONO do campo continua
+aqui e continua valendo no salvar_config; ele só deixa de organizar a tela.
 """
 from __future__ import annotations
 
@@ -69,7 +73,7 @@ CAMPOS: tuple[Campo, ...] = (
     Campo("atendimento.dias_humano", "Dias do atendimento humano", "dias", "Atendimento"),
     Campo("atendimento.debounce_s", "Espera para juntar mensagens seguidas (segundos)",
           "decimal", "Atendimento",
-          "Medição. Hoje o código ainda usa 8 s fixos; este valor passa a ser lido mais adiante."),
+          "Medição. Por enquanto a espera usada é de 8 s; este valor passa a valer mais adiante."),
     Campo("atendimento.aguardando_vendedor", "O que o agente faz enquanto espera o vendedor",
           "opcao", "Atendimento",
             "Vale na próxima mensagem do cliente que estiver esperando o vendedor.",
@@ -83,7 +87,7 @@ CAMPOS: tuple[Campo, ...] = (
     Campo("envio_real.reativacao", "Reativação da base: envio real", "sim_nao", "Envios",
           "Desligado: só simula e mostra na tela o que sairia.", dono="operador"),
     Campo("handoff.reaviso_min", "Minutos até o re-aviso ao vendedor", "inteiro", "Handoff",
-          "Já define a cor amarela da fila. O re-aviso automático chega no Bloco 7B."),
+          "Já define a cor amarela da fila."),
     Campo("handoff.gestor_min", "Minutos até avisar o gestor", "inteiro", "Handoff",
           "Já define a cor vermelha da fila."),
     Campo("financiamento.taxa_mensal", "Taxa da simulação", "percentual", "Financiamento",
@@ -144,6 +148,95 @@ def grupos_do(dono: str) -> list[str]:
     """Só os grupos que têm ao menos um campo daquele dono (sem aba vazia)."""
     presentes = {c.grupo for c in campos_do(dono)}
     return [g for g in GRUPOS if g in presentes]
+
+
+# ---------------------------------------------------------------------
+# S4a (Fase 3): Configuração por ASSUNTO, no painel do operador.
+# Mapa: assunto -> grupos inteiros, mais alguns campos avulsos. Os avulsos
+# existem porque a regra do Plano Mestre separa campos DENTRO do mesmo
+# grupo: limites vão para "Plano e limites"; intervalos e réguas vão para
+# "Mensagens automáticas" (S6). O que ainda não tem assunto fica "A decidir"
+# (pergunta ao analista) e continua nas telas antigas.
+# ---------------------------------------------------------------------
+ASSUNTOS = ("Identidade", "Atendimento", "Equipe", "Handoff", "Financiamento",
+            "Conhecimento", "Estoque", "Canais", "Plano e limites")
+PLANO_E_LIMITES = "Plano e limites"
+MENSAGENS_AUTOMATICAS = "Mensagens automáticas"
+A_DECIDIR = "A decidir"
+
+GRUPOS_DO_ASSUNTO = {
+    "Identidade": ("Identidade",),
+    "Atendimento": ("Atendimento",),
+    "Handoff": ("Handoff",),
+    "Financiamento": ("Financiamento",),
+    PLANO_E_LIMITES: ("Módulos", "Custos"),
+}
+CAMPOS_AVULSOS_DO_ASSUNTO = {
+    PLANO_E_LIMITES: ("remarketing.limite_mensal", "instagram.limite_private_replies_h"),
+}
+GRUPOS_FORA_DA_CONFIGURACAO = {
+    "Envios": MENSAGENS_AUTOMATICAS,
+    "Remarketing": MENSAGENS_AUTOMATICAS,
+    "Pós-venda": MENSAGENS_AUTOMATICAS,
+    "Instagram": A_DECIDIR,
+    "Dados": A_DECIDIR,
+}
+CAMPOS_A_DECIDIR = ("remarketing.carencia_dias",)
+
+# Assuntos que já têm campos no S4a (os outros chegam no S4b e no S4c).
+ASSUNTOS_COM_CAMPOS = tuple(a for a in ASSUNTOS if a in GRUPOS_DO_ASSUNTO)
+
+NOTAS_ASSUNTO = {
+    "Identidade": "Como o assistente se apresenta e fala com os clientes.",
+    "Atendimento": "Quando a equipe atende e o que o assistente faz enquanto o cliente "
+                   "espera o vendedor.",
+    "Handoff": "Quanto tempo esperar antes de avisar o vendedor de novo e antes de chamar "
+               "o gerente.",
+    "Financiamento": "Taxa usada nas simulações de financiamento que o assistente faz.",
+    PLANO_E_LIMITES: "O que a loja contratou e os limites de uso. Só o operador altera.",
+}
+
+_CONFIRMAR_CLIENTE = "O cliente confirmou estes valores (tira a marca 'a confirmar')"
+_CONFIRMAR_CONTRATO = "Confirmado no contrato (tira a marca 'a confirmar')"
+
+
+def _exigir_assunto(assunto: str) -> str:
+    if assunto not in ASSUNTOS:
+        raise ValueError(f"assunto '{assunto}' não existe")
+    return assunto
+
+
+def destino_do_campo(chave: str) -> str:
+    """Para onde o campo vai: um assunto da Configuração, 'Mensagens
+    automáticas' (S6) ou 'A decidir'. Chave desconhecida: KeyError."""
+    c = campo(chave)
+    for assunto, chaves in CAMPOS_AVULSOS_DO_ASSUNTO.items():
+        if chave in chaves:
+            return assunto
+    if chave in CAMPOS_A_DECIDIR:
+        return A_DECIDIR
+    for assunto, grupos in GRUPOS_DO_ASSUNTO.items():
+        if c.grupo in grupos:
+            return assunto
+    return GRUPOS_FORA_DA_CONFIGURACAO[c.grupo]
+
+
+def grupos_do_assunto(assunto: str) -> list[str]:
+    """Grupos inteiros que formam o assunto (na ordem de GRUPOS)."""
+    grupos = GRUPOS_DO_ASSUNTO.get(_exigir_assunto(assunto), ())
+    return [g for g in GRUPOS if g in grupos]
+
+
+def campos_do_assunto(assunto: str) -> list[Campo]:
+    """Campos de um assunto, SEM filtrar por dono (na ordem de CAMPOS).
+    Assunto que ainda não tem campos (Equipe, Canais...) devolve lista vazia."""
+    _exigir_assunto(assunto)
+    return [c for c in CAMPOS if destino_do_campo(c.chave) == assunto]
+
+
+def texto_confirmar(assunto: str) -> str:
+    _exigir_assunto(assunto)
+    return _CONFIRMAR_CONTRATO if assunto == PLANO_E_LIMITES else _CONFIRMAR_CLIENTE
 
 
 def padrao(c: Campo):

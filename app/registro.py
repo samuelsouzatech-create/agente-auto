@@ -50,6 +50,10 @@ ACOES_RELEVANTES = {
     "criar_acesso": "app.autenticacao.criar_usuario_com_login",
     "definir_email_acesso": "app.autenticacao.definir_email",
     "redefinir_senha": "app.autenticacao.definir_senha",
+    # S2
+    "criar_loja": "app.lojas_admin.criar_loja",
+    "marcar_item_implantacao": "app.implantacao.marcar_item",
+    "desmarcar_item_implantacao": "app.implantacao.desmarcar_item",
 }
 
 # Ações que já tinham histórico próprio (quem, quando, na mesma transação).
@@ -106,3 +110,16 @@ def registrar(acao, loja_id, antes, depois, conexao=None, alvo=None, agora=None)
     finally:
         propria.close()
     return novo_id
+
+
+# S4b: Equipe, Canais e números de teste.
+ACOES_RELEVANTES.update({
+    "criar_pessoa_equipe": "app.usuarios.criar_usuario",
+    "alterar_pessoa_equipe": "app.usuarios.atualizar_usuario",
+    "desativar_pessoa_equipe": "app.usuarios.definir_ativo",
+    "reativar_pessoa_equipe": "app.usuarios.definir_ativo",
+    "cadastrar_canal": "app.canais.cadastrar_canal",
+    "desativar_canal": "app.canais.desativar_canal_da_loja",
+    "cadastrar_numero_teste": "app.estado_loja.cadastrar_numero_de_teste",
+    "desativar_numero_teste": "app.estado_loja.desativar_numero_de_teste",
+})

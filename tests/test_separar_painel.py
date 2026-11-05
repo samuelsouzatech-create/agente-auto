@@ -28,7 +28,7 @@ from tools import acionar_handoff
 
 RAIZ = Path(__file__).resolve().parent.parent
 PROIBIDOS_NO_CLIENTE = ("app.custos", "app.precos", "app.lojas_admin", "app.canais",
-                        "paginas.operador_sessao")
+                        "paginas.operador_sessao", "paginas.operador")
 
 
 @pytest.fixture
