@@ -133,3 +133,11 @@ ACOES_RELEVANTES.update({
     "alterar_documento": "app.conhecimento.gravar",
     "apagar_documento": "app.conhecimento.apagar_documento",
 })
+
+
+# S8: Custos e preços. Sem loja: um preço vale para todas as lojas.
+ACOES_RELEVANTES.update({
+    "cadastrar_preco": "app.custos_precos.cadastrar_preco",
+    "apagar_preco": "app.custos_precos.apagar_preco",
+    "recalcular_custos": "app.custos_precos.recalcular_periodo",
+})

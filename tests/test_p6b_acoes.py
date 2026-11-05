@@ -261,7 +261,11 @@ def test_cada_acao_deixa_rastro_com_o_ator(acao):
     l = linhas[0]
     # A função recebeu "Ana"; quem fica no Registro é o ATOR ("Teste").
     # S2: criar_loja grava na loja que acabou de nascer; as outras, na loja 1.
-    loja_esperada = resultado if acao == "criar_loja" else 1
+    # S8: preço e recálculo valem para todas as lojas: Registro sem loja.
+    if acao in ("cadastrar_preco", "apagar_preco", "recalcular_custos"):
+        loja_esperada = None
+    else:
+        loja_esperada = resultado if acao == "criar_loja" else 1
     assert (l["pessoa"], l["papel"], l["origem"], l["loja_id"]) == (
         "Teste", "operador", "painel", loja_esperada)
     assert l["quando"] and l["depois"]
@@ -459,4 +463,36 @@ CENARIOS.update({
         _prep_documento,
         lambda s: _conhecimento.apagar_documento(1, s["doc"]),
         "SELECT -COUNT(*) FROM conhecimento"),
+})
+
+
+# ------------------------------------------------------------ S8: Custos e preços
+from app import custos as _custos, custos_precos as _custos_precos, precos as _precos
+
+
+def _prep_preco():
+    _precos.cadastrar_preco("ia.entrada", 0.10, "2026-01-01", "USD")
+    return {"id": _precos.listar_precos()[0]["id"]}
+
+
+def _prep_custo_sem_preco():
+    _custos.registrar_uso(1, LEAD, "simulador", _custos.Uso(1000, 100), agora=AGORA)
+    _precos.cadastrar_preco("ia.entrada", 0.10, "2026-01-01", "USD")
+    _precos.cadastrar_preco("ia.saida", 0.40, "2026-01-01", "USD")
+    _precos.cadastrar_preco("cambio.usd_brl", 5.0, "2026-01-01")
+    return {}
+
+
+CENARIOS.update({
+    "cadastrar_preco": (
+        _prep_nada,
+        lambda s: _custos_precos.cadastrar_preco("ia.saida", 0.40, "2026-01-01", "USD"),
+        "SELECT COUNT(*) FROM precos"),
+    "apagar_preco": (
+        _prep_preco, lambda s: _custos_precos.apagar_preco(s["id"]),
+        "SELECT -COUNT(*) FROM precos"),
+    "recalcular_custos": (
+        _prep_custo_sem_preco,
+        lambda s: _custos_precos.recalcular_periodo(date(2026, 10, 1), date(2026, 10, 31)),
+        "SELECT COUNT(*) FROM uso_custos WHERE custo_completo = 1"),
 })

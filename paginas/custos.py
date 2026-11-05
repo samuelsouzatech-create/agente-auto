@@ -29,7 +29,7 @@ faltam = precos.faltando(hoje)
 if faltam:
     nomes = ", ".join(precos.ITENS[i]["rotulo"] for i in faltam)
     st.warning(f"⚠️ Preço não cadastrado: {nomes}. Os tokens já estão sendo medidos; "
-               "o custo em R$ aparece quando você cadastrar os preços (lá embaixo).")
+               "o custo em R$ aparece quando você cadastrar os preços na tela Custos e preços.")
 
 # ------------------------------------------------------------- mês
 meses, ano, mes = [], hoje.year, hoje.month
@@ -114,6 +114,9 @@ with st.expander("🧾 Últimas execuções desta loja"):
 
 # ------------------------------------------------------------- preços
 st.divider()
+st.info("Os preços agora ficam na tela “Custos e preços”, no nível Geral. "
+        "Lá também ficam o recálculo e o histórico de cada preço.")
+st.stop()   # S8: preços e recálculo saíram daqui (o S10 apaga esta tela)
 st.subheader("Preços")
 st.caption("Copie da página oficial de preços do fornecedor de IA e da tabela oficial da Meta. "
            "Preço de IA é por 1 milhão de tokens. Mudou o preço ou trocou de modelo de IA? "

@@ -293,3 +293,11 @@ ROTULOS.update({
     "alterar_documento": "Mudou texto do conhecimento",
     "apagar_documento": "Apagou texto do conhecimento",
 })
+
+
+# S8: Custos e preços.
+ROTULOS.update({
+    "cadastrar_preco": "Cadastrou preço",
+    "apagar_preco": "Apagou preço",
+    "recalcular_custos": "Recalculou custos",
+})
