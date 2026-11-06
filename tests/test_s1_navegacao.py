@@ -70,9 +70,10 @@ def test_enderecos_nao_se_repetem():
     assert len(enderecos) == len(set(enderecos))
 
 
-def test_tela_inicial_e_o_resumo():
-    assert PAGINA_INICIAL == "paginas/operador/resumo.py"
-    assert PAGINA_INICIAL in arquivos(LOJA)
+def test_tela_inicial_e_a_visao_geral():
+    # S9 (decisão 11A): a tela inicial passou do Resumo para a Visão geral.
+    assert PAGINA_INICIAL == "paginas/operador/visao_geral.py"
+    assert PAGINA_INICIAL in arquivos(GERAL)
 
 
 def test_montar_operador_tem_geral_loja_e_antigas(monkeypatch):

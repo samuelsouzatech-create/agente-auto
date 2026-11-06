@@ -60,8 +60,8 @@ LOJA = {
 
 GRUPO_ANTIGAS = "Antigas (serão removidas)"
 
-# Tela que abre primeiro. Fica no Resumo até a Visão geral ganhar conteúdo (S9).
-PAGINA_INICIAL = "paginas/operador/resumo.py"
+# Tela que abre primeiro: a Visão geral, desde o S9 (decisão 11A).
+PAGINA_INICIAL = "paginas/operador/visao_geral.py"
 
 
 def arquivos(grupos: dict) -> list[str]:
