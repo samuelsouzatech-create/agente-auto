@@ -199,6 +199,8 @@ def test_handoff_nao_promete_em_instantes():
 
 
 def test_tela_tem_o_botao_e_compila():
-    fonte = (RAIZ / "paginas/importar_base.py").read_text(encoding="utf-8")
+    # S10b: o botão foi para Mensagens automáticas, aba "Base da loja".
+    tela = "paginas/operador/mensagens_automaticas.py"
+    fonte = (RAIZ / tela).read_text(encoding="utf-8")
     assert "agendar_base" in fonte
-    py_compile.compile(str(RAIZ / "paginas/importar_base.py"), doraise=True)
+    py_compile.compile(str(RAIZ / tela), doraise=True)

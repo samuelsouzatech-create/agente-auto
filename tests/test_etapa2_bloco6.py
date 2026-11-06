@@ -19,7 +19,7 @@ from app.importacao import (
 )
 from app.lojas import criar_loja
 from app.segmentos import modulo_do_segmento
-from paginas.menu import OPERADOR, arquivos
+from paginas.menu import LOJA, arquivos
 
 RAIZ = Path(__file__).resolve().parent.parent
 HOJE = date(2026, 10, 30)
@@ -227,7 +227,9 @@ def test_venda_e_compra_importada_iguais_aparecem_uma_vez():
 # ------------------------------------------------------------ tela
 
 def test_tela_de_importar_e_do_operador():
-    assert "paginas/importar_base.py" in arquivos(OPERADOR)
-    fonte = (RAIZ / "paginas/importar_base.py").read_text(encoding="utf-8")
+    # S10b: a importação fica em Base de clientes (painel do operador, nível Loja).
+    tela = "paginas/operador/base_clientes.py"
+    assert tela in arquivos(LOJA)
+    fonte = (RAIZ / tela).read_text(encoding="utf-8")
     assert "exigir_operador()" in fonte
-    py_compile.compile(str(RAIZ / "paginas/importar_base.py"), doraise=True)
+    py_compile.compile(str(RAIZ / tela), doraise=True)

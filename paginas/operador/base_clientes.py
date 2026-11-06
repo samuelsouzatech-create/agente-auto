@@ -29,6 +29,7 @@ from paginas.comum import (
     avisar, definir_ator_da_sessao, exigir_operador, loja_atual, mostrar_aviso, para_streamlit,
     usuario_atual,
 )
+from paginas.operador.paginacao import mostrar_paginacao
 
 AVISO_NADA_ENVIADO = ("Nada é enviado a ninguém nesta tela. A importação apenas registra os "
                       "contatos e as compras anteriores na base da loja.")
@@ -161,7 +162,7 @@ else:
         "Autorização": "Declarada" if i["consentimento"] else "Não declarada",
         "Situação": (f"Desfeita ({horario_para_tela(loja, i['desfeita_em'])})"
                      if i["desfeita_em"] else "Valendo"),
-    } for i in lista], hide_index=True)
+    } for i in mostrar_paginacao(lista, f"s7_importacoes_{loja.id}")], hide_index=True)
     st.caption("Mostrando as importações mais recentes.")
 
     ativas = [i for i in lista if not i["desfeita_em"]]
@@ -188,5 +189,4 @@ else:
                 st.session_state["_s7_desfeitas"] = desfeitas + 1
             st.rerun()
 
-st.caption("Pós-venda da base e reativação continuam em “Importar base”, no grupo "
-           "“Antigas (serão removidas)”.")
+st.caption("Pós-venda da base e reativação  ficam em Mensagens automáticas › aba “Base da loja”.")

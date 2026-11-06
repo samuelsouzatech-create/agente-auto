@@ -451,8 +451,8 @@ def test_tela_nao_faz_sql_nem_conta():
     assert "exigir_operador()" in fonte and "definir_ator_da_sessao()" in fonte
 
 
-def test_tela_antiga_continua_e_os_precos_sairam_dela():
-    assert "paginas/custos.py" in arquivos(OPERADOR)
+def test_tela_antiga_saiu_e_a_nova_ficou():
+    # S10b: a tela antiga paginas/custos.py saiu; fica só Custos e preços.
+    assert "paginas/custos.py" not in arquivos(OPERADOR)
+    assert not (RAIZ / "paginas" / "custos.py").exists()
     assert "paginas/operador/custos_precos.py" in arquivos(GERAL)
-    fonte = (RAIZ / "paginas" / "custos.py").read_text(encoding="utf-8")
-    assert "st.stop()" in fonte and "Custos e preços" in fonte

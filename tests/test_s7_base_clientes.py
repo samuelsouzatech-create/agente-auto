@@ -329,6 +329,8 @@ def test_tela_so_chama_a_importacao_que_ja_existe():
     assert "exigir_operador()" in fonte and "definir_ator_da_sessao()" in fonte
 
 
-def test_tela_antiga_continua_no_menu():
-    assert "paginas/importar_base.py" in arquivos(OPERADOR)
+def test_tela_antiga_saiu_e_a_nova_ficou():
+    # S10b: "Importar base" saiu; pós-venda e reativação estão em Mensagens automáticas.
+    assert "paginas/importar_base.py" not in arquivos(OPERADOR)
+    assert not (RAIZ / "paginas" / "importar_base.py").exists()
     assert "paginas/operador/base_clientes.py" in arquivos(LOJA)

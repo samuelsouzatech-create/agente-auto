@@ -31,6 +31,8 @@ from paginas.comum import (
     avisar, definir_ator_da_sessao, exigir_operador, loja_atual, mostrar_aviso, para_streamlit,
     usuario_atual,
 )
+from paginas.operador.estilo import mostrar_selos
+from paginas.operador.paginacao import mostrar_paginacao
 
 exigir_operador()
 loja = carregar_loja(loja_atual())
@@ -232,7 +234,7 @@ with aba_leads:
             "Cliente": l["nome"], "Carro": l["carro"] or "—", "Origem": l["origem"],
             "Último contato": l["ultimo_contato"], "Etapa": l["etapa_rotulo"],
             f"Próximo passo do {agente}": l["proximo_passo"],
-        } for l in leads], hide_index=True)
+        } for l in mostrar_paginacao(leads, f"vc_leads_{loja.id}")], hide_index=True)
 
 # ------------------------------------------------------------ Resultado
 with aba_resultado:
@@ -277,6 +279,7 @@ with aba_acompanhamento:
     if not itens:
         st.info("Ninguém na fila agora.")
     else:
+        mostrar_selos([i["tipo"] for i in itens])
         nomes_fila = nomes_dos_clientes(loja.id, [i["lead_id"] for i in itens])
         st.dataframe([{
             "Quando": "—" if i.get("bloqueio") else (

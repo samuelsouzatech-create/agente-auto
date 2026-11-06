@@ -3,11 +3,15 @@ import streamlit as st
 
 from app.lojas_admin import listar_lojas
 
+# S10b: texto para quem abre o painel pela primeira vez (sem comando técnico).
+SEM_LOJA = ("Nenhuma loja cadastrada ainda. Clique em “➕ Nova loja”, aqui na lateral, "
+            "para criar a primeira.")
+
 
 def escolher_loja():
     lojas = listar_lojas()
     if not lojas:
-        st.error('Nenhuma loja cadastrada. Rode: python -c "import banco; banco.criar_tabelas()"')
+        st.info(SEM_LOJA)
         st.stop()
     rotulos, vistos = {}, {}
     for l in lojas:

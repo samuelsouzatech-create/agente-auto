@@ -199,7 +199,7 @@ def banco_v12(monkeypatch, tmp_path):
 
 def test_sobe_da_v12_sem_perder_loja(banco_v12):
     banco.migrar()
-    assert _um("PRAGMA user_version") == 13
+    assert _um("PRAGMA user_version") == banco.VERSAO_SCHEMA     # S10b: vai até a 14
     assert _um("SELECT COUNT(*) FROM lojas WHERE nome = 'Loja Antiga'") == 1
     assert _um("SELECT COUNT(*) FROM checklist_implantacao") == 0
 

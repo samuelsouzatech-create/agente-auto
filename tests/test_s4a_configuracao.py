@@ -319,8 +319,5 @@ def test_telas_antigas_continuam_abrindo(nome_operador):
     cliente.session_state["_loja_cliente"] = 1
     cliente.run()
     assert not cliente.exception, cliente.exception
-    plano = AppTest.from_file(str(RAIZ / "paginas" / "plano.py"), default_timeout=30)
-    plano.session_state["_papel"] = "operador"
-    plano.session_state["loja_id"] = 1
-    plano.run()
-    assert not plano.exception, plano.exception
+    # S10b: a tela antiga "Plano e limites" saiu (o assunto Plano e limites ficou).
+    assert not (RAIZ / "paginas" / "plano.py").exists()

@@ -238,7 +238,7 @@ def test_renomear_loja():
 ARQUIVOS_DO_PAINEL = [
     "painel.py", "paginas/comum.py", "paginas/handoff.py", "paginas/estoque.py",
     "paginas/resultados.py", "paginas/configuracao.py", "paginas/conhecimento.py",
-    "paginas/usuarios.py", "paginas/lojas_canais.py",
+    "paginas/usuarios.py",
 ]
 
 
