@@ -313,6 +313,19 @@ with aba_acompanhamento:
                 "O que": bloqueios.descricao(b), "Quem marcou": b["criado_por"],
                 "Quando": horario_para_tela(loja, b["criado_em"]) if b["criado_em"] else "",
             } for b in ativos], hide_index=True)
+            if pode_agir:
+                # S10a: o Desfazer vinha da tela antiga "Retomadas e pós-venda".
+                def _rotulo_marcado(n):
+                    b = ativos[n]
+                    return f"{nomes_b.get(str(b['lead_id']), '—')} · {bloqueios.descricao(b)}"
+
+                qual = st.selectbox("Desfazer qual?", range(len(ativos)),
+                                    format_func=_rotulo_marcado, key="vc_desfazer_qual")
+                if st.button("↩️ Desfazer", key="vc_desfazer"):
+                    _agir(lambda: bloqueios.desfazer(loja.id, ativos[qual]["id"], operador),
+                          lambda feito: ("Desfeito. Se ainda valer, a mensagem sai na "
+                                         "próxima rodada." if feito
+                                         else "Isso já tinha sido desfeito."))
 
     pausas = pausa.historico(loja.id)
     if pausas:
