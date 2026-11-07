@@ -731,7 +731,25 @@ CREATE TABLE IF NOT EXISTS checklist_implantacao (
 """
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12, 13: _MIGRACAO_13}
+_MIGRACAO_14 = """
+-- S10 (Fase 3): índices para as telas do operador. Só cria índice: nenhum
+-- dado muda e nada é apagado. IF NOT EXISTS: pode rodar de novo (testes
+-- antigos voltam o user_version). Número 14 (decisão 2A do analista): as
+-- v14 e v15 da branch painel-rotas passam a ser 15 e 16.
+-- Regra: loja_id na frente. remarketing_envios, leads e uso_custos já têm
+-- índice por loja (migrações 1 e 5): nada novo neles.
+CREATE INDEX IF NOT EXISTS idx_mensagens_loja_direcao ON mensagens(loja_id, direcao, criado_em, lead_id);
+CREATE INDEX IF NOT EXISTS idx_handoffs_loja_estado ON handoffs(loja_id, estado, criado_em);
+-- As duas exceções (decisão 3A): consultas da Visão geral que olham TODAS
+-- as lojas, só no painel do operador. Valem porque o EXPLAIN QUERY PLAN
+-- mostra que são usadas (tests/test_s10b_limpeza.py). O painel do cliente
+-- continua sempre filtrando por loja.
+CREATE INDEX IF NOT EXISTS idx_mensagens_direcao_canal ON mensagens(direcao, canal, criado_em);
+CREATE INDEX IF NOT EXISTS idx_custos_data ON uso_custos(criado_em, tipo, latencia_ms);
+"""
+
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12, 13: _MIGRACAO_13, 14: _MIGRACAO_14}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

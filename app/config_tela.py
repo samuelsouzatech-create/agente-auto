@@ -239,6 +239,31 @@ def texto_confirmar(assunto: str) -> str:
     return _CONFIRMAR_CONTRATO if assunto == PLANO_E_LIMITES else _CONFIRMAR_CLIENTE
 
 
+# ---------------------------------------------------------------------
+# S10a: o que só existia nas telas antigas ganha lugar no painel novo, sem
+# mudar o destino de cada campo (o mapa do S4a continua igual):
+#   - "Mensagens automáticas" > Regras: campos de destino Mensagens
+#     automáticas, mais a carência (é regra da retomada);
+#   - "Configuração" > Outros ajustes: o resto do "A decidir" (Instagram e
+#     prazo de guarda das conversas).
+# Um teste confere que todo campo aparece em exatamente um lugar.
+# ---------------------------------------------------------------------
+REGRAS_DAS_MENSAGENS = "Regras das mensagens"
+OUTROS_AJUSTES = "Outros ajustes"
+
+
+def campos_das_regras() -> list[Campo]:
+    """Mensagens automáticas > Regras (na ordem de CAMPOS)."""
+    return [c for c in CAMPOS if destino_do_campo(c.chave) == MENSAGENS_AUTOMATICAS
+            or c.chave in CAMPOS_A_DECIDIR]
+
+
+def campos_de_outros_ajustes() -> list[Campo]:
+    """Configuração > Outros ajustes (na ordem de CAMPOS)."""
+    return [c for c in CAMPOS if destino_do_campo(c.chave) == A_DECIDIR
+            and c.chave not in CAMPOS_A_DECIDIR]
+
+
 def padrao(c: Campo):
     valor = PADROES
     for parte in c.chave.split("."):

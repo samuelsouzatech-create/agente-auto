@@ -77,7 +77,7 @@ def _agora_texto(agora: datetime | None = None) -> str:
 
 
 def calcular_custo(uso: Uso, dia, msgs_servico: int = 0, msgs_utilidade: int = 0,
-                   msgs_marketing: int = 0) -> tuple[float, float, bool]:
+                   msgs_marketing: int = 0, valor_de=None) -> tuple[float, float, bool]:
     """Devolve (custo_ia, custo_meta, completo) em R$.
     completo=False quando faltou algum preço para algo que foi usado."""
     completo = True
@@ -86,9 +86,10 @@ def calcular_custo(uso: Uso, dia, msgs_servico: int = 0, msgs_utilidade: int = 0
         nonlocal completo
         if not quantidade:
             return 0.0
-        valor = precos.valor_em_brl(item, dia)
+        buscar = valor_de or precos.valor_em_brl     # S8: tabela da transação
+        valor = buscar(item, dia)
         if valor is None and reserva:
-            valor = precos.valor_em_brl(reserva, dia)
+            valor = buscar(reserva, dia)
         if valor is None:
             completo = False
             return 0.0
@@ -160,37 +161,81 @@ def registrar_uso(loja_id: int, lead_id: str | None, canal: str, uso: Uso | None
     return registro
 
 
-def recalcular_custos(loja_id: int | None = None) -> int:
+def _tabela_de_precos(conexao) -> dict:
+    """S8: os preços lidos pela MESMA conexão (vê o preço ainda não confirmado)."""
+    tabela = {}
+    for l in conexao.execute("SELECT item, valor, moeda, vigente_desde FROM precos "
+                             "ORDER BY item, vigente_desde"):
+        tabela.setdefault(l["item"], []).append(
+            (str(l["vigente_desde"])[:10], l["moeda"], float(l["valor"])))
+    return tabela
+
+
+def _valor_da_tabela(tabela):
+    """Igual a precos.valor_em_brl, mas lendo a tabela já carregada."""
+    def vigente(item, dia):
+        achado = None
+        for desde, moeda, valor in tabela.get(item, ()):
+            if desde > dia:
+                break
+            achado = (moeda, valor)
+        return achado
+
+    def valor_de(item, dia):
+        dia = precos._data_iso(dia)
+        preco = vigente(item, dia)
+        if preco is None:
+            return None
+        if preco[0] == "BRL":
+            return preco[1]
+        cambio = vigente("cambio.usd_brl", dia)
+        return None if cambio is None else preco[1] * cambio[1]
+    return valor_de
+
+
+def recalcular_custos(loja_id: int | None = None, inicio: str | None = None,
+                      fim: str | None = None, conexao=None) -> int:
     """Recalcula o custo em R$ a partir dos tokens gravados, com os preços
-    vigentes na data de cada linha. Use depois de cadastrar ou corrigir preços."""
-    conexao = conectar()
+    vigentes na data de cada linha. S8: inicio/fim (UTC, formato do banco,
+    o fim não entra) limitam as linhas; sem eles, todas. Só reescreve
+    custo_llm, custo_meta e custo_completo: rodar de novo dá o mesmo resultado.
+    Com 'conexao', usa a dela e NÃO dá commit (preço e recálculo juntos).
+    Devolve quantas linhas foram recalculadas."""
+    propria = conexao is None
+    con = conectar() if propria else conexao
     try:
         sql = ("SELECT id, criado_em, tokens_entrada, tokens_saida, tokens_audio, "
                "msgs_servico, msgs_utilidade, msgs_marketing FROM uso_custos")
-        parametros = ()
+        partes, parametros = [], []
         if loja_id is not None:
-            sql += " WHERE loja_id = ?"
-            parametros = (loja_id,)
-        linhas = conexao.execute(sql, parametros).fetchall()
-    finally:
-        conexao.close()
-
-    atualizacoes = []
-    for l in linhas:
-        uso = Uso(l["tokens_entrada"], l["tokens_saida"], l["tokens_audio"])
-        ia, meta, ok = calcular_custo(uso, str(l["criado_em"])[:10],
-                                      l["msgs_servico"], l["msgs_utilidade"], l["msgs_marketing"])
-        atualizacoes.append((ia, meta, 1 if ok else 0, l["id"]))
-
-    conexao = conectar()
-    try:
-        conexao.executemany(
+            partes.append("loja_id = ?")
+            parametros.append(loja_id)
+        if inicio:
+            partes.append("criado_em >= ?")
+            parametros.append(inicio)
+        if fim:
+            partes.append("criado_em < ?")
+            parametros.append(fim)
+        if partes:
+            sql += " WHERE " + " AND ".join(partes)
+        linhas = con.execute(sql, parametros).fetchall()
+        valor_de = _valor_da_tabela(_tabela_de_precos(con))
+        atualizacoes = []
+        for l in linhas:
+            uso = Uso(l["tokens_entrada"], l["tokens_saida"], l["tokens_audio"])
+            ia, meta, ok = calcular_custo(uso, str(l["criado_em"])[:10],
+                                          l["msgs_servico"], l["msgs_utilidade"],
+                                          l["msgs_marketing"], valor_de=valor_de)
+            atualizacoes.append((ia, meta, 1 if ok else 0, l["id"]))
+        con.executemany(
             "UPDATE uso_custos SET custo_llm = ?, custo_meta = ?, custo_completo = ? WHERE id = ?",
             atualizacoes,
         )
-        conexao.commit()
+        if propria:
+            con.commit()
     finally:
-        conexao.close()
+        if propria:
+            con.close()
     return len(atualizacoes)
 
 

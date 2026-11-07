@@ -198,3 +198,68 @@ def mostrar_assunto(loja, assunto: str, papel: str, usuario: str) -> None:
                 st.warning(CONFLITO)
 
     _mostrar_desfazer(loja, assunto, papel, usuario, prefixo, slug, versao_vista)
+
+
+# ------------------------------------------------------------ S10a: campos fora dos assuntos
+
+CONFIRMAR_CAMPOS = "Valores confirmados com a loja ou no contrato (tira a marca 'a confirmar')"
+
+
+def mostrar_campos(loja, titulo: str, campos: list, slug: str, papel: str, usuario: str,
+                   nota: str = "") -> None:
+    """Um bloco de campos fora dos assuntos (S10a): "Regras das mensagens" e
+    "Outros ajustes". Mesmo Salvar do assunto: validação, dono e proteção de
+    versão ficam no salvar_config. Separado por grupo. Sem Desfazer: cada
+    mudança fica no Registro."""
+    from app.config_tela import GRUPOS
+    geracao = st.session_state.get(f"_cfg_geracao_{loja.id}_{slug}", 0)
+    prefixo = f"campos_{loja.id}_{slug}_{geracao}"
+    chave_vista = f"_cfg_versao_{loja.id}_{slug}"
+    # Formulário sendo criado agora = guarda a versão que ele está mostrando.
+    if f"{prefixo}_confirmar" not in st.session_state:
+        st.session_state[chave_vista] = loja.versao_config
+    versao_vista = st.session_state.get(chave_vista, loja.versao_config)
+
+    st.subheader(titulo)
+    if nota:
+        st.caption(nota)
+    faltam = set(pendentes(loja)) & {c.chave for c in campos}
+    if faltam:
+        st.caption(f"⚠️ {len(faltam)} de {len(campos)} valor(es) ainda no padrão do produto, "
+                   "a confirmar.")
+    if loja.versao_config != versao_vista:
+        st.info("A configuração desta loja mudou desde que você abriu esta tela.")
+        if st.button("🔄 Carregar os valores atuais", key=f"{prefixo}_recarregar"):
+            _recarregar(loja.id, slug)
+            st.rerun()
+
+    with st.form(f"{prefixo}_form"):
+        valores = {}
+        for grupo in GRUPOS:
+            do_grupo = [c for c in campos if c.grupo == grupo]
+            if not do_grupo:
+                continue
+            st.markdown(f"**{grupo}**")
+            for c in do_grupo:
+                valores[c.chave] = _widget(loja, faltam, c, f"{prefixo}_{c.chave}")
+        confirmar = st.checkbox(CONFIRMAR_CAMPOS, key=f"{prefixo}_confirmar")
+        salvar = st.form_submit_button(f"💾 Salvar {titulo}")
+    if salvar:
+        mudancas, erros = mudancas_da_tela(loja, valores, confirmar)
+        if erros:
+            for erro in erros:
+                st.error(erro)
+        elif not mudancas:
+            st.info("Nada mudou.")
+        else:
+            try:
+                salvar_config(loja.id, mudancas, usuario, papel=papel,
+                              versao_esperada=versao_vista)
+                _recarregar(loja.id, slug)
+                avisar(f"{titulo}: {len(mudancas)} valor(es) salvo(s).")
+                st.rerun()
+            except ConfigInvalida as erro:              # inclui SemPermissao
+                for mensagem in erro.erros:
+                    st.error(traduzir_erro(mensagem))
+            except ConflitoDeVersao:
+                st.warning(CONFLITO)

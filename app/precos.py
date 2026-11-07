@@ -50,7 +50,8 @@ def _data_iso(valor) -> str:
     return texto
 
 
-def cadastrar_preco(item: str, valor, vigente_desde, moeda: str | None = None) -> None:
+def cadastrar_preco(item: str, valor, vigente_desde, moeda: str | None = None,
+                    conexao=None) -> dict:
     """Cadastra (ou corrige, se já existir na mesma data) um preço."""
     erros = []
     if item not in ITENS:
@@ -75,9 +76,10 @@ def cadastrar_preco(item: str, valor, vigente_desde, moeda: str | None = None) -
     if erros:
         raise PrecoInvalido(erros)
 
-    conexao = conectar()
+    propria = conexao is None          # S8: com conexao, não dá commit
+    con = conectar() if propria else conexao
     try:
-        conexao.execute(
+        con.execute(
             """INSERT INTO precos (item, valor, moeda, unidade, vigente_desde)
                VALUES (?, ?, ?, ?, ?)
                ON CONFLICT (item, vigente_desde)
@@ -85,9 +87,12 @@ def cadastrar_preco(item: str, valor, vigente_desde, moeda: str | None = None) -
                              unidade = excluded.unidade""",
             (item, valor, moeda, ITENS[item]["unidade"], dia),
         )
-        conexao.commit()
+        if propria:
+            con.commit()
     finally:
-        conexao.close()
+        if propria:
+            con.close()
+    return {"item": item, "valor": valor, "moeda": moeda, "vigente_desde": dia}
 
 
 def preco_vigente(item: str, dia) -> dict | None:
@@ -135,11 +140,14 @@ def listar_precos() -> list[dict]:
     return [dict(l) for l in linhas]
 
 
-def apagar_preco(preco_id: int) -> bool:
-    conexao = conectar()
+def apagar_preco(preco_id: int, conexao=None) -> bool:
+    propria = conexao is None          # S8: com conexao, não dá commit
+    con = conectar() if propria else conexao
     try:
-        cursor = conexao.execute("DELETE FROM precos WHERE id = ?", (preco_id,))
-        conexao.commit()
+        cursor = con.execute("DELETE FROM precos WHERE id = ?", (preco_id,))
+        if propria:
+            con.commit()
         return cursor.rowcount > 0
     finally:
-        conexao.close()
+        if propria:
+            con.close()

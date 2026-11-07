@@ -34,6 +34,7 @@ from app.jobs.reativacao import rodar_reativacao
 from app.jobs.remarketing import INTERVALO_S as INTERVALO_REMARKETING_S
 from app.jobs.remarketing import envio_real_ligado, rodar_remarketing
 from app.jobs.trava import TTL_S, TravaRunner, cliente_redis_sincrono
+from app.jobs import batimento
 
 INTERVALO_S = 30
 
@@ -118,6 +119,7 @@ def main(argv=None) -> int:
                 except Exception as erro:
                     print(f"[Runner] Redis falhou ao renovar a trava ({type(erro).__name__}). Parando.")
                     break
+                batimento.marcar_giro(trava.cliente)   # S9: sinal de vida do relógio
             try:
                 r = rodar_ciclo()
                 if r["handoffs"] or r["gastos"]:
@@ -163,6 +165,7 @@ def main(argv=None) -> int:
         print("\n[Runner] Parado.")
     finally:
         if trava is not None:
+            batimento.marcar_parado(trava.cliente)   # S9: vermelho na hora
             trava.liberar()
     return 0
 

@@ -281,4 +281,5 @@ def test_gasto_do_dia_e_ferramentas():
 
 # ====================================================== página
 def test_pagina_de_custos_compila():
-    py_compile.compile(str(RAIZ / "paginas" / "custos.py"), doraise=True)
+    # S10b: a tela antiga saiu; os custos ficam em Custos e preços (operador).
+    py_compile.compile(str(RAIZ / "paginas" / "operador" / "custos_precos.py"), doraise=True)

@@ -18,6 +18,7 @@ from app import regua
 from app.chaves import exigir_loja
 from app.lojas import carregar_loja, modulo_ativo
 from app.registro import registrar
+from app.permissoes import exigir_pode_agir
 from app.relogio import agora_utc, dia_local
 
 FORMAS = ("avista", "financiado")
@@ -72,6 +73,7 @@ def _texto_carro(linha) -> str:
 def registrar_venda(loja_id, lead_id, veiculo_id, data_venda, forma_pagamento, *,
                     meses_financiamento=None, vendedor: str = "", agora: datetime | None = None) -> dict:
     loja_id = exigir_loja(loja_id)
+    exigir_pode_agir(loja_id)        # S5: loja No ar, operador só vê
     agora = agora or agora_utc()
     loja = carregar_loja(loja_id)
     lead_id = str(lead_id or "").strip()

@@ -625,6 +625,8 @@ Plano Mestre de Execução — Léo: painéis, pendências da Etapa 2, Etapas 3 
 
 ### S10 — Desempenho, acabamento e retirada das telas antigas (1,5 a 2 dias) 
 
+> **Obrigatório no S10 (anotado no S6, decisão D-1):** remover ou trocar a tela antiga `paginas/envios.py` ("Retomadas e pós-venda"), que ficou ao lado da nova "Mensagens automáticas" (`paginas/operador/mensagens_automaticas.py`). Ela também aparece no painel da loja e tem testes do P5 e do Bloco 7 (`tests/test_p5_bloqueios.py`, `tests/test_etapa2_bloco7.py`). O S10 só fica pronto sem tela duplicada.
+
 - **Faça:** migração `indices` (índices nas tabelas mais consultadas: `mensagens` , `handoffs` , `uso_custos` , `remarketing_envios` , `leads` , sempre com `loja_id` na 
 
 - frente); paginação nas listas; remover as telas antigas do operador e o grupo "Antigas"; refinar o visual escuro com um pouco de CSS (cartões, bordas, selos coloridos como "Retomada" e "Pós-venda") em um único arquivo `paginas/operador/estilo.py` ; atualizar o `README.md` . 

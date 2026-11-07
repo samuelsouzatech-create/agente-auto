@@ -163,8 +163,11 @@ def _telas() -> dict:
 def test_so_existe_um_botao_de_venda_no_streamlit():
     telas = _telas()
     com_venda = sorted(nome for nome, texto in telas.items() if "registrar_venda(" in texto)
-    assert com_venda == ["paginas/conversas.py"]
-    assert telas["paginas/conversas.py"].count("registrar_venda(") == 1
+    # S5: a tela "Ver como a loja" do operador ganhou o seu botao (loja Em teste).
+    # A antiga (conversas.py) sai no S10. Cada uma chama o caminho unico uma vez.
+    assert com_venda == ["paginas/conversas.py", "paginas/operador/ver_como.py"]
+    for nome in com_venda:
+        assert telas[nome].count("registrar_venda(") == 1
 
 
 def test_telas_nao_marcam_vendido_nem_resultado_a_mao():

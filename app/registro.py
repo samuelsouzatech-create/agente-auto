@@ -123,3 +123,21 @@ ACOES_RELEVANTES.update({
     "cadastrar_numero_teste": "app.estado_loja.cadastrar_numero_de_teste",
     "desativar_numero_teste": "app.estado_loja.desativar_numero_de_teste",
 })
+
+
+# S4c: Estoque e Conhecimento.
+ACOES_RELEVANTES.update({
+    "cadastrar_carro": "app.estoque.adicionar_carro",
+    "alterar_carro": "app.estoque.atualizar_carro",
+    "criar_documento": "app.conhecimento.gravar",
+    "alterar_documento": "app.conhecimento.gravar",
+    "apagar_documento": "app.conhecimento.apagar_documento",
+})
+
+
+# S8: Custos e preços. Sem loja: um preço vale para todas as lojas.
+ACOES_RELEVANTES.update({
+    "cadastrar_preco": "app.custos_precos.cadastrar_preco",
+    "apagar_preco": "app.custos_precos.apagar_preco",
+    "recalcular_custos": "app.custos_precos.recalcular_periodo",
+})

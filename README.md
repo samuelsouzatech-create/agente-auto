@@ -18,8 +18,9 @@ Agente de atendimento e qualificação de leads para lojas de veículos, constru
 - **Orquestração do agente**: LangGraph (StateGraph com ciclo de tool calling)
 - **LLM**: Google Gemini
 - **RAG**: embeddings do Gemini + Chroma
-- **Banco de dados**: SQLite (local, MVP)
-- **Interface de teste**: Streamlit
+- **Banco de dados**: SQLite (local), com migrações numeradas
+- **Memória rápida e relógio**: Redis
+- **Painéis**: Streamlit 1.65
 
 ## Como rodar
 
@@ -43,13 +44,14 @@ Agente de atendimento e qualificação de leads para lojas de veículos, constru
    pip install -r requirements.txt
    ```
 
-4. Crie um arquivo `.env` na raiz com sua chave do Google Gemini:
+4. Crie um arquivo `.env` na raiz com sua chave do Google Gemini e o seu nome (usado no painel do operador):
 
    ```
    GOOGLE_API_KEY=sua_chave_aqui
+   OPERADOR_NOME=Seu Nome
    ```
 
-5. Crie o banco de dados com estoque de exemplo:
+5. Crie (ou atualize) o banco de dados com estoque de exemplo. As migrações só acrescentam; nada é apagado:
 
    ```bash
    python banco.py
@@ -61,28 +63,41 @@ Agente de atendimento e qualificação de leads para lojas de veículos, constru
    python ingestao_rag.py
    ```
 
-7. Rode a interface de teste:
-
-   ```bash
-   streamlit run app.py
-   ```
-
-## Arquitetura
-
-O projeto segue o princípio de que o banco de dados próprio é a fonte da verdade: o agente nunca inventa dados, sempre consulta tools. O estoque é consultado por tool estruturada (nunca por RAG), e o RAG é usado apenas para conteúdo textual estável (políticas e FAQ da loja).
-
-## Status
-
-Protótipo em desenvolvimento (Fase 1 — Núcleo). Projeto de estudo e portfólio.
-
 ## Painéis (só local, sem login)
 
 | Painel | Comando | Porta |
 |---|---|---|
 | Operador | `python -m streamlit run operador.py --server.port 8501` | 8501 |
 | Cliente  | `$env:LOJA_ID="1"` e depois `python -m streamlit run painel.py --server.port 8502` | 8502 |
+| Relógio (avisos e retomadas) | `python -m app.jobs.runner` (precisa do Redis ligado no Docker) | — |
 
-- O painel do cliente mostra só a loja de `LOJA_ID` e recusa abrir sem ela.
+### Painel do operador (`operador.py`)
+
+- **Geral**: Visão geral (saúde do sistema, "Precisa de atenção" e a tabela de lojas), Custos e preços e o botão **➕ Nova loja** na lateral.
+- **Loja** (a loja escolhida na lateral): Resumo, Ver como a loja, Configuração, Mensagens automáticas, Base de clientes e Registro.
+- Precisa de `OPERADOR_NOME` no `.env`; sem ele, o painel não abre.
+- Listas longas aparecem em páginas de 50, com "Anterior" e "Próxima".
+
+### Painel do cliente (`painel.py`)
+
+- Mostra só a loja de `LOJA_ID` e recusa abrir sem ela.
+- Tem 8 telas e continua no ar até o painel em React substituí-lo.
 - Campos de plano (módulos, teto de custo, limites) só o operador altera: a regra está no `salvar_config`, não só na tela.
-- Nenhum dos dois pode ir para a internet até existir login (API do painel).
 
+Nenhum dos dois painéis pode ir para a internet até existir login.
+
+## Testes
+
+```bash
+pytest -q -p no:cacheprovider
+```
+
+Os testes rodam sem internet, num banco temporário, com duas lojas para provar que uma não vê os dados da outra.
+
+## Arquitetura
+
+O projeto segue o princípio de que o banco de dados próprio é a fonte da verdade: o agente nunca inventa dados, sempre consulta tools. O estoque é consultado por tool estruturada (nunca por RAG), e o RAG é usado apenas para conteúdo textual estável (políticas e FAQ da loja). Regra de negócio fica em `app/`; as telas só mostram e chamam.
+
+## Status
+
+Projeto de estudo e portfólio. Painel do operador concluído na branch `painel-operador`, aguardando validação.

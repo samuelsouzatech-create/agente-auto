@@ -117,7 +117,8 @@ def test_filtro_por_pessoa():
     _tres_acoes()
     assert {i["acao"] for i in filtrar_registro(1, pessoa="Ana")} == {"pausar_envios"}
     assert {i["acao"] for i in filtrar_registro(1, pessoa=" Samuel ")} == {"salvar_configuracao"}
-    assert {i["acao"] for i in filtrar_registro(1, pessoa="Teste")} == {"registrar_venda"}
+    assert {i["acao"] for i in filtrar_registro(1, pessoa="Teste")} == {"cadastrar_carro",
+                                                                     "registrar_venda"}
     assert pessoas_no_registro(1) == ["Ana", "Samuel", "Teste"]
 
 
@@ -129,7 +130,7 @@ def test_filtro_por_tipo_de_acao():
     assert [i["acao"] for i in filtrar_registro(1, acao="salvar_configuracao")] == [
         "salvar_configuracao"]
     assert [i["acao"] for i in filtrar_registro(1, acao="registrar_venda")] == ["registrar_venda"]
-    assert set(acoes_no_registro(1)) == {"pausar_envios", "retomar_envios",
+    assert set(acoes_no_registro(1)) == {"cadastrar_carro", "pausar_envios", "retomar_envios",
                                          "salvar_configuracao", "registrar_venda"}
 
 
