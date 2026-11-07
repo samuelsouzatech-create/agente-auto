@@ -209,15 +209,18 @@ def test_documento_invalido(indice):
 
 def test_importar_txts_respeita_loja_e_nao_sobrescreve(tmp_path, monkeypatch, indice):
     import ingestao_rag
-    (tmp_path / "troca.txt").write_text("Loja 1 aceita troca.", encoding="utf-8")
+    # S4c: sem loja padrão; o .txt da loja 1 fica em loja_1/ e o solto é ignorado.
+    (tmp_path / "loja_1").mkdir()
+    (tmp_path / "loja_1" / "troca.txt").write_text("Loja 1 aceita troca.", encoding="utf-8")
+    (tmp_path / "solto.txt").write_text("sem loja", encoding="utf-8")
     (tmp_path / "loja_7").mkdir()
     (tmp_path / "loja_7" / "x.txt").write_text("loja inexistente", encoding="utf-8")
     monkeypatch.setattr(ingestao_rag, "PASTA_CONHECIMENTO", str(tmp_path))
 
-    assert ingestao_rag.importar_txts() == 1
+    assert ingestao_rag.importar_txts(1) == 1
     doc = conhecimento.listar_documentos(1)[0]
     conhecimento.salvar_documento(1, "troca", "Texto editado na tela.", doc_id=doc["id"])
-    assert ingestao_rag.importar_txts() == 0
+    assert ingestao_rag.importar_txts(1) == 0
     assert conhecimento.listar_documentos(1)[0]["texto"] == "Texto editado na tela."
 
 
@@ -235,7 +238,7 @@ def test_renomear_loja():
 ARQUIVOS_DO_PAINEL = [
     "painel.py", "paginas/comum.py", "paginas/handoff.py", "paginas/estoque.py",
     "paginas/resultados.py", "paginas/configuracao.py", "paginas/conhecimento.py",
-    "paginas/usuarios.py", "paginas/lojas_canais.py",
+    "paginas/usuarios.py",
 ]
 
 

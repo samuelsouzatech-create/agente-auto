@@ -367,5 +367,6 @@ def test_rodar_ciclo_e_runner():
 
 
 def test_arquivos_compilam():
-    for arquivo in ("app/jobs/runner.py", "app/jobs/alertas.py", "paginas/custos.py"):
+    for arquivo in ("app/jobs/runner.py", "app/jobs/alertas.py",
+                    "paginas/operador/custos_precos.py"):
         py_compile.compile(str(RAIZ / arquivo), doraise=True)

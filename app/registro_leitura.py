@@ -283,3 +283,21 @@ ROTULOS.update({
     "cadastrar_numero_teste": "Cadastrou número de teste",
     "desativar_numero_teste": "Desativou número de teste",
 })
+
+
+# S4c: Estoque e Conhecimento.
+ROTULOS.update({
+    "cadastrar_carro": "Cadastrou carro",
+    "alterar_carro": "Mudou carro",
+    "criar_documento": "Criou texto do conhecimento",
+    "alterar_documento": "Mudou texto do conhecimento",
+    "apagar_documento": "Apagou texto do conhecimento",
+})
+
+
+# S8: Custos e preços.
+ROTULOS.update({
+    "cadastrar_preco": "Cadastrou preço",
+    "apagar_preco": "Apagou preço",
+    "recalcular_custos": "Recalculou custos",
+})

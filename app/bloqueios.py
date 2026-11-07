@@ -26,6 +26,7 @@ from datetime import datetime
 from banco import conectar
 from app.chaves import exigir_loja
 from app.registro import registrar
+from app.permissoes import exigir_pode_agir
 from app.relogio import agora_utc, do_banco, para_banco
 
 TIPOS = ("remarketing", "pos_venda", "reativacao", "todos")
@@ -52,6 +53,7 @@ def bloquear(loja_id, lead_id, tipo: str, passo, autor: str, *,
              agora: datetime | None = None) -> int:
     """Marca para não enviar. Se a mesma marca já está ativa, devolve a que existe."""
     loja_id = exigir_loja(loja_id)
+    exigir_pode_agir(loja_id)        # S5: loja No ar, operador só vê
     lead_id, autor = _limpo(lead_id), _limpo(autor)
     if not lead_id:
         raise BloqueioInvalido("Cliente não informado.")

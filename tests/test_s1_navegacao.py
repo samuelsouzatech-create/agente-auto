@@ -11,7 +11,7 @@ from streamlit.testing.v1 import AppTest
 
 import paginas.menu as menu
 from paginas.menu import (
-    CLIENTE, GERAL, GRUPO_ANTIGAS, LOJA, OPERADOR, PAGINA_INICIAL, arquivos,
+    CLIENTE, GERAL, LOJA, OPERADOR, PAGINA_INICIAL, arquivos,
 )
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -70,17 +70,19 @@ def test_enderecos_nao_se_repetem():
     assert len(enderecos) == len(set(enderecos))
 
 
-def test_tela_inicial_e_o_resumo():
-    assert PAGINA_INICIAL == "paginas/operador/resumo.py"
-    assert PAGINA_INICIAL in arquivos(LOJA)
+def test_tela_inicial_e_a_visao_geral():
+    # S9 (decisão 11A): a tela inicial passou do Resumo para a Visão geral.
+    assert PAGINA_INICIAL == "paginas/operador/visao_geral.py"
+    assert PAGINA_INICIAL in arquivos(GERAL)
 
 
-def test_montar_operador_tem_geral_loja_e_antigas(monkeypatch):
+def test_montar_operador_tem_so_geral_e_loja(monkeypatch):
+    """S10b: o grupo das telas antigas saiu; nenhuma tela do cliente no operador."""
     monkeypatch.setattr(menu.st, "Page", PaginaFalsa)
     paginas = menu.montar_operador()
-    assert list(paginas) == ["Geral", "Loja", GRUPO_ANTIGAS]
-    assert GRUPO_ANTIGAS == "Antigas (serão removidas)"
-    assert [p.arquivo for p in paginas[GRUPO_ANTIGAS]] == arquivos(OPERADOR) + arquivos(CLIENTE)
+    assert list(paginas) == ["Geral", "Loja"]
+    assert not hasattr(menu, "GRUPO_ANTIGAS")
+    assert [p.arquivo for lista in paginas.values() for p in lista] == TELAS_DO_MENU
     padroes = [p.arquivo for lista in paginas.values() for p in lista if p.opcoes["default"]]
     assert padroes == [PAGINA_INICIAL]
     for p in paginas["Geral"] + paginas["Loja"]:

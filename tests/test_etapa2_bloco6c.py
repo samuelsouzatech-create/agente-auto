@@ -314,6 +314,8 @@ def test_assistente_sabe_da_reativacao_quando_o_cliente_responde():
 
 
 def test_tela_tem_a_reativacao_e_compila():
-    fonte = (RAIZ / "paginas/importar_base.py").read_text(encoding="utf-8")
+    # S10b: a reativação foi para Mensagens automáticas, aba "Base da loja".
+    tela = "paginas/operador/mensagens_automaticas.py"
+    fonte = (RAIZ / tela).read_text(encoding="utf-8")
     assert "montar_fila" in fonte and "cancelar_fila" in fonte
-    py_compile.compile(str(RAIZ / "paginas/importar_base.py"), doraise=True)
+    py_compile.compile(str(RAIZ / tela), doraise=True)

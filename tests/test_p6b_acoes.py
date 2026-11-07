@@ -261,7 +261,11 @@ def test_cada_acao_deixa_rastro_com_o_ator(acao):
     l = linhas[0]
     # A função recebeu "Ana"; quem fica no Registro é o ATOR ("Teste").
     # S2: criar_loja grava na loja que acabou de nascer; as outras, na loja 1.
-    loja_esperada = resultado if acao == "criar_loja" else 1
+    # S8: preço e recálculo valem para todas as lojas: Registro sem loja.
+    if acao in ("cadastrar_preco", "apagar_preco", "recalcular_custos"):
+        loja_esperada = None
+    else:
+        loja_esperada = resultado if acao == "criar_loja" else 1
     assert (l["pessoa"], l["papel"], l["origem"], l["loja_id"]) == (
         "Teste", "operador", "painel", loja_esperada)
     assert l["quando"] and l["depois"]
@@ -409,4 +413,86 @@ CENARIOS.update({
     "desativar_numero_teste": (
         _prep_numero, lambda s: estado_loja.desativar_numero_de_teste(1, s["id"]),
         "SELECT COUNT(*) FROM numeros_de_teste WHERE ativo = 0"),
+})
+
+
+# ------------------------------------------------------------ S4c: Estoque e Conhecimento
+from app import conhecimento as _conhecimento, estoque as _estoque
+
+
+class _IndiceFalsoS4c:
+    def get(self, where):
+        return {"ids": []}
+
+    def delete(self, ids):
+        pass
+
+    def add_texts(self, texts, metadatas, ids):
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _indice_falso_s4c(monkeypatch):
+    monkeypatch.setattr(_conhecimento, "_indice", lambda: _IndiceFalsoS4c())
+
+
+def _prep_documento():
+    return {"doc": _conhecimento.salvar_documento(1, "Troca", "Aceitamos troca.")}
+
+
+CENARIOS.update({
+    "cadastrar_carro": (
+        _prep_nada,
+        lambda s: _estoque.adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual",
+                                           62000.0, loja_id=1),
+        "SELECT COUNT(*) FROM estoque"),
+    "alterar_carro": (
+        _prep_carro,
+        lambda s: _estoque.atualizar_carro(s["carro"], "Hyundai", "HB20", 2020, 40000, "Prata",
+                                           "Manual", 59000.0, "disponivel", loja_id=1),
+        "SELECT COUNT(*) FROM estoque WHERE preco = 59000"),
+    "criar_documento": (
+        _prep_nada,
+        lambda s: _conhecimento.salvar_documento(1, "Troca", "Aceitamos troca."),
+        "SELECT COUNT(*) FROM conhecimento"),
+    "alterar_documento": (
+        _prep_documento,
+        lambda s: _conhecimento.salvar_documento(1, "Troca", "Não aceitamos.", s["doc"]),
+        "SELECT COUNT(*) FROM conhecimento WHERE texto = 'Não aceitamos.'"),
+    "apagar_documento": (
+        _prep_documento,
+        lambda s: _conhecimento.apagar_documento(1, s["doc"]),
+        "SELECT -COUNT(*) FROM conhecimento"),
+})
+
+
+# ------------------------------------------------------------ S8: Custos e preços
+from app import custos as _custos, custos_precos as _custos_precos, precos as _precos
+
+
+def _prep_preco():
+    _precos.cadastrar_preco("ia.entrada", 0.10, "2026-01-01", "USD")
+    return {"id": _precos.listar_precos()[0]["id"]}
+
+
+def _prep_custo_sem_preco():
+    _custos.registrar_uso(1, LEAD, "simulador", _custos.Uso(1000, 100), agora=AGORA)
+    _precos.cadastrar_preco("ia.entrada", 0.10, "2026-01-01", "USD")
+    _precos.cadastrar_preco("ia.saida", 0.40, "2026-01-01", "USD")
+    _precos.cadastrar_preco("cambio.usd_brl", 5.0, "2026-01-01")
+    return {}
+
+
+CENARIOS.update({
+    "cadastrar_preco": (
+        _prep_nada,
+        lambda s: _custos_precos.cadastrar_preco("ia.saida", 0.40, "2026-01-01", "USD"),
+        "SELECT COUNT(*) FROM precos"),
+    "apagar_preco": (
+        _prep_preco, lambda s: _custos_precos.apagar_preco(s["id"]),
+        "SELECT -COUNT(*) FROM precos"),
+    "recalcular_custos": (
+        _prep_custo_sem_preco,
+        lambda s: _custos_precos.recalcular_periodo(date(2026, 10, 1), date(2026, 10, 31)),
+        "SELECT COUNT(*) FROM uso_custos WHERE custo_completo = 1"),
 })

@@ -5,6 +5,7 @@ import streamlit as st
 
 from app.apresentacao import horario_para_tela, nomes_dos_clientes
 from app.handoff import assumir_handoff, devolver_ao_agente, listar_handoffs
+from app.permissoes import AcaoNaoPermitida
 from app.lojas import carregar_loja
 from app.mensagens import historico_do_lead
 from paginas.comum import definir_ator_da_sessao, loja_atual, para_streamlit, usuario_atual
@@ -89,8 +90,12 @@ def mostrar_fila(loja_id, vendedor):
             with col_acoes:
                 if estado == "aguardando_humano":
                     if st.button("✋ Assumir", key=f"assumir_{h['id']}"):
-                        assumir_handoff(lead_id, vendedor=vendedor, loja_id=loja_id)
-                        st.rerun()
+                        try:
+                            assumir_handoff(lead_id, vendedor=vendedor, loja_id=loja_id)
+                        except AcaoNaoPermitida as erro:
+                            st.error(str(erro))
+                        else:
+                            st.rerun()
                 elif estado == "humano_assumiu":
                     if st.button("↩️ Devolver ao Léo", key=f"devolver_{h['id']}"):
                         devolver_ao_agente(lead_id, loja_id=loja_id)

@@ -207,8 +207,8 @@ def test_tela_canais_testa_conexao(nome_operador, monkeypatch):
 
 
 def test_telas_antigas_continuam_abrindo(nome_operador):
-    for arquivo, papel in (("usuarios.py", "cliente"), ("usuarios.py", "operador"),
-                           ("lojas_canais.py", "operador")):
+    # S10b: a tela antiga "Lojas e canais" saiu.
+    for arquivo, papel in (("usuarios.py", "cliente"), ("usuarios.py", "operador")):
         at = AppTest.from_file(str(RAIZ / "paginas" / arquivo), default_timeout=30)
         at.session_state["_papel"] = papel
         at.session_state["_loja_cliente"] = 1

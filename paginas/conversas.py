@@ -8,6 +8,7 @@ from app.estoque import listar_estoque
 from app.vendas import FORMAS, VendaInvalida, registrar_venda, vendas_do_lead
 from app.envio_painel import CANAIS_COM_ENVIO, EnvioRecusado, enviar_pelo_painel
 from app.handoff import assumir_conversa, devolver_ao_agente, estado_do_handoff, quem_assumiu
+from app.permissoes import AcaoNaoPermitida
 from app.interesse import ROTULOS, reativar_contato, situacao_do_lead
 from app.lojas import carregar_loja
 from app.mensagens import historico_do_lead, listar_conversas
@@ -78,7 +79,10 @@ with col_acoes:
             avisar(devolver_ao_agente(lead_id, loja_id=loja.id))
             st.rerun()
     elif st.button("✋ Assumir conversa", type="primary"):
-        avisar(assumir_conversa(lead_id, vendedor, loja_id=loja.id))
+        try:
+            avisar(assumir_conversa(lead_id, vendedor, loja_id=loja.id))
+        except AcaoNaoPermitida as erro:
+            avisar(str(erro), "error")
         st.rerun()
 
     situacao = situacao_do_lead(loja.id, lead_id)
@@ -120,7 +124,7 @@ with col_acoes:
                         extra = (f" {agendados} passo(s) de pós-venda agendado(s)."
                                  if r["pos_venda_ligado"] else " Pós-venda desligado nesta loja.")
                         avisar(f"Venda registrada: {r['carro']}.{extra}")
-                    except VendaInvalida as erro:
+                    except (VendaInvalida, AcaoNaoPermitida) as erro:
                         avisar(str(erro), "error")
                     st.rerun()
 
@@ -133,7 +137,7 @@ if estado == "humano_assumiu" and dono == vendedor and canal in CANAIS_COM_ENVIO
     if texto:
         try:
             enviar_pelo_painel(loja.id, canal, lead_id, texto, vendedor)
-        except EnvioRecusado as erro:
+        except (EnvioRecusado, AcaoNaoPermitida) as erro:
             avisar(str(erro), "error")
         st.rerun()
 elif estado == "humano_assumiu" and dono != vendedor:

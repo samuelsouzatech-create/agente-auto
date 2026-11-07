@@ -11,6 +11,7 @@ ficam como estavam.
 """
 from banco import conectar
 from app.registro import conferir_ator, registrar
+from app.permissoes import exigir_pode_agir
 
 
 def _handoff_aberto(cursor, lead_id, loja_id):
@@ -55,7 +56,7 @@ def assumir_handoff(lead_id, vendedor, loja_id):
     Trava para dois vendedores: o UPDATE só vale se o lead ainda estiver
     'aguardando_humano'. Se outro vendedor já assumiu, devolve quem está no comando.
     """
-    conferir_ator(loja_id)          # P6: sem autor (ou autor de outra loja), nada muda
+    exigir_pode_agir(loja_id)          # P6: sem autor (ou autor de outra loja), nada muda
     conexao = conectar()
     try:
         cursor = conexao.cursor()
@@ -101,7 +102,7 @@ def assumir_conversa(lead_id, vendedor, loja_id):
     - Nada aberto: abre um handoff já assumido (origem 'painel'). O
       avisado_em fica preenchido para o 7B não avisar ninguém à toa.
     """
-    conferir_ator(loja_id)          # P6: sem autor (ou autor de outra loja), nada muda
+    exigir_pode_agir(loja_id)          # P6: sem autor (ou autor de outra loja), nada muda
     conexao = conectar()
     try:
         cursor = conexao.cursor()

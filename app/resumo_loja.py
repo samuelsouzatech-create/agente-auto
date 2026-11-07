@@ -19,7 +19,7 @@ from app.pausa import pausado
 from app.registro_leitura import ler_registro
 from app.relogio import agora_utc, do_banco, hora_local
 
-DIAS_SEM_VENDA = 14
+from app.alertas_config import DIAS_SEM_VENDA  # noqa: E402  (S9: valor num arquivo só)
 MAX_MUDANCAS = 10
 ATENCAO = "atencao"
 

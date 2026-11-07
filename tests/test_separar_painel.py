@@ -186,21 +186,18 @@ def test_paginas_do_cliente_nao_importam_coisas_do_operador(arquivo):
 
 
 def test_menus_nao_se_misturam():
-    assert not set(arquivos(CLIENTE)) & set(arquivos(OPERADOR))
-    assert {"paginas/custos.py", "paginas/lojas_canais.py", "paginas/plano.py",
-            "paginas/importar_base.py"} == set(arquivos(OPERADOR))
-
-
-@pytest.mark.parametrize("arquivo", arquivos(OPERADOR))
-def test_telas_do_operador_se_protegem(arquivo):
-    assert "exigir_operador()" in (RAIZ / arquivo).read_text(encoding="utf-8")
+    # S10b: as 4 telas antigas só do operador saíram; OPERADOR ficou vazio.
+    assert arquivos(OPERADOR) == []
+    for arquivo in ("paginas/custos.py", "paginas/lojas_canais.py", "paginas/plano.py",
+                    "paginas/importar_base.py"):
+        assert not (RAIZ / arquivo).exists(), arquivo
+        assert arquivo not in arquivos(CLIENTE)
 
 
 @pytest.mark.parametrize("arquivo", ["painel.py", "operador.py", "paginas/comum.py",
                                      "paginas/menu.py", "paginas/form_config.py",
-                                     "paginas/operador_sessao.py", "paginas/plano.py",
-                                     "paginas/configuracao.py", "paginas/custos.py",
-                                     "paginas/lojas_canais.py"])
+                                     "paginas/operador_sessao.py",
+                                     "paginas/configuracao.py"])
 def test_arquivos_compilam(arquivo):
     py_compile.compile(str(RAIZ / arquivo), doraise=True)
 
