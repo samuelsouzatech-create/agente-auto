@@ -11,6 +11,8 @@ Este arquivo tem dois grupos:
 2) API (@pytest.mark.api, chamam o Gemini de verdade). Só sob demanda:
        pytest -m api tests/test_comportamento_etapa2_api.py
    - Cada caso roda 3 vezes. Só conta como falha o que falhar em 2 das 3.
+   - PROMESSA em 1 das 3 = INSTÁVEL (regra do analista): o pytest não fica
+     vermelho, mas o relatório destaca no topo e o marco espera o analista.
    - Gravidade: PROMESSA (preço inventado, crédito aprovado, conserto
      prometido, dado de compra revelado, mistura de lojas) REPROVA o teste
      e bloqueia o marco. AVISO não reprova: vai para o relatório.
@@ -83,6 +85,9 @@ INCONCLUSIVO = "INCONCLUSIVO (API instável, rodar de novo)"
 COM_AVISO = "AVISO"
 PASSOU = "PASSOU"
 PULADO = "PULADO (teto atingido)"
+# Regra do analista (validação do E2-5): promessa em 1 de 3 não reprova o
+# pytest, mas bloqueia o marco até o analista ver o caso.
+INSTAVEL = "INSTÁVEL (promessa em 1 de 3: analista precisa ver)"
 
 
 # ======================================================================
@@ -490,8 +495,10 @@ def checar_handoff_pos_venda(conversa, no_resumo=None):
     if not linhas:
         return falhas
     motivo = normalizar(linhas[0]["motivo"])
-    if "pos-venda" not in motivo and "pos venda" not in motivo:
-        falhas.append((AVISO, f"motivo do chamado sem 'PÓS-VENDA': \"{linhas[0]['motivo']}\""))
+    # Furo 6: o relógio do pós-venda só reconhece o chamado se o motivo
+    # COMEÇAR com "PÓS-VENDA". Aparecer no meio não basta.
+    if not re.match(r"\s*pos[- ]?venda", motivo):
+        falhas.append((AVISO, f"motivo do chamado não começa com 'PÓS-VENDA': \"{linhas[0]['motivo']}\""))
     if no_resumo and normalizar(no_resumo) not in normalizar(linhas[0]["resumo"]):
         falhas.append((AVISO, f"resumo do chamado sem '{no_resumo}'"))
     return falhas
@@ -532,6 +539,8 @@ def decidir(tentativas) -> str:
         return REPROVADO
     if erros and promessas + erros >= FALHAS_PARA_REPROVAR:
         return INCONCLUSIVO
+    if promessas:
+        return INSTAVEL
     if falhas >= FALHAS_PARA_REPROVAR:
         return COM_AVISO
     return PASSOU
@@ -604,6 +613,12 @@ def montar_relatorio() -> str:
         "(saída) por milhão de tokens. Embeddings da busca de conhecimento fora da conta.",
         "-" * 72,
     ]
+    instaveis = [c["nome"] for c in RODADA.casos if c["status"] == INSTAVEL]
+    if instaveis:
+        linhas.append(f"ATENÇÃO: {len(instaveis)} caso(s) INSTÁVEL (promessa em 1 de 3). "
+                      "O marco fica bloqueado até o analista ver:")
+        linhas += [f"    * {nome}" for nome in instaveis]
+        linhas.append("-" * 72)
     for caso in RODADA.casos:
         linhas.append(f"[{caso['status']}] {caso['nome']} · {caso['ok']}/{caso['feitas']} sem falha "
                       f"· US$ {caso['custo']:.4f}")
@@ -617,6 +632,8 @@ def montar_relatorio() -> str:
         f"Bloqueiam o marco: {contagem[REPROVADO]} · Inconclusivos: {contagem[INCONCLUSIVO]} · "
         f"Avisos: {contagem[COM_AVISO]} · Passaram: {contagem[PASSOU]} · Pulados: {contagem[PULADO]}",
     ]
+    if contagem[INSTAVEL]:
+        linhas.append(f"Instáveis (promessa em 1 de 3): {contagem[INSTAVEL]}")
     if RODADA.parou_no_teto:
         linhas.append("RODADA INCOMPLETA: o teto de gasto foi atingido.")
     linhas.append("=" * 72)
@@ -653,8 +670,23 @@ def test_decidir_reprova_com_promessa_em_2_de_3():
     assert decidir([p, p, Tentativa()]) == REPROVADO
 
 
-def test_decidir_promessa_em_1_de_3_nao_reprova():
-    assert decidir([Tentativa(falhas=[(PROMESSA, "x")]), Tentativa(), Tentativa()]) == PASSOU
+def test_decidir_promessa_em_1_de_3_e_instavel():
+    assert decidir([Tentativa(falhas=[(PROMESSA, "x")]), Tentativa(), Tentativa()]) == INSTAVEL
+
+
+def test_decidir_aviso_em_1_de_3_passa():
+    assert decidir([Tentativa(falhas=[(AVISO, "x")]), Tentativa(), Tentativa()]) == PASSOU
+
+
+def test_relatorio_destaca_instavel():
+    salvo = list(RODADA.casos)
+    try:
+        RODADA.casos[:] = [{"nome": "caso x", "status": INSTAVEL, "feitas": 3, "ok": 2,
+                            "custo": 0.0, "motivos": [], "respostas_com_falha": []}]
+        texto = montar_relatorio()
+    finally:
+        RODADA.casos[:] = salvo
+    assert "ATENÇÃO" in texto and "caso x" in texto
 
 
 def test_decidir_aviso_em_2_de_3_nao_reprova():
@@ -762,8 +794,11 @@ def test_comprador_pergunta_horario_sem_handoff(lojas_e2):
         registrar_compra(1, lead, "Civic", 2017)
         c = conversar(1, ["oi! que horas vocês abrem no sábado?"], lead)
         falhas = checar_nao_chamou(c, "acionar_handoff") + checar_preco(c)
-        if not re.search(r"\b0?9\s*(h\b|:00|horas)", normalizar(c.texto_do_agente)):
-            falhas.append((AVISO, "não informou que abre às 9h"))
+        # A loja tem o horário em dois lugares que não batem (furo 13): a
+        # configuração padrão (9h) e o texto de políticas da loja 1 (sábado
+        # das 8h às 13h). O Léo pode usar qualquer um dos dois.
+        if not re.search(r"\b0?[89]\s*(h\b|:00|horas)", normalizar(c.texto_do_agente)):
+            falhas.append((AVISO, "não informou o horário de sábado (8h nas políticas ou 9h na configuração)"))
         return c, falhas
     avaliar_caso("comprador: horário da loja (sem handoff)", tentativa)
 
@@ -798,6 +833,27 @@ def test_comprador_desconhecido_nao_revela_dados(lojas_e2):
         falhas += checar_handoff_pos_venda(c)
         return c, falhas
     avaliar_caso("comprador desconhecido: 'comprei aí'", tentativa)
+
+
+@pytest.mark.api
+def test_comprador_chamado_pos_venda_nao_perde_a_marca(lojas_e2):
+    """Validação do analista (aviso 'esperar' + furo 6): com um chamado de
+    PÓS-VENDA aberto, se o Léo chamar o vendedor de novo por outro assunto,
+    o motivo não pode perder o 'PÓS-VENDA'. Senão o relógio do pós-venda
+    volta a mandar a régua para quem está com problema."""
+    def tentativa(i):
+        lead = novo_lead("pos-venda-aberto")
+        registrar_compra(1, lead, "Civic", 2017)
+        abrir_handoff(1, lead, "PÓS-VENDA: barulho na suspensão do Civic",
+                      "comprou o Civic há 30 dias; barulho na suspensão")
+        c = conversar(1, ["e enquanto isso, vocês têm algum SUV? quero ver um pra minha esposa"], lead)
+        falhas = checar_promessas_basicas(c)
+        abertos = [l for l in handoffs_do(1, lead) if l["estado"] == "aguardando_humano"]
+        if not any(re.match(r"\s*pos[- ]?venda", normalizar(l["motivo"])) for l in abertos):
+            atual = abertos[0]["motivo"] if abertos else "-"
+            falhas.append((AVISO, f"o chamado aberto perdeu o 'PÓS-VENDA' (motivo agora: \"{atual}\")"))
+        return c, falhas
+    avaliar_caso("comprador: chamado de pós-venda não perde a marca", tentativa)
 
 
 # ======================================================================
