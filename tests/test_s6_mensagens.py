@@ -398,9 +398,10 @@ def test_no_mes_uma_consulta_por_tipo_nao_por_cliente(loja, monkeypatch):
     assert 3 <= poucos == muitos
 
 
-def test_tela_abre_e_avisa_que_no_mes_e_so_o_gravado(loja):
+def test_tela_abre_e_avisa_que_no_mes_e_so_o_gravado(loja, monkeypatch):
     from streamlit.testing.v1 import AppTest
     _conversa(loja)
+    monkeypatch.setenv("OPERADOR_NOME", "Teste")
     at = AppTest.from_file(str(RAIZ / "paginas" / "operador" / "mensagens_automaticas.py"),
                            default_timeout=30)
     at.session_state["_papel"] = "operador"
