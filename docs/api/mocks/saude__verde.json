@@ -1,0 +1,23 @@
+{
+  "luz": "verde",
+  "titulo": "Léo atendendo",
+  "detalhe": "Atendendo o WhatsApp.",
+  "estado": {
+    "codigo": "no_ar",
+    "rotulo": "No ar"
+  },
+  "pausa": {
+    "ativa": false,
+    "por": null,
+    "desde": null,
+    "motivo": null
+  },
+  "canais": [
+    {
+      "tipo": "whatsapp",
+      "rotulo": "WhatsApp",
+      "ativo": true
+    }
+  ],
+  "faixa": null
+}

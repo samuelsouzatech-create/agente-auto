@@ -1,0 +1,105 @@
+{
+  "cliente": {
+    "lead": "5581999990001",
+    "nome": "Juliana Souza",
+    "telefone": "(81) 99999-0001",
+    "origem": "WhatsApp",
+    "carro": "HB20 Comfort 2020",
+    "pagamento": "Financiado",
+    "troca": "Gol 2014 · 98.000 km",
+    "prazo": "Esta semana",
+    "visita": "Visita · sáb 10:00",
+    "motivo_do_chamado": "Quer ver o carro e fechar a entrada",
+    "etiqueta": "Interesse alto",
+    "etapa": "com_vendedor",
+    "etapa_rotulo": "Com vendedor",
+    "proximo_passo": "Vendedor conversa com a Juliana",
+    "ultimo_contato": {
+      "iso": "2026-11-06T21:40:00-03:00",
+      "texto": "hoje 21:40"
+    }
+  },
+  "mensagens": [
+    {
+      "id": 101,
+      "de": "cliente",
+      "autor": null,
+      "tipo": "texto",
+      "texto": "Oi, o HB20 2020 ainda está disponível?",
+      "canal": "whatsapp",
+      "quando": {
+        "iso": "2026-11-06T21:31:00-03:00",
+        "texto": "hoje 21:31"
+      }
+    },
+    {
+      "id": 102,
+      "de": "leo",
+      "autor": null,
+      "tipo": "texto",
+      "texto": "Oi, Juliana! Está sim: HB20 Comfort 2020, prata, 48.000 km, R$ 62.900,00. Quer ver ele pessoalmente?",
+      "canal": "whatsapp",
+      "quando": {
+        "iso": "2026-11-06T21:31:00-03:00",
+        "texto": "hoje 21:31"
+      }
+    },
+    {
+      "id": 103,
+      "de": "cliente",
+      "autor": null,
+      "tipo": "texto",
+      "texto": "Quero. Aceitam meu Gol 2014 na troca? Dá pra financiar o resto?",
+      "canal": "whatsapp",
+      "quando": {
+        "iso": "2026-11-06T21:38:00-03:00",
+        "texto": "hoje 21:38"
+      }
+    },
+    {
+      "id": 104,
+      "de": "leo",
+      "autor": null,
+      "tipo": "texto",
+      "texto": "Vou chamar um vendedor para avaliar a troca e simular o financiamento com você. Já te respondem aqui.",
+      "canal": "whatsapp",
+      "quando": {
+        "iso": "2026-11-06T21:40:00-03:00",
+        "texto": "hoje 21:40"
+      }
+    }
+  ],
+  "estado_do_chamado": "nenhum",
+  "assumido_por": null,
+  "janela": {
+    "aberta": true,
+    "fecha_em": {
+      "iso": "2026-11-07T21:40:00-03:00",
+      "texto": "amanhã 21:40"
+    },
+    "explicacao": null
+  },
+  "aviso": null,
+  "acoes": {
+    "assumir": {
+      "permitida": true,
+      "motivo": null
+    },
+    "responder": {
+      "permitida": false,
+      "motivo": "Assuma a conversa antes de responder."
+    },
+    "devolver": {
+      "permitida": false,
+      "motivo": "A conversa já está com o Léo."
+    },
+    "registrar_venda": {
+      "permitida": true,
+      "motivo": null
+    },
+    "reativar_contato": {
+      "permitida": false,
+      "motivo": "Indisponível agora."
+    }
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "pagina": 1,
+  "paginas": 1,
+  "total": 6,
+  "tamanho": 50,
+  "periodo_dias": 30,
+  "itens": [
+    {
+      "lead": "5581999990003",
+      "nome": "(81) 99999-0003",
+      "carro": "Onix 2021",
+      "origem": "WhatsApp",
+      "ultimo_contato": {
+        "iso": "2026-11-06T21:52:00-03:00",
+        "texto": "hoje 21:52"
+      },
+      "etapa": "com_vendedor",
+      "etapa_rotulo": "Com vendedor",
+      "proximo_passo": "Aguardando vendedor"
+    },
+    {
+      "lead": "5581999990001",
+      "nome": "Juliana Souza",
+      "carro": "HB20 Comfort 2020",
+      "origem": "WhatsApp",
+      "ultimo_contato": {
+        "iso": "2026-11-06T21:40:00-03:00",
+        "texto": "hoje 21:40"
+      },
+      "etapa": "com_vendedor",
+      "etapa_rotulo": "Com vendedor",
+      "proximo_passo": "Vendedor conversa com a Juliana"
+    },
+    {
+      "lead": "5581999990004",
+      "nome": "Bruno Costa",
+      "carro": "Creta 2022",
+      "origem": "WhatsApp",
+      "ultimo_contato": {
+        "iso": "2026-11-05T18:20:00-03:00",
+        "texto": "qui 18:20"
+      },
+      "etapa": "visita_marcada",
+      "etapa_rotulo": "Visita marcada",
+      "proximo_passo": "Visita sáb 10:00"
+    },
+    {
+      "lead": "5581999990005",
+      "nome": "Marina Lopes",
+      "carro": "Onix 2021",
+      "origem": "WhatsApp",
+      "ultimo_contato": {
+        "iso": "2026-11-04T10:05:00-03:00",
+        "texto": "qua 10:05"
+      },
+      "etapa": "venda_registrada",
+      "etapa_rotulo": "Venda registrada",
+      "proximo_passo": "Pós-venda em 7 dias"
+    },
+    {
+      "lead": "5581999990006",
+      "nome": "Rafael Tavares",
+      "carro": "Corolla XEi 2019",
+      "origem": "WhatsApp",
+      "ultimo_contato": {
+        "iso": "2026-11-03T14:44:00-03:00",
+        "texto": "ter 14:44"
+      },
+      "etapa": "pediu_tempo",
+      "etapa_rotulo": "Pediu tempo",
+      "proximo_passo": "Léo retoma em 10/11"
+    },
+    {
+      "lead": "5581999990002",
+      "nome": "Carlos Mendes",
+      "carro": "Corolla XEi 2019",
+      "origem": "WhatsApp",
+      "ultimo_contato": {
+        "iso": "2026-11-03T16:12:00-03:00",
+        "texto": "ter 16:12"
+      },
+      "etapa": "em_conversa",
+      "etapa_rotulo": "Em conversa",
+      "proximo_passo": "Léo retoma amanhã 09:00"
+    }
+  ],
+  "contagem_por_etapa": [
+    {
+      "etapa": "novo",
+      "rotulo": "Novo",
+      "total": 0
+    },
+    {
+      "etapa": "em_conversa",
+      "rotulo": "Em conversa",
+      "total": 1
+    },
+    {
+      "etapa": "pediu_tempo",
+      "rotulo": "Pediu tempo",
+      "total": 1
+    },
+    {
+      "etapa": "com_vendedor",
+      "rotulo": "Com vendedor",
+      "total": 2
+    },
+    {
+      "etapa": "visita_marcada",
+      "rotulo": "Visita marcada",
+      "total": 1
+    },
+    {
+      "etapa": "venda_registrada",
+      "rotulo": "Venda registrada",
+      "total": 1
+    },
+    {
+      "etapa": "nao_seguiu",
+      "rotulo": "Não seguiu",
+      "total": 0
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "codigo": "invalido",
+  "mensagem": "Escolha o que não enviar.",
+  "campos": {
+    "tipo": "Tipo inválido."
+  }
+}

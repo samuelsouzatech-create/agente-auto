@@ -1,0 +1,7 @@
+{
+  "codigo": "invalido",
+  "mensagem": "Este carro não está no estoque desta loja.",
+  "campos": {
+    "carro_id": "Escolha um carro do estoque."
+  }
+}

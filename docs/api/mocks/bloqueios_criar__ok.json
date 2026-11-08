@@ -1,0 +1,14 @@
+{
+  "id": 7,
+  "lead": "5581999990006",
+  "cliente": "Rafael Tavares",
+  "tipo": "remarketing",
+  "tipo_rotulo": "Retomada",
+  "passo": 2,
+  "descricao": "Não enviar a 2ª retomada para Rafael Tavares",
+  "criado_em": {
+    "iso": "2026-11-06T15:10:00-03:00",
+    "texto": "hoje 15:10"
+  },
+  "por": "Camila Rocha"
+}

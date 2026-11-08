@@ -1,0 +1,96 @@
+{
+  "periodo": {
+    "inicio": "2026-11-02",
+    "fim": "2026-11-08",
+    "rotulo": "2 a 8 de novembro"
+  },
+  "conversas_atendidas": 6,
+  "fora_do_horario": 1,
+  "primeira_resposta": {
+    "segundos": 9.0,
+    "texto": "9 s"
+  },
+  "ate_vendedor_assumir": {
+    "segundos": null,
+    "texto": "—"
+  },
+  "passados_ao_vendedor": 1,
+  "visitas_marcadas": 0,
+  "vendas_registradas": 0,
+  "funil": [
+    {
+      "etapa": "conversas",
+      "rotulo": "Conversas",
+      "total": 6
+    },
+    {
+      "etapa": "qualificados",
+      "rotulo": "Qualificados",
+      "total": 2
+    },
+    {
+      "etapa": "com_vendedor",
+      "rotulo": "Passados ao vendedor",
+      "total": 1
+    },
+    {
+      "etapa": "visitas",
+      "rotulo": "Visitas marcadas",
+      "total": 0
+    },
+    {
+      "etapa": "vendas",
+      "rotulo": "Vendas registradas",
+      "total": 0
+    }
+  ],
+  "por_dia": [
+    {
+      "dia": "2026-11-02",
+      "dia_texto": "02/11",
+      "no_horario": 0,
+      "fora_do_horario": 0
+    },
+    {
+      "dia": "2026-11-03",
+      "dia_texto": "03/11",
+      "no_horario": 0,
+      "fora_do_horario": 0
+    },
+    {
+      "dia": "2026-11-04",
+      "dia_texto": "04/11",
+      "no_horario": 0,
+      "fora_do_horario": 0
+    },
+    {
+      "dia": "2026-11-05",
+      "dia_texto": "05/11",
+      "no_horario": 1,
+      "fora_do_horario": 0
+    },
+    {
+      "dia": "2026-11-06",
+      "dia_texto": "06/11",
+      "no_horario": 1,
+      "fora_do_horario": 0
+    },
+    {
+      "dia": "2026-11-07",
+      "dia_texto": "07/11",
+      "no_horario": 0,
+      "fora_do_horario": 0
+    },
+    {
+      "dia": "2026-11-08",
+      "dia_texto": "08/11",
+      "no_horario": 0,
+      "fora_do_horario": 0
+    }
+  ],
+  "dados_de_teste": true,
+  "contando_desde": {
+    "iso": "2026-11-08T09:00:00-03:00",
+    "texto": "dom 09:00"
+  }
+}

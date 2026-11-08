@@ -1,0 +1,21 @@
+{
+  "nome": "Camila Rocha",
+  "papel": "gestor",
+  "papel_rotulo": "Gerente",
+  "escopo": "completo",
+  "conversa_do_link": null,
+  "loja": {
+    "nome": "Garagem Recife Veículos",
+    "fuso": "America/Recife",
+    "estado": {
+      "codigo": "no_ar",
+      "rotulo": "No ar"
+    }
+  },
+  "modulos": {
+    "acompanhamento": true,
+    "estoque": true
+  },
+  "trocar_senha_obrigatoria": true,
+  "csrf": "k3Jx9vQ1mZp2LrT8wY5aB7cD0eF4gH6i"
+}

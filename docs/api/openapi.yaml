@@ -1,0 +1,899 @@
+openapi: 3.1.0
+info:
+  title: Léo — API do painel do cliente
+  version: 1.0.0
+  description: |
+    Contrato v1 (C1 do Plano Mestre). Escrito antes do código: a API real (C2) tem de obedecer a este arquivo,
+    e o front pode ser feito contra os dados falsos de docs/api/mocks/.
+    Regras: nenhuma rota recebe loja_id (a loja e o papel vêm só da sessão); toda data vai em ISO com fuso e
+    acompanhada de um texto pronto; listas têm paginação; erros têm um formato só.
+servers:
+  - url: /api/v1
+tags:
+  - {name: Acesso}
+  - {name: Estado}
+  - {name: Atender}
+  - {name: Leads}
+  - {name: Resultado}
+  - {name: Acompanhamento}
+  - {name: Estoque}
+  - {name: Link}
+security:
+  - sessao: []
+paths:
+  /auth/login:
+    post:
+      tags: [Acesso]
+      summary: Entrar com e-mail e senha
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginEntrada'}
+      responses:
+        '200':
+          description: Entrou. Define o cookie de sessão (HttpOnly, Secure, SameSite).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Eu'}
+        '401': {$ref: '#/components/responses/CredenciaisInvalidas'}
+        '429': {$ref: '#/components/responses/MuitasTentativas'}
+  /auth/logout:
+    post:
+      tags: [Acesso]
+      summary: Sair (revoga a sessão)
+      parameters: [{$ref: '#/components/parameters/Csrf'}]
+      responses:
+        '204': {description: Saiu.}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+  /auth/eu:
+    get:
+      tags: [Acesso]
+      summary: Quem está logado, qual loja e quais abas existem
+      responses:
+        '200':
+          description: Sessão válida.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Eu'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+  /auth/trocar-senha:
+    post:
+      tags: [Acesso]
+      summary: Trocar a própria senha (obrigatório no primeiro acesso)
+      parameters: [{$ref: '#/components/parameters/Csrf'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TrocarSenhaEntrada'}
+      responses:
+        '204': {description: Senha trocada.}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /saude:
+    get:
+      tags: [Estado]
+      summary: A luz "Léo atendendo" do topo
+      description: Verde só se atende de verdade. Pausado, loja em teste ou sem canal ativo nunca é verde.
+      responses:
+        '200':
+          description: Estado atual.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Saude'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+  /atender:
+    get:
+      tags: [Atender]
+      summary: Lista da tela Atender
+      responses:
+        '200':
+          description: Esperando, com vendedor e conversas de hoje.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Atender'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+  /conversas/{lead}:
+    get:
+      tags: [Atender]
+      summary: Histórico, cartão "O que o Léo já sabe" e ações permitidas
+      parameters: [{$ref: '#/components/parameters/Lead'}]
+      responses:
+        '200':
+          description: A conversa.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Conversa'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+  /conversas/{lead}/assumir:
+    post:
+      tags: [Atender]
+      summary: Assumir a conversa (o Léo fica em silêncio)
+      parameters: [{$ref: '#/components/parameters/Lead'}, {$ref: '#/components/parameters/Csrf'}]
+      responses:
+        '200':
+          description: Conversa já com o vendedor.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Conversa'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+        '409': {$ref: '#/components/responses/Conflito'}
+  /conversas/{lead}/responder:
+    post:
+      tags: [Atender]
+      summary: Responder o cliente (só depois de assumir)
+      parameters: [{$ref: '#/components/parameters/Lead'}, {$ref: '#/components/parameters/Csrf'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ResponderEntrada'}
+      responses:
+        '200':
+          description: Mensagem enviada e gravada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Mensagem'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+        '409': {$ref: '#/components/responses/JanelaFechada'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /conversas/{lead}/devolver:
+    post:
+      tags: [Atender]
+      summary: Devolver a conversa ao Léo
+      parameters: [{$ref: '#/components/parameters/Lead'}, {$ref: '#/components/parameters/Csrf'}]
+      responses:
+        '200':
+          description: Conversa devolvida.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Conversa'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+  /conversas/{lead}/registrar-venda:
+    post:
+      tags: [Atender]
+      summary: Registrar venda (único caminho para "vendido")
+      description: Grava venda, resultado, baixa no estoque e agenda o pós-venda, tudo numa transação (P2).
+      parameters: [{$ref: '#/components/parameters/Lead'}, {$ref: '#/components/parameters/Csrf'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VendaEntrada'}
+      responses:
+        '200':
+          description: Venda registrada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VendaRegistrada'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /conversas/{lead}/reativar-contato:
+    post:
+      tags: [Atender]
+      summary: O cliente pediu para voltar a ser procurado
+      parameters: [{$ref: '#/components/parameters/Lead'}, {$ref: '#/components/parameters/Csrf'}]
+      responses:
+        '200':
+          description: Contato reativado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Conversa'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+  /leads:
+    get:
+      tags: [Leads]
+      summary: Clientes por etapa
+      parameters:
+        - {name: periodo, in: query, schema: {type: integer, enum: [7, 30, 90], default: 30}, description: Últimos N dias}
+        - {name: busca, in: query, schema: {type: string, maxLength: 80}, description: 'Procura no nome e no carro, sem acento'}
+        - {name: etapa, in: query, schema: {$ref: '#/components/schemas/Etapa'}}
+        - {$ref: '#/components/parameters/Pagina'}
+        - {$ref: '#/components/parameters/Tamanho'}
+      responses:
+        '200':
+          description: Lista paginada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LeadsPagina'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+  /resultado:
+    get:
+      tags: [Resultado]
+      summary: Números da semana ou do mês
+      parameters:
+        - {name: visao, in: query, schema: {type: string, enum: [semana, mes], default: semana}}
+        - {name: data, in: query, schema: {type: string, format: date}, description: Qualquer dia dentro do período; padrão hoje}
+      responses:
+        '200':
+          description: Números do período.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Resultado'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /acompanhamento:
+    get:
+      tags: [Acompanhamento]
+      summary: Mensagens automáticas (módulo opcional)
+      responses:
+        '200':
+          description: Modo, pausa, limite, próximos envios, histórico e bloqueios.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Acompanhamento'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+  /acompanhamento/pausar:
+    post:
+      tags: [Acompanhamento]
+      summary: Pausar todos os envios automáticos da loja
+      parameters: [{$ref: '#/components/parameters/Csrf'}]
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PausarEntrada'}
+      responses:
+        '200':
+          description: Pausado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pausa'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /acompanhamento/retomar:
+    post:
+      tags: [Acompanhamento]
+      summary: Retomar os envios
+      parameters: [{$ref: '#/components/parameters/Csrf'}]
+      responses:
+        '200':
+          description: Retomado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pausa'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+  /bloqueios:
+    post:
+      tags: [Acompanhamento]
+      summary: 'Não enviar: só a chave escolhida, pode ser desfeito até o envio'
+      parameters: [{$ref: '#/components/parameters/Csrf'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BloqueioEntrada'}
+      responses:
+        '201':
+          description: Bloqueio criado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Bloqueio'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /bloqueios/{id}:
+    delete:
+      tags: [Acompanhamento]
+      summary: Desfazer o Não enviar
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {$ref: '#/components/parameters/Csrf'}
+      responses:
+        '204': {description: Desfeito.}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+  /estoque:
+    get:
+      tags: [Estoque]
+      summary: Carros da loja (módulo opcional)
+      parameters:
+        - {$ref: '#/components/parameters/Pagina'}
+        - {$ref: '#/components/parameters/Tamanho'}
+      responses:
+        '200':
+          description: Lista paginada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EstoquePagina'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+    post:
+      tags: [Estoque]
+      summary: Cadastrar carro (nunca como vendido)
+      parameters: [{$ref: '#/components/parameters/Csrf'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CarroEntrada'}
+      responses:
+        '201':
+          description: Carro cadastrado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Carro'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /estoque/{id}:
+    put:
+      tags: [Estoque]
+      summary: Editar carro (sem "vendido")
+      description: Se vier "esperado" e o carro mudou nesse meio tempo, responde 409 (conflito).
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {$ref: '#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CarroEdicao'}
+      responses:
+        '200':
+          description: Carro salvo.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Carro'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+        '409': {$ref: '#/components/responses/Conflito'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /v/{token}:
+    get:
+      tags: [Link]
+      summary: Link do vendedor vindo do aviso (C3)
+      description: |
+        Uso único, validade curta, escopo restrito (só aquela conversa e as ações assumir, responder, devolver
+        e registrar venda). Válido: cria sessão de escopo "link", marca o link como usado e redireciona para
+        /conversas/{lead} do front, sem o token na URL. Inválido (usado, vencido ou revogado): redireciona
+        para a rota do front /link-invalido?motivo=usado|vencido|revogado.
+      security: []
+      parameters:
+        - {name: token, in: path, required: true, schema: {type: string, minLength: 22, maxLength: 128}}
+      responses:
+        '302':
+          description: Redireciona. Com link válido, define o cookie de sessão.
+          headers:
+            Location: {schema: {type: string}}
+        '429': {$ref: '#/components/responses/MuitasTentativas'}
+components:
+  securitySchemes:
+    sessao:
+      type: apiKey
+      in: cookie
+      name: leo_sessao
+  parameters:
+    Lead:
+      name: lead
+      in: path
+      required: true
+      schema: {type: string, maxLength: 80}
+      description: Identificador do cliente (hoje, o id da conversa). Nunca é logado em texto no servidor.
+    Csrf:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: {type: string}
+      description: O valor de "csrf" devolvido por /auth/login e /auth/eu. Exigido em toda rota que escreve.
+    Pagina:
+      name: pagina
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    Tamanho:
+      name: tamanho
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+  responses:
+    NaoAutenticado:
+      description: Sem sessão válida.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+    SemPermissao:
+      description: O papel (ou o escopo do link) não pode esta ação.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+    ModuloOuPermissao:
+      description: Papel sem permissão, ou módulo não contratado (codigo modulo_desligado).
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+    NaoEncontrado:
+      description: Não existe nesta loja (também quando existe em outra).
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+    Conflito:
+      description: O estado mudou (outra pessoa assumiu, carro editado por outra pessoa).
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+    JanelaFechada:
+      description: Fora da janela de 24 h do canal; só um modelo aprovado da Meta pode abrir a conversa.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+    Invalido:
+      description: Dado inválido; a mensagem já vem pronta para o usuário.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+    CredenciaisInvalidas:
+      description: E-mail ou senha incorretos (a mesma resposta para qualquer motivo).
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+    MuitasTentativas:
+      description: Limite de tentativas atingido; tente de novo mais tarde.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Erro'}}}
+  schemas:
+    Erro:
+      type: object
+      required: [codigo, mensagem]
+      properties:
+        codigo:
+          type: string
+          enum: [nao_autenticado, credenciais_invalidas, muitas_tentativas, sem_permissao, modulo_desligado,
+                 nao_encontrado, conflito, janela_fechada, invalido, senha_fraca, csrf_invalido, link_invalido,
+                 erro_interno]
+        mensagem: {type: string, description: 'Texto pronto para mostrar, sem termo técnico.'}
+        campos:
+          type: object
+          additionalProperties: {type: string}
+          description: Mensagem por campo, quando o erro é de formulário.
+    Horario:
+      type: object
+      required: [iso, texto]
+      properties:
+        iso: {type: string, format: date-time, description: 'Com o fuso da loja, ex. 2026-11-08T21:40:00-03:00'}
+        texto: {type: string, description: 'Já pronto: "hoje 21:40", "ontem 18:05", "sex 14:10", "12/10 09:30".'}
+    Estado:
+      type: object
+      required: [codigo, rotulo]
+      properties:
+        codigo: {type: string, enum: [em_teste, no_ar]}
+        rotulo: {type: string}
+    Pausa:
+      type: object
+      required: [ativa]
+      properties:
+        ativa: {type: boolean}
+        por: {type: [string, 'null']}
+        desde: {oneOf: [{$ref: '#/components/schemas/Horario'}, {type: 'null'}]}
+        motivo: {type: [string, 'null']}
+    LoginEntrada:
+      type: object
+      required: [email, senha]
+      properties:
+        email: {type: string, maxLength: 254}
+        senha: {type: string, maxLength: 128}
+    TrocarSenhaEntrada:
+      type: object
+      required: [senha_atual, senha_nova]
+      properties:
+        senha_atual: {type: string, maxLength: 128}
+        senha_nova: {type: string, minLength: 10, maxLength: 128}
+    Eu:
+      type: object
+      required: [nome, papel, papel_rotulo, escopo, loja, modulos, trocar_senha_obrigatoria, csrf]
+      properties:
+        nome: {type: string}
+        papel: {type: string, enum: [dono, gestor, vendedor_link]}
+        papel_rotulo: {type: string, description: 'Dono, Gerente ou Vendedor'}
+        escopo: {type: string, enum: [completo, link]}
+        conversa_do_link: {type: [string, 'null'], description: 'Só no escopo "link": a única conversa liberada.'}
+        loja:
+          type: object
+          required: [nome, fuso, estado]
+          properties:
+            nome: {type: string}
+            fuso: {type: string, examples: [America/Recife]}
+            estado: {$ref: '#/components/schemas/Estado'}
+        modulos:
+          type: object
+          required: [acompanhamento, estoque]
+          properties:
+            acompanhamento: {type: boolean}
+            estoque: {type: boolean}
+        trocar_senha_obrigatoria: {type: boolean}
+        csrf: {type: string}
+    Saude:
+      type: object
+      required: [luz, titulo, detalhe, estado, pausa, canais, faixa]
+      properties:
+        luz: {type: string, enum: [verde, amarela, vermelha]}
+        titulo: {type: string, examples: [Léo atendendo]}
+        detalhe: {type: string}
+        estado: {$ref: '#/components/schemas/Estado'}
+        pausa: {$ref: '#/components/schemas/Pausa'}
+        canais:
+          type: array
+          items:
+            type: object
+            required: [tipo, rotulo, ativo]
+            properties:
+              tipo: {type: string, enum: [whatsapp, telegram, instagram]}
+              rotulo: {type: string}
+              ativo: {type: boolean}
+        faixa:
+          description: Aviso no topo da tela (laranja se pausado, azul se em teste); null se nada a avisar.
+          oneOf:
+            - type: object
+              required: [tipo, texto]
+              properties:
+                tipo: {type: string, enum: [laranja, azul]}
+                texto: {type: string}
+            - type: 'null'
+    Etapa:
+      type: string
+      enum: [novo, em_conversa, pediu_tempo, com_vendedor, visita_marcada, venda_registrada, nao_seguiu]
+    Janela:
+      type: object
+      required: [aberta]
+      properties:
+        aberta: {type: boolean}
+        fecha_em: {oneOf: [{$ref: '#/components/schemas/Horario'}, {type: 'null'}]}
+        explicacao: {type: [string, 'null'], description: 'Texto quando fechada (ex. "Faz mais de 24 h que o cliente não escreve").'}
+    CartaoCliente:
+      type: object
+      required: [lead, nome, origem, etapa, etapa_rotulo]
+      properties:
+        lead: {type: string}
+        nome: {type: string, description: 'Nome, ou telefone formatado, ou Cliente sem nome.'}
+        telefone: {type: string}
+        origem: {type: string, examples: [WhatsApp]}
+        carro: {type: string}
+        pagamento: {type: string}
+        troca: {type: string}
+        prazo: {type: string}
+        visita: {type: string}
+        motivo_do_chamado: {type: string}
+        etiqueta: {type: string, description: 'Rótulo neutro, ex. "Interesse alto".'}
+        etapa: {$ref: '#/components/schemas/Etapa'}
+        etapa_rotulo: {type: string}
+        proximo_passo: {type: string}
+        ultimo_contato: {oneOf: [{$ref: '#/components/schemas/Horario'}, {type: 'null'}]}
+    CartaoConversa:
+      type: object
+      required: [lead, nome, origem, estado_do_chamado, janela]
+      properties:
+        lead: {type: string}
+        nome: {type: string}
+        telefone: {type: string}
+        origem: {type: string}
+        carro: {type: string}
+        motivo: {type: string}
+        etiqueta: {type: string}
+        ultima_mensagem: {oneOf: [{$ref: '#/components/schemas/Horario'}, {type: 'null'}]}
+        espera:
+          description: Tempo esperando, contado só dentro do expediente (igual ao aviso ao gerente).
+          oneOf:
+            - type: object
+              required: [minutos, texto]
+              properties:
+                minutos: {type: integer}
+                texto: {type: string}
+            - type: 'null'
+        estado_do_chamado: {type: string, enum: [aguardando, humano_assumiu, nenhum]}
+        assumido_por: {type: [string, 'null']}
+        janela: {$ref: '#/components/schemas/Janela'}
+    Atender:
+      type: object
+      required: [esperando, com_vendedor, conversas_de_hoje]
+      properties:
+        esperando: {type: array, items: {$ref: '#/components/schemas/CartaoConversa'}}
+        com_vendedor: {type: array, items: {$ref: '#/components/schemas/CartaoConversa'}}
+        conversas_de_hoje: {type: array, items: {$ref: '#/components/schemas/CartaoConversa'}}
+    Mensagem:
+      type: object
+      required: [id, de, texto, canal, quando]
+      properties:
+        id: {type: integer}
+        de: {type: string, enum: [cliente, leo, vendedor]}
+        autor: {type: [string, 'null'], description: Nome do vendedor quando de = vendedor.}
+        tipo: {type: string, enum: [texto, audio, imagem, outro], default: texto}
+        texto: {type: string}
+        canal: {type: string}
+        quando: {$ref: '#/components/schemas/Horario'}
+    AcaoPermitida:
+      type: object
+      required: [permitida]
+      properties:
+        permitida: {type: boolean}
+        motivo: {type: [string, 'null'], description: 'Por que está desligada, em palavras.'}
+    Conversa:
+      type: object
+      required: [cliente, mensagens, estado_do_chamado, janela, acoes]
+      properties:
+        cliente: {$ref: '#/components/schemas/CartaoCliente'}
+        mensagens: {type: array, items: {$ref: '#/components/schemas/Mensagem'}}
+        estado_do_chamado: {type: string, enum: [aguardando, humano_assumiu, nenhum]}
+        assumido_por: {type: [string, 'null']}
+        janela: {$ref: '#/components/schemas/Janela'}
+        aviso: {type: [string, 'null'], description: 'Faixa da conversa, ex. loja em teste.'}
+        acoes:
+          type: object
+          required: [assumir, responder, devolver, registrar_venda, reativar_contato]
+          properties:
+            assumir: {$ref: '#/components/schemas/AcaoPermitida'}
+            responder: {$ref: '#/components/schemas/AcaoPermitida'}
+            devolver: {$ref: '#/components/schemas/AcaoPermitida'}
+            registrar_venda: {$ref: '#/components/schemas/AcaoPermitida'}
+            reativar_contato: {$ref: '#/components/schemas/AcaoPermitida'}
+    ResponderEntrada:
+      type: object
+      required: [texto]
+      properties:
+        texto: {type: string, minLength: 1, maxLength: 4000}
+    VendaEntrada:
+      type: object
+      required: [carro_id, data_venda, forma_pagamento]
+      properties:
+        carro_id: {type: integer}
+        data_venda: {type: string, format: date, description: Não pode ser futura (fuso da loja).}
+        forma_pagamento: {type: string, enum: [avista, financiado]}
+        meses_financiamento: {type: [integer, 'null'], minimum: 1, maximum: 120, description: Obrigatório se financiado.}
+    VendaRegistrada:
+      type: object
+      required: [venda_id, carro, efeitos]
+      properties:
+        venda_id: {type: integer}
+        carro: {type: string}
+        data: {type: string}
+        forma: {type: string}
+        efeitos:
+          type: array
+          items:
+            type: object
+            required: [codigo, texto]
+            properties:
+              codigo: {type: string, enum: [venda, resultado, baixa_no_estoque, pos_venda]}
+              texto: {type: string}
+    LinhaLead:
+      type: object
+      required: [lead, nome, origem, etapa, etapa_rotulo]
+      properties:
+        lead: {type: string}
+        nome: {type: string}
+        carro: {type: string}
+        origem: {type: string}
+        ultimo_contato: {oneOf: [{$ref: '#/components/schemas/Horario'}, {type: 'null'}]}
+        etapa: {$ref: '#/components/schemas/Etapa'}
+        etapa_rotulo: {type: string, description: 'A etapa "venda_registrada" aparece como "Venda registrada".'}
+        proximo_passo: {type: string}
+    Paginacao:
+      type: object
+      required: [pagina, paginas, total, tamanho]
+      properties:
+        pagina: {type: integer}
+        paginas: {type: integer}
+        total: {type: integer}
+        tamanho: {type: integer}
+    LeadsPagina:
+      allOf:
+        - {$ref: '#/components/schemas/Paginacao'}
+        - type: object
+          required: [itens, contagem_por_etapa, periodo_dias]
+          properties:
+            itens: {type: array, items: {$ref: '#/components/schemas/LinhaLead'}}
+            contagem_por_etapa:
+              type: array
+              items:
+                type: object
+                required: [etapa, rotulo, total]
+                properties:
+                  etapa: {$ref: '#/components/schemas/Etapa'}
+                  rotulo: {type: string}
+                  total: {type: integer}
+            periodo_dias: {type: integer}
+    Resultado:
+      type: object
+      required: [periodo, conversas_atendidas, fora_do_horario, primeira_resposta, ate_vendedor_assumir,
+                 passados_ao_vendedor, visitas_marcadas, vendas_registradas, funil, por_dia, dados_de_teste]
+      properties:
+        periodo:
+          type: object
+          required: [inicio, fim, rotulo]
+          properties:
+            inicio: {type: string, format: date}
+            fim: {type: string, format: date}
+            rotulo: {type: string, examples: ['2 a 8 de novembro']}
+        conversas_atendidas: {type: integer}
+        fora_do_horario: {type: integer}
+        primeira_resposta:
+          description: Da primeira mensagem do cliente à primeira resposta, incluindo a espera de agrupamento.
+          type: object
+          required: [segundos, texto]
+          properties:
+            segundos: {type: [number, 'null']}
+            texto: {type: string}
+        ate_vendedor_assumir:
+          type: object
+          required: [segundos, texto]
+          properties:
+            segundos: {type: [number, 'null']}
+            texto: {type: string}
+        passados_ao_vendedor: {type: integer}
+        visitas_marcadas: {type: integer}
+        vendas_registradas: {type: integer}
+        funil:
+          type: array
+          items:
+            type: object
+            required: [etapa, rotulo, total]
+            properties:
+              etapa: {type: string, enum: [conversas, qualificados, com_vendedor, visitas, vendas]}
+              rotulo: {type: string}
+              total: {type: integer}
+        por_dia:
+          type: array
+          items:
+            type: object
+            required: [dia, dia_texto, no_horario, fora_do_horario]
+            properties:
+              dia: {type: string, format: date}
+              dia_texto: {type: string}
+              no_horario: {type: integer}
+              fora_do_horario: {type: integer}
+        dados_de_teste: {type: boolean, description: Loja ainda em teste (números de teste não são vendas reais).}
+        contando_desde: {oneOf: [{$ref: '#/components/schemas/Horario'}, {type: 'null'}]}
+    ModoEnvio:
+      type: object
+      required: [estado, rotulo, por_tipo]
+      properties:
+        estado: {type: string, enum: [enviando, pausadas, so_simulando, bloqueado_em_teste]}
+        rotulo: {type: string, description: 'Nunca "Ligadas" se nada está sendo enviado.'}
+        detalhe: {type: string}
+        por_tipo:
+          type: array
+          items:
+            type: object
+            required: [tipo, tipo_rotulo, situacao]
+            properties:
+              tipo: {type: string, enum: [remarketing, pos_venda, reativacao]}
+              tipo_rotulo: {type: string}
+              situacao: {type: string}
+    Bloqueio:
+      type: object
+      required: [id, lead, tipo, tipo_rotulo, descricao]
+      properties:
+        id: {type: integer}
+        lead: {type: string}
+        cliente: {type: string}
+        tipo: {type: string, enum: [remarketing, pos_venda, reativacao, todos]}
+        tipo_rotulo: {type: string}
+        passo: {type: [integer, 'null']}
+        descricao: {type: string}
+        criado_em: {oneOf: [{$ref: '#/components/schemas/Horario'}, {type: 'null'}]}
+        por: {type: [string, 'null']}
+    BloqueioEntrada:
+      type: object
+      required: [lead, tipo]
+      properties:
+        lead: {type: string}
+        tipo: {type: string, enum: [remarketing, pos_venda, reativacao, todos]}
+        passo: {type: [integer, 'null']}
+    PausarEntrada:
+      type: object
+      properties:
+        motivo: {type: string, maxLength: 200}
+    ItemEnvio:
+      type: object
+      required: [tipo, tipo_rotulo, lead, cliente, situacao]
+      properties:
+        tipo: {type: string, enum: [remarketing, pos_venda, reativacao]}
+        tipo_rotulo: {type: string}
+        lead: {type: string}
+        cliente: {type: string}
+        canal: {type: string}
+        passo: {type: [integer, 'null']}
+        quando: {oneOf: [{$ref: '#/components/schemas/Horario'}, {type: 'null'}]}
+        situacao: {type: string}
+        detalhe: {type: string}
+        bloqueio: {oneOf: [{$ref: '#/components/schemas/Bloqueio'}, {type: 'null'}]}
+        pode_bloquear: {type: boolean}
+    ItemHistorico:
+      type: object
+      required: [tipo, tipo_rotulo, lead, cliente, estado, estado_rotulo, quando]
+      properties:
+        tipo: {type: string, enum: [remarketing, pos_venda, reativacao]}
+        tipo_rotulo: {type: string}
+        lead: {type: string}
+        cliente: {type: string}
+        estado: {type: string}
+        estado_rotulo: {type: string}
+        motivo: {type: string}
+        texto: {type: string}
+        detalhe: {type: string}
+        quando: {$ref: '#/components/schemas/Horario'}
+    Acompanhamento:
+      type: object
+      required: [modo, pausa, uso_mes, proximos, historico, bloqueios_ativos, resultado_do_mes]
+      properties:
+        modo: {$ref: '#/components/schemas/ModoEnvio'}
+        pausa: {$ref: '#/components/schemas/Pausa'}
+        uso_mes:
+          type: object
+          required: [usados, texto]
+          properties:
+            usados: {type: integer}
+            limite: {type: [integer, 'null']}
+            texto: {type: string, examples: ['38 de 200 contatos neste mês']}
+        proximos: {type: array, items: {$ref: '#/components/schemas/ItemEnvio'}}
+        historico: {type: array, items: {$ref: '#/components/schemas/ItemHistorico'}}
+        bloqueios_ativos: {type: array, items: {$ref: '#/components/schemas/Bloqueio'}}
+        resultado_do_mes:
+          type: object
+          required: [enviados, responderam, agendaram]
+          properties:
+            enviados: {type: integer}
+            responderam: {type: integer}
+            agendaram: {type: integer}
+    Preco:
+      type: object
+      required: [valor, texto]
+      properties:
+        valor: {type: number, description: Em reais.}
+        texto: {type: string, examples: ['R$ 62.900,00']}
+    Carro:
+      type: object
+      required: [id, marca, modelo, ano, km, cor, cambio, preco, status, status_rotulo, fotos, interessados]
+      properties:
+        id: {type: integer}
+        marca: {type: string}
+        modelo: {type: string}
+        ano: {type: integer}
+        km: {type: integer}
+        cor: {type: string}
+        cambio: {type: string}
+        preco: {$ref: '#/components/schemas/Preco'}
+        status: {type: string, enum: [disponivel, reservado, indisponivel, vendido]}
+        status_rotulo: {type: string}
+        fotos: {type: array, items: {type: string, format: uri}, description: Por URL na v1; upload fica para depois (A4).}
+        interessados: {type: integer, description: 'Pessoas interessadas agora (um carro de interesse por cliente). Não é histórico de perguntas.'}
+        pode_editar: {type: boolean, description: Falso para carro vendido.}
+    CarroEntrada:
+      type: object
+      required: [marca, modelo, ano, km, cor, cambio, preco, status]
+      properties:
+        marca: {type: string, maxLength: 60}
+        modelo: {type: string, maxLength: 80}
+        ano: {type: integer, minimum: 1950}
+        km: {type: integer, minimum: 0}
+        cor: {type: string, maxLength: 40}
+        cambio: {type: string, maxLength: 40}
+        preco: {type: number, exclusiveMinimum: 0}
+        status: {type: string, enum: [disponivel, reservado, indisponivel], description: '"vendido" só por registrar-venda.'}
+        fotos: {type: array, items: {type: string, format: uri}, maxItems: 20}
+    CarroEdicao:
+      type: object
+      required: [dados]
+      properties:
+        dados: {$ref: '#/components/schemas/CarroEntrada'}
+        esperado:
+          description: Os valores que a tela mostrou. Se o carro mudou nesse meio tempo, responde 409.
+          type: object
+          additionalProperties: true
+    EstoquePagina:
+      allOf:
+        - {$ref: '#/components/schemas/Paginacao'}
+        - type: object
+          required: [itens, totais]
+          properties:
+            itens: {type: array, items: {$ref: '#/components/schemas/Carro'}}
+            totais:
+              type: object
+              required: [disponivel, reservado, indisponivel, vendido]
+              properties:
+                disponivel: {type: integer}
+                reservado: {type: integer}
+                indisponivel: {type: integer}
+                vendido: {type: integer}

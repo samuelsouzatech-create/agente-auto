@@ -1,0 +1,43 @@
+{
+  "modo": {
+    "estado": "bloqueado_em_teste",
+    "rotulo": "Bloqueado: loja em teste",
+    "detalhe": "Nada é enviado a clientes reais enquanto a loja estiver em teste.",
+    "por_tipo": [
+      {
+        "tipo": "remarketing",
+        "tipo_rotulo": "Retomada",
+        "situacao": "Bloqueado: loja em teste"
+      },
+      {
+        "tipo": "pos_venda",
+        "tipo_rotulo": "Pós-venda",
+        "situacao": "Bloqueado: loja em teste"
+      },
+      {
+        "tipo": "reativacao",
+        "tipo_rotulo": "Reativação",
+        "situacao": "Bloqueado: loja em teste"
+      }
+    ]
+  },
+  "pausa": {
+    "ativa": false,
+    "por": null,
+    "desde": null,
+    "motivo": null
+  },
+  "uso_mes": {
+    "usados": 0,
+    "limite": 200,
+    "texto": "0 de 200 contatos neste mês"
+  },
+  "proximos": [],
+  "historico": [],
+  "bloqueios_ativos": [],
+  "resultado_do_mes": {
+    "enviados": 0,
+    "responderam": 0,
+    "agendaram": 0
+  }
+}

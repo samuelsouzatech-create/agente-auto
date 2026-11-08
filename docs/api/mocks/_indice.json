@@ -1,0 +1,380 @@
+{
+  "auth_login__ok.json": {
+    "rota": "/auth/login",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "auth_login__senha_provisoria.json": {
+    "rota": "/auth/login",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "auth_login__credenciais_invalidas.json": {
+    "rota": "/auth/login",
+    "metodo": "post",
+    "status": "401",
+    "tipo": "resposta"
+  },
+  "auth_login__muitas_tentativas.json": {
+    "rota": "/auth/login",
+    "metodo": "post",
+    "status": "429",
+    "tipo": "resposta"
+  },
+  "auth_eu__dono.json": {
+    "rota": "/auth/eu",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "auth_eu__loja_em_teste.json": {
+    "rota": "/auth/eu",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "auth_eu__modulos_desligados.json": {
+    "rota": "/auth/eu",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "auth_eu__vendedor_do_link.json": {
+    "rota": "/auth/eu",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "auth_eu__nao_autenticado.json": {
+    "rota": "/auth/eu",
+    "metodo": "get",
+    "status": "401",
+    "tipo": "resposta"
+  },
+  "auth_trocar_senha__senha_fraca.json": {
+    "rota": "/auth/trocar-senha",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "pedido_auth_login.json": {
+    "rota": "/auth/login",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "pedido"
+  },
+  "pedido_auth_trocar_senha.json": {
+    "rota": "/auth/trocar-senha",
+    "metodo": "post",
+    "status": "204",
+    "tipo": "pedido"
+  },
+  "saude__verde.json": {
+    "rota": "/saude",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "saude__pausado.json": {
+    "rota": "/saude",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "saude__em_teste.json": {
+    "rota": "/saude",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "saude__sem_canal.json": {
+    "rota": "/saude",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "atender__com_dados.json": {
+    "rota": "/atender",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "atender__vazio.json": {
+    "rota": "/atender",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_lead__aguardando.json": {
+    "rota": "/conversas/{lead}",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_lead__assumida.json": {
+    "rota": "/conversas/{lead}",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_assumir__ok.json": {
+    "rota": "/conversas/{lead}/assumir",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_assumir__ja_assumida.json": {
+    "rota": "/conversas/{lead}/assumir",
+    "metodo": "post",
+    "status": "409",
+    "tipo": "resposta"
+  },
+  "conversas_lead__janela_fechada.json": {
+    "rota": "/conversas/{lead}",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_lead__loja_em_teste.json": {
+    "rota": "/conversas/{lead}",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_lead__nao_encontrada.json": {
+    "rota": "/conversas/{lead}",
+    "metodo": "get",
+    "status": "404",
+    "tipo": "resposta"
+  },
+  "conversas_responder__ok.json": {
+    "rota": "/conversas/{lead}/responder",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_responder__janela_fechada.json": {
+    "rota": "/conversas/{lead}/responder",
+    "metodo": "post",
+    "status": "409",
+    "tipo": "resposta"
+  },
+  "conversas_responder__vazia.json": {
+    "rota": "/conversas/{lead}/responder",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "conversas_devolver__ok.json": {
+    "rota": "/conversas/{lead}/devolver",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_registrar_venda__ok.json": {
+    "rota": "/conversas/{lead}/registrar-venda",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_registrar_venda__carro_invalido.json": {
+    "rota": "/conversas/{lead}/registrar-venda",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "conversas_reativar_contato__ok.json": {
+    "rota": "/conversas/{lead}/reativar-contato",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "pedido_responder.json": {
+    "rota": "/conversas/{lead}/responder",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "pedido"
+  },
+  "pedido_registrar_venda.json": {
+    "rota": "/conversas/{lead}/registrar-venda",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "pedido"
+  },
+  "leads__com_dados.json": {
+    "rota": "/leads",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "leads__vazio.json": {
+    "rota": "/leads",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "resultado__semana.json": {
+    "rota": "/resultado",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "resultado__vazio.json": {
+    "rota": "/resultado",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "resultado__loja_em_teste.json": {
+    "rota": "/resultado",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "acompanhamento__enviando.json": {
+    "rota": "/acompanhamento",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "acompanhamento__pausado.json": {
+    "rota": "/acompanhamento",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "acompanhamento__loja_em_teste.json": {
+    "rota": "/acompanhamento",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "acompanhamento__vazio.json": {
+    "rota": "/acompanhamento",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "acompanhamento__modulo_desligado.json": {
+    "rota": "/acompanhamento",
+    "metodo": "get",
+    "status": "403",
+    "tipo": "resposta"
+  },
+  "acompanhamento_pausar__ok.json": {
+    "rota": "/acompanhamento/pausar",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "acompanhamento_retomar__ok.json": {
+    "rota": "/acompanhamento/retomar",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "bloqueios_criar__ok.json": {
+    "rota": "/bloqueios",
+    "metodo": "post",
+    "status": "201",
+    "tipo": "resposta"
+  },
+  "bloqueios_criar__tipo_invalido.json": {
+    "rota": "/bloqueios",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "pedido_pausar.json": {
+    "rota": "/acompanhamento/pausar",
+    "metodo": "post",
+    "status": "200",
+    "tipo": "pedido"
+  },
+  "pedido_bloqueio.json": {
+    "rota": "/bloqueios",
+    "metodo": "post",
+    "status": "201",
+    "tipo": "pedido"
+  },
+  "estoque__com_dados.json": {
+    "rota": "/estoque",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "estoque__vazio.json": {
+    "rota": "/estoque",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "estoque__modulo_desligado.json": {
+    "rota": "/estoque",
+    "metodo": "get",
+    "status": "403",
+    "tipo": "resposta"
+  },
+  "estoque_criar__ok.json": {
+    "rota": "/estoque",
+    "metodo": "post",
+    "status": "201",
+    "tipo": "resposta"
+  },
+  "estoque_criar__vendido_recusado.json": {
+    "rota": "/estoque",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "estoque_editar__ok.json": {
+    "rota": "/estoque/{id}",
+    "metodo": "put",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "estoque_editar__conflito.json": {
+    "rota": "/estoque/{id}",
+    "metodo": "put",
+    "status": "409",
+    "tipo": "resposta"
+  },
+  "estoque_editar__vendido.json": {
+    "rota": "/estoque/{id}",
+    "metodo": "put",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "pedido_estoque_criar.json": {
+    "rota": "/estoque",
+    "metodo": "post",
+    "status": "201",
+    "tipo": "pedido"
+  },
+  "pedido_estoque_editar.json": {
+    "rota": "/estoque/{id}",
+    "metodo": "put",
+    "status": "200",
+    "tipo": "pedido"
+  },
+  "erro__sem_permissao.json": {
+    "rota": "/saude",
+    "metodo": "get",
+    "status": "403",
+    "tipo": "resposta"
+  },
+  "erro__link_escopo.json": {
+    "rota": "/leads",
+    "metodo": "get",
+    "status": "403",
+    "tipo": "resposta"
+  },
+  "erro__nao_autenticado.json": {
+    "rota": "/atender",
+    "metodo": "get",
+    "status": "401",
+    "tipo": "resposta"
+  }
+}

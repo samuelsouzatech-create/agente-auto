@@ -1,0 +1,21 @@
+{
+  "id": 12,
+  "marca": "Hyundai",
+  "modelo": "HB20 Comfort",
+  "ano": 2020,
+  "km": 48000,
+  "cor": "Prata",
+  "cambio": "Manual",
+  "preco": {
+    "valor": 61900.0,
+    "texto": "R$ 61.900,00"
+  },
+  "status": "disponivel",
+  "status_rotulo": "Disponível",
+  "fotos": [
+    "https://fotos.exemplo.example/hb20-1.jpg",
+    "https://fotos.exemplo.example/hb20-2.jpg"
+  ],
+  "interessados": 3,
+  "pode_editar": true
+}

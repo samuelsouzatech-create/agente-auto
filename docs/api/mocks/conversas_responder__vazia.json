@@ -1,0 +1,7 @@
+{
+  "codigo": "invalido",
+  "mensagem": "Escreva a mensagem antes de enviar.",
+  "campos": {
+    "texto": "Mensagem vazia."
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "codigo": "invalido",
+  "mensagem": "Para marcar como vendido, use Registrar venda na conversa do cliente.",
+  "campos": {
+    "status": "Use Registrar venda."
+  }
+}
