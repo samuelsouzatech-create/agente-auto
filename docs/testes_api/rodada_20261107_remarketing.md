@@ -48,3 +48,19 @@ palavras de desconto. A leitura das frases mostrou o problema; o detector foi re
 Detectores por palavras podem errar nos dois sentidos; por isso o relatório guarda o texto
 de cada tentativa. Quando o furo 3 for corrigido, revisar o teste xfail dele junto
 (a assinatura de `_limpar_texto` pode mudar).
+
+## Decisões do analista (08/11/2026)
+- Marco 2b fechado sem esperar a correção do furo 15. Furos 1, 2, 3, 7, 8, 13 e 15 ficam
+  como falha esperada, cada um com bloco de correção próprio.
+- O caso `pediu_desconto` continua falhando na API (mostra a verdade). O cabeçalho do
+  relatório diz "Falha conhecida: furo 15".
+- Rodada completa com o Gemini: só depois do furo 15 e da guarda de preço. Ela também
+  cobre a mudança do S4c em `tools/buscar_conhecimento.py`.
+- Ordem: 15 + 3 (mesmo arquivo) → 1 + 2 → 7 → 8 → Marco 4 (C1, C2, C3) → 13.
+- Furo 15: corrigir no prompt e no filtro, num bloco só; se o filtro barrar, sai o texto reserva.
+- Vídeo proibido por enquanto: o redator oferece só fotos e visita.
+- "Chegou"/"acabou de chegar" não pode: dizer "temos um Corolla" só quando vier do estoque.
+- Horário por dia: aprovado `atendimento.horario_semana` com compatibilidade com o formato antigo;
+  `remarketing.horario_envio` continua uma janela só, mas nunca fora da abertura do dia
+  (se for complicado, fica para depois); feriados (furo 14) ficam fora. O C1 já prevê horário por dia.
+- Tag: `testes-api-e2-5` (e não "etapa-2-testada", porque ainda há defeitos abertos).

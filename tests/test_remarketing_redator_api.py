@@ -340,6 +340,8 @@ def _relatorio():
               f"{GASTO['saida']} de saída, {GASTO['respostas']} respostas do modelo)",
               f"Preço usado: US$ {PRECO_ENTRADA} (entrada) e US$ {PRECO_SAIDA} (saída) por milhão.",
               "Resumo: " + ", ".join(f"{k}: {v}" for k, v in sorted(contagem.items()))]
+    linhas.append("Falha conhecida: furo 15 (caso 'cliente pediu desconto antes' "
+                  "falha de propósito até a correção do redator em app/).")
     if contagem.get("INSTÁVEL") or contagem.get("BLOQUEIA"):
         linhas.append("ATENÇÃO: houve falha de promessa. O marco espera o analista.")
     linhas.append("-" * 72)
