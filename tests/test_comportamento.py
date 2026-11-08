@@ -55,11 +55,17 @@ def conversar(mensagem_cliente: str):
     Gemini quando o pytest apenas COLETA os testes sem rodá-los."""
     from app.core.agent import agente_grafo
     from langchain_core.messages import HumanMessage
+    import uuid
+
+    # thread_id unico por conversa: a memoria do grafo (MemorySaver)
+    # exige um, e cada teste comeca uma conversa nova (Marco 2b, E2-5).
+    lead_id = f"teste-comportamento-{uuid.uuid4().hex[:8]}"
 
     resultado = agente_grafo.invoke({
         "messages": [HumanMessage(content=mensagem_cliente)],
-        "lead_id": "teste-comportamento",
-    })
+        "lead_id": lead_id,
+        "loja_id": 1,
+    }, {"configurable": {"thread_id": lead_id}})
     return resultado["messages"]
 
 
