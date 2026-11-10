@@ -22,7 +22,9 @@ Rodar a conferência (na raiz do repositório): `python docs/api/conferir_mocks.
 6. **Rótulos prontos**: etapa, situação, motivo e etiqueta vêm em texto. O front não calcula etapa, não valida regra e não monta frase.
 7. **Listas** têm paginação (`pagina`, `tamanho`, resposta com `pagina`, `paginas`, `total`) e estado vazio.
 8. **Erro num formato só**: `{codigo, mensagem, campos?}`. A `mensagem` está pronta para o usuário, sem termo técnico.
-9. **Ações permitidas vêm da API.** Em `GET /conversas/{lead}`, `acoes` diz o que cada botão pode e, quando não pode, o motivo em palavras. O front só obedece.
+9. **Abas e ações vêm da API.** `GET /auth/eu` traz `abas`, a lista do que esta pessoa vê (já filtrada por papel e por módulo contratado), e o front só desenha estas. Em `GET /conversas/{lead}`, `acoes` diz o que cada botão pode e, quando não pode, o motivo em palavras.
+10. **Atualização automática.** `GET /atender` (e a conversa aberta) trazem `atualizar_em_segundos`. O front consulta de novo nesse intervalo (20 s na lista e 10 s na conversa aberta) e pausa quando a aba está escondida. Sem websocket na v1.
+11. **Quem pode o quê** está em cada operação do `openapi.yaml`, em `x-papeis`. O C2 tem um teste que compara isso com as rotas reais.
 
 ### Códigos de resposta
 
@@ -30,7 +32,7 @@ Rodar a conferência (na raiz do repositório): `python docs/api/conferir_mocks.
 |---|---|---|
 | 401 | `nao_autenticado` | Sem sessão válida |
 | 401 | `credenciais_invalidas` | Login errado (a mesma resposta para qualquer motivo) |
-| 429 | `muitas_tentativas` | Limite de tentativas no login ou no link |
+| 429 | `muitas_tentativas` | Limite de tentativas no login, na troca de senha, no "esqueci a senha" ou no link |
 | 403 | `sem_permissao` | O papel, ou o escopo do link, não pode |
 | 403 | `modulo_desligado` | Aba opcional não contratada |
 | 404 | `nao_encontrado` | Não existe nesta loja (também quando existe em outra) |
@@ -40,31 +42,34 @@ Rodar a conferência (na raiz do repositório): `python docs/api/conferir_mocks.
 
 ### Papéis
 
-| Papel na API | Quem é | Acessa |
-|---|---|---|
-| `dono` | Dono da loja | Tudo do painel |
-| `gestor` | Gerente | Tudo do painel |
-| `vendedor_link` | Vendedor que abriu o link do aviso | **Só** a conversa do link e as ações assumir, responder, devolver e registrar venda |
+| Papel na API | Quem é | Como entra | `escopo` | Vê |
+|---|---|---|---|---|
+| `dono` | Dono da loja | Login | `completo` | Tudo do painel |
+| `gestor` | Gerente | Login | `completo` | Tudo do painel |
+| `vendedor` | Equipe de atendimento online | Login | `atendimento` | **Atender e Leads.** Assume, responde, devolve e registra venda. Não vê Resultado, Acompanhamento, Estoque nem a luz de saúde. Não reativa contato |
+| `vendedor_link` | Vendedor da loja que recebeu o aviso | Link do aviso (C3) | `link` | **Só** a conversa do link, com as ações assumir, responder, devolver e registrar venda |
 
-Operador e suporte **não** usam esta API: o painel do operador continua chamando `app/` direto.
+Operador e suporte **não** usam esta API (o painel do operador chama `app/` direto). Se tentarem entrar com a senha certa, a resposta é o mesmo 401 de qualquer erro, sem criar sessão. Se uma sessão dessas aparecer por outro caminho, toda rota responde 403.
 
 ## 2. Rotas
 
 | Grupo | Rota | Quem | Função em `app/` | Dados falsos |
 |---|---|---|---|---|
-| Acesso | `POST /auth/login` | todos | `autenticacao.autenticar` | `auth_login__*` |
-| Acesso | `POST /auth/logout` | logado | — (revoga a sessão) | — |
+| Acesso | `POST /auth/login` | público | `autenticacao.autenticar` | `auth_login__*` |
+| Acesso | `POST /auth/logout` | logado (qualquer papel) | — (revoga a sessão) | — |
 | Acesso | `GET /auth/eu` | logado | sessão + `estado_loja` + módulos | `auth_eu__*` |
-| Acesso | `POST /auth/trocar-senha` | logado | **nova** (ver seção 4) | `auth_trocar_senha__senha_fraca` |
+| Acesso | `POST /auth/trocar-senha` | logado | **nova** (ver seção 5) | `auth_trocar_senha__*` |
+| Acesso | `POST /auth/esqueci-senha` | público | **nova**, C2f | `auth_esqueci_senha__*` |
+| Acesso | `POST /auth/criar-senha` | público (com link) | **nova**, C2f | `auth_criar_senha__*` |
 | Estado | `GET /saude` | dono, gestor | `pausa.situacao`, `estado_loja.situacao_da_loja`, `canais.listar_canais` | `saude__*` |
-| Atender | `GET /atender` | dono, gestor | `handoff.listar_handoffs`, `mensagens.listar_conversas`, `relogio.minutos_no_expediente` | `atender__*` |
-| Atender | `GET /conversas/{lead}` | dono, gestor, vendedor do link | `mensagens.historico_do_lead`, `painel_leitura.cartao_do_lead`, `janela.janela_aberta` | `conversas_lead__*` |
+| Atender | `GET /atender` | dono, gestor, vendedor | `handoff.listar_handoffs`, `mensagens.listar_conversas`, `relogio.minutos_no_expediente` | `atender__*` |
+| Atender | `GET /conversas/{lead}` | dono, gestor, vendedor, vendedor do link | `mensagens.historico_do_lead`, `painel_leitura.cartao_do_lead`, `janela.janela_aberta` | `conversas_lead__*` |
 | Atender | `POST /conversas/{lead}/assumir` | idem | `handoff.assumir_conversa` | `conversas_assumir__*` |
 | Atender | `POST /conversas/{lead}/responder` | idem | `envio_painel.enviar_pelo_painel` | `conversas_responder__*` |
 | Atender | `POST /conversas/{lead}/devolver` | idem | `handoff.devolver_ao_agente` | `conversas_devolver__ok` |
 | Atender | `POST /conversas/{lead}/registrar-venda` | idem | `vendas.registrar_venda` | `conversas_registrar_venda__*` |
 | Atender | `POST /conversas/{lead}/reativar-contato` | dono, gestor | `interesse.reativar_contato` | `conversas_reativar_contato__ok` |
-| Leads | `GET /leads` | dono, gestor | `painel_leitura.etapas_dos_leads` | `leads__*` |
+| Leads | `GET /leads` | dono, gestor, vendedor | `painel_leitura.etapas_dos_leads` | `leads__*` |
 | Resultado | `GET /resultado` | dono, gestor | `painel_leitura.resultado_do_periodo` | `resultado__*` |
 | Acompanhamento | `GET /acompanhamento` | dono, gestor | `painel_envios.*`, `pausa.situacao`, `bloqueios.listar_ativos` | `acompanhamento__*` |
 | Acompanhamento | `POST /acompanhamento/pausar`, `/retomar` | dono, gestor | `pausa.pausar`, `pausa.retomar` | `acompanhamento_pausar__ok`, `acompanhamento_retomar__ok` |
@@ -72,6 +77,7 @@ Operador e suporte **não** usam esta API: o painel do operador continua chamand
 | Estoque | `GET /estoque`, `POST /estoque`, `PUT /estoque/{id}` | dono, gestor | `estoque.listar_estoque`, `adicionar_carro`, `atualizar_carro` | `estoque__*`, `estoque_criar__*`, `estoque_editar__*` |
 | Link | `GET /v/{token}` | quem recebeu o aviso | `links_vendedor` (C3) | — (redireciona) |
 
+Nas rotas de conversa, o vendedor do link só alcança a conversa do próprio link; qualquer outra responde 404.
 Cada rota define o ator (`app/ator.py`: pessoa da sessão, papel `cliente`, origem `api`, loja da sessão) **antes** de chamar `app/`.
 Assim o Registro e as travas (P6, S5, P7) continuam valendo sem mudar nenhuma função existente.
 
@@ -85,8 +91,8 @@ Assim o Registro e as travas (P6, S5, P7) continuam valendo sem mudar nenhuma fu
 | Módulo não contratado | `auth_eu__modulos_desligados`, `acompanhamento__modulo_desligado`, `estoque__modulo_desligado` |
 | Loja em teste | `auth_eu__loja_em_teste`, `saude__em_teste`, `conversas_lead__loja_em_teste`, `resultado__loja_em_teste`, `acompanhamento__loja_em_teste` |
 | Envios pausados | `saude__pausado`, `acompanhamento__pausado` |
-| Primeiro acesso (senha provisória) | `auth_login__senha_provisoria` |
-| Vendedor do link (escopo restrito) | `auth_eu__vendedor_do_link`, `erro__link_escopo` |
+| Vendedor com login e vendedor do link (escopos restritos) | `auth_eu__vendedor_com_login`, `auth_eu__vendedor_do_link`, `erro__vendedor_sem_acesso`, `erro__link_escopo` |
+| Criar e recuperar senha (C2f) | `auth_esqueci_senha__*`, `auth_criar_senha__*` |
 | Conflito de edição | `estoque_editar__conflito`, `conversas_assumir__ja_assumida` |
 | Carro vendido não editável | `estoque__com_dados` (campo `pode_editar: false`), `estoque_editar__vendido` |
 
@@ -109,7 +115,7 @@ Assim o Registro e as travas (P6, S5, P7) continuam valendo sem mudar nenhuma fu
 | 13 | "Muito interessada" | `etiqueta` neutra ("Interesse alto"). |
 | 14 | Luz "Léo atendendo" | `GET /saude`. Nunca verde com pausa, loja em teste ou sem canal ativo. |
 | 15 | Celular | Fora da API. Desenho das telas de celular precisa ser aprovado antes do front. |
-| 16 | "Esqueci minha senha" | Sem rota na v1. A tela diz para falar com o suporte (o operador redefine). |
+| 16 | "Esqueci minha senha" | `POST /auth/esqueci-senha` e `POST /auth/criar-senha` (C2f). Link de uso único; a mesma resposta exista ou não o e-mail. Até o provedor de e-mail existir, o operador gera o link no painel e o manda ao dono. |
 | 17 | "Estados (demo)" e nome cortado | Fora da API. `/auth/eu` traz o nome para o menu do usuário (Sair, Trocar senha). |
 | 18 | Módulo não contratado | `modulos` em `/auth/eu` (a aba não aparece) e `403 modulo_desligado` se chamar mesmo assim. |
 | 19 | Legibilidade | Fora da API (fonte mínima de 14 px e contraste). |
@@ -119,8 +125,8 @@ Assim o Registro e as travas (P6, S5, P7) continuam valendo sem mudar nenhuma fu
 
 Pequenas funções, cada uma com teste. Nenhuma muda o que já funciona.
 
-1. **Trocar senha**: `autenticacao.trocar_senha(usuario_id, senha_atual, senha_nova)`. Hoje só existe `definir_senha`, que não confere a senha atual.
-2. **Senha provisória**: coluna nova em `usuarios` (`senha_provisoria`, 0 ou 1). Entra na migração 15 (sessões). `login` devolve `trocar_senha_obrigatoria` e a API recusa qualquer outra rota até a troca.
+1. **Trocar senha**: `autenticacao.trocar_senha(usuario_id, senha_atual, senha_nova, manter_sessao=None)`. Hoje só existe `definir_senha`, que não confere a senha atual. Senha atual errada conta no limite de tentativas do login. As outras sessões da pessoa caem; a de quem trocou continua.
+2. **Links de criar e redefinir senha (C2f)**: tabela nova na migração 16 (hash do token, `usuario_id`, tipo `criar` ou `redefinir`, validade, uso). **Sem senha provisória**: ninguém, nem o operador, conhece a senha de outra pessoa.
 3. **Módulo "estoque"**: a configuração da loja tem os módulos `whatsapp, instagram, agendamento, fotos, remarketing, pos_venda`, mas não `estoque`. Criar `modulos.estoque` (padrão ligado, para nenhuma loja existente perder a aba). `modulos.acompanhamento` da API = `remarketing` ou `pos_venda` ligado.
 4. **Pessoas interessadas por carro**: leitura nova sobre `interesse_veiculo` (um carro de interesse por cliente).
 5. **Tempo de espera do cliente**: usar `relogio.minutos_no_expediente`. Só dentro do expediente, igual ao aviso ao gerente.
@@ -128,16 +134,22 @@ Pequenas funções, cada uma com teste. Nenhuma muda o que já funciona.
 7. **Luz de saúde da loja**: função de leitura nova com as regras do item 14. Na v1 não testa o canal ao vivo, só se há canal ativo cadastrado.
 8. **Conversão de horário**: `listar_handoffs` e `historico_do_lead` devolvem UTC cru. A API converte com `apresentacao.horario_para_tela` e `horario_iso_local`.
 
-## 6. Decisões que o Samuel aprova antes do C2
+## 6. Decisões do Samuel (tomadas em 09/11/2026)
 
-| # | Decisão | Recomendação |
+| # | Decisão | Resultado |
 |---|---|---|
-| D1 | O painel é só para dono e gerente. Vendedor entra só pelo link do aviso. | A |
-| D2 | O módulo Estoque ganha uma chave própria, ligada por padrão (seção 5, item 3). | A |
-| D3 | O `lead` vai na URL. No WhatsApp ele é o telefone, então o servidor **não loga o caminho** das rotas de conversa. Um id opaco pode vir depois. | A |
-| D4 | A luz de saúde da v1 não testa o canal ao vivo. "Canal caído" de verdade vem depois. | A |
-| D5 | Senha provisória criada pelo operador, com troca obrigatória no primeiro acesso. Sem "esqueci minha senha" na v1. | A |
-| D6 | Em loja Em teste, o vendedor pode usar o painel, mas nada é enviado a cliente real. O C2 confere o que `enviar_pelo_painel` faz hoje nesse caso e me avisa antes de mudar. | A |
+| D1 | Quem entra no painel | **Três perfis.** Dono e gerente com login (tudo). Vendedor com login (papel `vendedor`, que já existe em `usuarios`): Atender e Leads, com assumir, responder, devolver e registrar venda. Vendedor da loja pelo link (`vendedor_link`). |
+| D2 | Módulo Estoque | Chave própria `modulos.estoque`, ligada por padrão, visível em "Plano e limites". Só esconde a aba; o Léo continua consultando o estoque. |
+| D3 | `lead` na URL | Mantido. O servidor **não loga o caminho** das rotas de conversa. Um código opaco pode vir depois sem refazer o front. |
+| D4 | Luz de saúde | Só o que está cadastrado (canal ativo, pausa, estado da loja). Teste ao vivo do canal fica para depois. |
+| D5 | Senha | **Em duas etapas.** C2a traz login, sessão e troca de senha. C2f traz o link de criar e de redefinir senha, **sem senha provisória**. Envio por e-mail quando houver provedor; até lá o operador copia o link. |
+| D6 | Loja em teste | Como hoje: o vendedor continua respondendo pelo painel, e na prática só aparecem conversas de números de teste. O C2 acrescenta um teste que prova isso. |
+
+Padrões técnicos fixados no C2a: sessão de 7 dias; cookie `SameSite=Lax`, `Secure` e `HttpOnly`; CSRF calculado a partir do token da sessão
+(sem coluna nova); `/docs` e `/openapi.json` desligados; CORS pela variável `PAINEL_ORIGEM`; loja desligada derruba a sessão.
+O painel e a API precisam ficar no **mesmo domínio-base** (por exemplo `painel.seudominio.com.br` e `api.seudominio.com.br`), senão o navegador não envia o cookie.
+
+Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o dono convida gerente e vendedores sem passar pelo operador. Não existe no protótipo e por isso não está no contrato.
 
 ## 7. Como o contrato muda
 

@@ -1,0 +1,7 @@
+{
+  "codigo": "invalido",
+  "mensagem": "A senha atual está incorreta.",
+  "campos": {
+    "senha_atual": "Senha atual incorreta."
+  }
+}

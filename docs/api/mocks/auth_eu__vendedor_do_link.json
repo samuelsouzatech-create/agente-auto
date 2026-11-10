@@ -13,9 +13,11 @@
     }
   },
   "modulos": {
-    "acompanhamento": false,
-    "estoque": false
+    "acompanhamento": true,
+    "estoque": true
   },
-  "trocar_senha_obrigatoria": false,
+  "abas": [
+    "atender"
+  ],
   "csrf": "k3Jx9vQ1mZp2LrT8wY5aB7cD0eF4gH6i"
 }

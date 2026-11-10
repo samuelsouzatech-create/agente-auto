@@ -1,4 +1,5 @@
 {
+  "atualizar_em_segundos": 10,
   "cliente": {
     "lead": "5581999990001",
     "nome": "Juliana Souza",
@@ -79,7 +80,7 @@
     },
     "explicacao": null
   },
-  "aviso": "Sua loja está em teste: mensagens para clientes reais não são enviadas.",
+  "aviso": "Sua loja está em teste: o Léo só responde aos números de teste.",
   "acoes": {
     "assumir": {
       "permitida": true,

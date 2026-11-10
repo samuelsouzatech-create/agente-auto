@@ -5,7 +5,7 @@
     "status": "200",
     "tipo": "resposta"
   },
-  "auth_login__senha_provisoria.json": {
+  "auth_login__gerente.json": {
     "rota": "/auth/login",
     "metodo": "post",
     "status": "200",
@@ -47,6 +47,12 @@
     "status": "200",
     "tipo": "resposta"
   },
+  "auth_eu__vendedor_com_login.json": {
+    "rota": "/auth/eu",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
   "auth_eu__nao_autenticado.json": {
     "rota": "/auth/eu",
     "metodo": "get",
@@ -58,6 +64,54 @@
     "metodo": "post",
     "status": "422",
     "tipo": "resposta"
+  },
+  "auth_trocar_senha__senha_atual_errada.json": {
+    "rota": "/auth/trocar-senha",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "auth_trocar_senha__muitas_tentativas.json": {
+    "rota": "/auth/trocar-senha",
+    "metodo": "post",
+    "status": "429",
+    "tipo": "resposta"
+  },
+  "auth_esqueci_senha__ok.json": {
+    "rota": "/auth/esqueci-senha",
+    "metodo": "post",
+    "status": "202",
+    "tipo": "resposta"
+  },
+  "auth_esqueci_senha__muitas_tentativas.json": {
+    "rota": "/auth/esqueci-senha",
+    "metodo": "post",
+    "status": "429",
+    "tipo": "resposta"
+  },
+  "auth_criar_senha__link_invalido.json": {
+    "rota": "/auth/criar-senha",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "auth_criar_senha__senha_fraca.json": {
+    "rota": "/auth/criar-senha",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "pedido_auth_esqueci_senha.json": {
+    "rota": "/auth/esqueci-senha",
+    "metodo": "post",
+    "status": "202",
+    "tipo": "pedido"
+  },
+  "pedido_auth_criar_senha.json": {
+    "rota": "/auth/criar-senha",
+    "metodo": "post",
+    "status": "204",
+    "tipo": "pedido"
   },
   "pedido_auth_login.json": {
     "rota": "/auth/login",
@@ -358,6 +412,12 @@
     "metodo": "put",
     "status": "200",
     "tipo": "pedido"
+  },
+  "erro__vendedor_sem_acesso.json": {
+    "rota": "/resultado",
+    "metodo": "get",
+    "status": "403",
+    "tipo": "resposta"
   },
   "erro__sem_permissao.json": {
     "rota": "/saude",

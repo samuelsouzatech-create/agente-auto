@@ -1,4 +1,5 @@
 {
+  "atualizar_em_segundos": 10,
   "cliente": {
     "lead": "5581999990001",
     "nome": "Juliana Souza",

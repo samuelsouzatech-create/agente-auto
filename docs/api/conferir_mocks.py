@@ -79,6 +79,12 @@ def principal():
                     erros.append(f"{rota}: parâmetro loja_id não é permitido.")
     with open(os.path.join(PASTA, "_indice.json"), encoding="utf-8") as f:
         indice = json.load(f)
+    papeis_ok = {"publico", "dono", "gestor", "vendedor", "vendedor_link"}
+    for rota, ops in doc["paths"].items():
+        for metodo, op in ops.items():
+            papeis = op.get("x-papeis")
+            if not papeis or not set(papeis) <= papeis_ok:
+                erros.append(f"{metodo.upper()} {rota}: falta x-papeis ou tem papel desconhecido")
     cobertas = set()
     for arquivo, meta in sorted(indice.items()):
         with open(os.path.join(PASTA, arquivo), encoding="utf-8") as f:
