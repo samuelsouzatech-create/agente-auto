@@ -141,3 +141,9 @@ ACOES_RELEVANTES.update({
     "apagar_preco": "app.custos_precos.apagar_preco",
     "recalcular_custos": "app.custos_precos.recalcular_periodo",
 })
+
+
+# C2a: a própria pessoa troca a senha (painel da loja, pela API).
+ACOES_RELEVANTES.update({
+    "trocar_senha": "app.autenticacao.trocar_senha",
+})

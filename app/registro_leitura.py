@@ -301,3 +301,9 @@ ROTULOS.update({
     "apagar_preco": "Apagou preço",
     "recalcular_custos": "Recalculou custos",
 })
+
+
+# C2a: troca de senha pela própria pessoa.
+ROTULOS.update({
+    "trocar_senha": "Trocou a própria senha",
+})

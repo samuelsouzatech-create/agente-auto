@@ -73,6 +73,14 @@ class SenhaFraca(ValueError):
     pass
 
 
+class SenhaAtualErrada(ValueError):
+    """A senha atual digitada não confere (conta no limite de tentativas)."""
+
+
+class MuitasTentativas(PermissionError):
+    """Erros demais seguidos: espere a janela de tentativas passar."""
+
+
 def rotulo_papel(papel: str) -> str:
     return ROTULOS_PAPEL.get(papel, papel)
 
@@ -268,6 +276,54 @@ def autenticar(email, senha, agora=None) -> dict | None:
         return None
     return {"id": u["id"], "nome": u["nome"], "papel": u["papel"],
             "rotulo_papel": rotulo_papel(u["papel"]), "loja_id": u["loja_id"], "email": email_limpo}
+
+
+# ------------------------------------------------------------ troca pela própria pessoa (C2a)
+
+def trocar_senha(usuario_id: int, senha_atual, senha_nova, manter_sessao=None,
+                 agora=None) -> int:
+    """A própria pessoa troca a senha (painel da loja, C2a). Diferente de
+    definir_senha (o operador redefine): aqui é preciso saber a senha atual.
+
+    - Senha atual errada conta no mesmo limite de tentativas do login
+      (tabela acessos) e levanta SenhaAtualErrada. Erros demais: MuitasTentativas.
+    - A senha nova passa por validar_senha e não pode ser igual à atual.
+    - Na mesma transação: grava o hash novo, encerra as OUTRAS sessões da
+      pessoa (a de manter_sessao continua valendo, decisão P5 A) e grava
+      'trocar_senha' no Registro (só "trocada", nunca a senha).
+    Devolve quantas sessões foram encerradas."""
+    from app.registro import conferir_ator, registrar   # aqui dentro: evita import circular
+    from app.sessoes import revogar_todas_da_pessoa
+    momento = para_banco(agora or agora_utc())
+    sql_acesso = "INSERT INTO acessos (usuario_id, email, quando, resultado) VALUES (?, ?, ?, ?)"
+    conexao = conectar()
+    try:
+        u = _usuario(conexao, usuario_id)
+        conferir_ator(u["loja_id"])               # sem ator, nada acontece (nem a tentativa)
+        if not u["ativo"] or not u["email"] or not u["senha_hash"]:
+            raise DadosInvalidos("Esta pessoa não tem acesso ativo.")
+        if bloqueado_por_tentativas(u["email"], agora):
+            raise MuitasTentativas("Muitas tentativas seguidas. Espere alguns minutos e tente de novo.")
+        atual = senha_atual if isinstance(senha_atual, str) else ""
+        if not _verificar(u["senha_hash"], atual):
+            conexao.execute(sql_acesso, (usuario_id, u["email"], momento, "senha_errada"))
+            conexao.commit()
+            raise SenhaAtualErrada("A senha atual não confere.")
+        validar_senha(senha_nova)
+        if senha_nova == atual:
+            raise SenhaFraca("A senha nova precisa ser diferente da atual.")
+        conexao.execute("UPDATE usuarios SET senha_hash = ? WHERE id = ?",
+                        (_hasher.hash(senha_nova), usuario_id))
+        encerradas = revogar_todas_da_pessoa(usuario_id, exceto_token=manter_sessao,
+                                             agora=agora, conexao=conexao)
+        conexao.execute(sql_acesso, (usuario_id, u["email"], momento, "senha_trocada"))
+        registrar("trocar_senha", u["loja_id"], None,
+                  {"senha": "trocada", "sessoes_encerradas": encerradas},
+                  conexao=conexao, alvo=f"usuario:{usuario_id}", agora=agora)
+        conexao.commit()
+    finally:
+        conexao.close()
+    return encerradas
 
 
 def listar_logins() -> list[dict]:
