@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api_painel import erros, rotas_auth
+from app.api_painel import erros, rotas_atender, rotas_auth
 from app.api_painel.dependencias import CABECALHO_CSRF
 
 PREFIXO = "/api/v1"
@@ -38,6 +38,7 @@ def criar_app() -> FastAPI:
                            allow_headers=["Content-Type", CABECALHO_CSRF])
     erros.instalar(app)
     app.include_router(rotas_auth.router, prefix=PREFIXO)
+    app.include_router(rotas_atender.router, prefix=PREFIXO)   # C2b
     return app
 
 

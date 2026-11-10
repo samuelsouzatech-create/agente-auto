@@ -46,7 +46,7 @@ Rodar a conferência (na raiz do repositório): `python docs/api/conferir_mocks.
 |---|---|---|---|---|
 | `dono` | Dono da loja | Login | `completo` | Tudo do painel |
 | `gestor` | Gerente | Login | `completo` | Tudo do painel |
-| `vendedor` | Equipe de atendimento online | Login | `atendimento` | **Atender e Leads.** Assume, responde, devolve e registra venda. Não vê Resultado, Acompanhamento, Estoque nem a luz de saúde. Não reativa contato |
+| `vendedor` | Equipe de atendimento online | Login | `atendimento` | **Atender e Leads.** Assume, responde, devolve e registra venda. Vê a luz de saúde. Não vê Resultado, Acompanhamento nem Estoque. Não reativa contato |
 | `vendedor_link` | Vendedor da loja que recebeu o aviso | Link do aviso (C3) | `link` | **Só** a conversa do link, com as ações assumir, responder, devolver e registrar venda |
 
 Operador e suporte **não** usam esta API (o painel do operador chama `app/` direto). Se tentarem entrar com a senha certa, a resposta é o mesmo 401 de qualquer erro, sem criar sessão. Se uma sessão dessas aparecer por outro caminho, toda rota responde 403.
@@ -61,7 +61,7 @@ Operador e suporte **não** usam esta API (o painel do operador chama `app/` dir
 | Acesso | `POST /auth/trocar-senha` | logado | **nova** (ver seção 5) | `auth_trocar_senha__*` |
 | Acesso | `POST /auth/esqueci-senha` | público | **nova**, C2f | `auth_esqueci_senha__*` |
 | Acesso | `POST /auth/criar-senha` | público (com link) | **nova**, C2f | `auth_criar_senha__*` |
-| Estado | `GET /saude` | dono, gestor | `pausa.situacao`, `estado_loja.situacao_da_loja`, `canais.listar_canais` | `saude__*` |
+| Estado | `GET /saude` | dono, gestor, vendedor | `pausa.situacao`, `estado_loja.situacao_da_loja`, `canais.listar_canais` | `saude__*` |
 | Atender | `GET /atender` | dono, gestor, vendedor | `handoff.listar_handoffs`, `mensagens.listar_conversas`, `relogio.minutos_no_expediente` | `atender__*` |
 | Atender | `GET /conversas/{lead}` | dono, gestor, vendedor, vendedor do link | `mensagens.historico_do_lead`, `painel_leitura.cartao_do_lead`, `janela.janela_aberta` | `conversas_lead__*` |
 | Atender | `POST /conversas/{lead}/assumir` | idem | `handoff.assumir_conversa` | `conversas_assumir__*` |
