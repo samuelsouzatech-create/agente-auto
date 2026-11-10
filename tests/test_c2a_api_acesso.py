@@ -358,7 +358,16 @@ def test_so_as_rotas_do_c2a_todas_em_api_v1():
                      ("POST", PREFIXO + "/conversas/{lead}/assumir"),
                      ("POST", PREFIXO + "/conversas/{lead}/responder"),
                      ("POST", PREFIXO + "/conversas/{lead}/devolver"),
-                     ("POST", PREFIXO + "/conversas/{lead}/registrar-venda")}
+                     ("POST", PREFIXO + "/conversas/{lead}/registrar-venda"),
+                     ("POST", PREFIXO + "/conversas/{lead}/reativar-contato"),   # C2d
+                     ("GET", PREFIXO + "/acompanhamento"),
+                     ("POST", PREFIXO + "/acompanhamento/pausar"),
+                     ("POST", PREFIXO + "/acompanhamento/retomar"),
+                     ("POST", PREFIXO + "/bloqueios"),
+                     ("DELETE", PREFIXO + "/bloqueios/{id}"),
+                     ("GET", PREFIXO + "/estoque"),
+                     ("POST", PREFIXO + "/estoque"),
+                     ("PUT", PREFIXO + "/estoque/{id}")}
     assert {r.removeprefix(PREFIXO) for _, r in rotas} <= set(DOC["paths"])
 
 

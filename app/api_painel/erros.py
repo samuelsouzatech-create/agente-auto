@@ -17,6 +17,7 @@ CODIGOS = {
     "nao_autenticado": (401, "Entre para continuar."),
     "credenciais_invalidas": (401, "E-mail ou senha incorretos."),
     "sem_permissao": (403, "Você não tem permissão para esta ação."),
+    "modulo_desligado": (403, "Esta área não faz parte do seu plano."),
     "csrf_invalido": (403, "Sua sessão precisa ser confirmada. Recarregue a página e tente de novo."),
     "senha_fraca": (422, "A senha é fraca demais. Use pelo menos 10 caracteres e evite senhas comuns."),
     "invalido": (422, "Confira os campos destacados."),

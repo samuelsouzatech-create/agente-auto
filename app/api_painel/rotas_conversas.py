@@ -217,3 +217,26 @@ def registrar_venda(entrada: VendaEntrada, alvo: tuple = Depends(escrever_conver
     return {"venda_id": feito["venda_id"], "carro": feito["carro"],
             "data": data_para_tela(entrada.data_venda), "forma": _forma(entrada),
             "efeitos": efeitos}
+
+
+# ------------------------------------------------------------ C2d: reativar contato
+@router.post("/{lead}/reativar-contato")
+def reativar_contato(lead: str, sessao: dict = Depends(escrever_conversa)):
+    """Só dono e gerente. Grava no Registro (lacuna 1). Nada a reativar: não grava."""
+    from app import situacao_lead
+    from app.ator import como
+    from app.registro import registrar
+    from banco import conectar
+    if sessao["papel"] not in ("dono", "gestor"):
+        raise ErroApi("sem_permissao")
+    loja_id = sessao["loja_id"]
+    if not situacao_lead.pode_contatar(loja_id, lead):
+        conexao = conectar()
+        try:
+            with como(sessao["nome"], "cliente", "api", loja_id):
+                situacao_lead.reativar_contato(loja_id, lead, conexao=conexao)
+                registrar("reativar_contato", loja_id, f"lead:{lead}", conexao=conexao)
+            conexao.commit()
+        finally:
+            conexao.close()
+    return montar_conversa(sessao, lead)

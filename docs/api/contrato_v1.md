@@ -157,3 +157,11 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
 - Mudança que quebra o front vira `/api/v2`.
 - O C2 exporta `docs/api/openapi.json` da API real, e um teste falha se divergir deste contrato. Assim ele nunca fica velho.
 - Quem muda o contrato muda também os dados falsos, e `conferir_mocks.py` precisa passar.
+
+
+### Lacunas resolvidas no C2d (10/11)
+
+9. `reativar-contato` grava `reativar_contato` no Registro. Sem nada a reativar, devolve a conversa e não grava.
+10. Carro vendido não se edita pela API: 422 `invalido` (dado falso `estoque_editar__vendido`).
+11. `pausar`/`retomar` repetidos: 200 com a situação atual, sem gravar de novo.
+12. `bloqueios`: cliente que não existe na loja = 422; desfazer bloqueio de outra loja = 404; já desfeito = 204 sem gravar.
