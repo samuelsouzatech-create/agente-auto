@@ -353,7 +353,12 @@ def test_toda_rota_exige_login():
 def test_so_as_rotas_do_c2a_todas_em_api_v1():
     rotas = _rotas_da_app()
     assert rotas == {("POST", LOGIN), ("POST", SAIR), ("GET", EU), ("POST", TROCAR),
-                     ("GET", PREFIXO + "/saude"), ("GET", PREFIXO + "/atender")}   # C2b
+                     ("GET", PREFIXO + "/saude"), ("GET", PREFIXO + "/atender"),   # C2b
+                     ("GET", PREFIXO + "/conversas/{lead}"),                       # C2c
+                     ("POST", PREFIXO + "/conversas/{lead}/assumir"),
+                     ("POST", PREFIXO + "/conversas/{lead}/responder"),
+                     ("POST", PREFIXO + "/conversas/{lead}/devolver"),
+                     ("POST", PREFIXO + "/conversas/{lead}/registrar-venda")}
     assert {r.removeprefix(PREFIXO) for _, r in rotas} <= set(DOC["paths"])
 
 

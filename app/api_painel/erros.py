@@ -22,6 +22,8 @@ CODIGOS = {
     "invalido": (422, "Confira os campos destacados."),
     "muitas_tentativas": (429, "Muitas tentativas. Espere alguns minutos ou fale com o suporte."),
     "nao_encontrado": (404, "Não encontrado."),
+    "conflito": (409, "Outra pessoa mudou isto agora. Recarregue e tente de novo."),
+    "janela_fechada": (409, "Faz mais de 24 h que o cliente não escreve. Só uma mensagem modelo aprovada pelo WhatsApp pode reabrir a conversa."),
     "erro_interno": (500, "Algo deu errado. Tente de novo em instantes."),
 }
 
