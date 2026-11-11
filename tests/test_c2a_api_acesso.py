@@ -367,7 +367,9 @@ def test_so_as_rotas_do_c2a_todas_em_api_v1():
                      ("DELETE", PREFIXO + "/bloqueios/{id}"),
                      ("GET", PREFIXO + "/estoque"),
                      ("POST", PREFIXO + "/estoque"),
-                     ("PUT", PREFIXO + "/estoque/{id}")}
+                     ("PUT", PREFIXO + "/estoque/{id}"),
+                     ("GET", PREFIXO + "/leads"),                          # C2: leituras
+                     ("GET", PREFIXO + "/resultado")}
     assert {r.removeprefix(PREFIXO) for _, r in rotas} <= set(DOC["paths"])
 
 
