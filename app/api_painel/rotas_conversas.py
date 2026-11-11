@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from banco import conectar
-from app import envio_painel, handoff, sessoes, vendas
+from app import envio_painel, handoff, interesse, sessoes, vendas
 from app.apresentacao import data_para_tela
 from app.ator import como
 from app.api_painel.atender import ASSUMIDO, AGUARDANDO, janela_do_cartao
@@ -30,6 +30,7 @@ from app.api_painel.dependencias import exigir_csrf, exigir_papel
 from app.api_painel.erros import ErroApi
 from app.lojas import carregar_loja
 from app.relogio import agora_utc
+from app.registro import registrar
 
 QUEM_ATENDE = sessoes.PAPEIS_DA_SESSAO          # dono, gestor, vendedor, vendedor_link
 NAO_ENCONTRADA = "Não encontramos essa conversa."
@@ -220,23 +221,30 @@ def registrar_venda(entrada: VendaEntrada, alvo: tuple = Depends(escrever_conver
 
 
 # ------------------------------------------------------------ C2d: reativar contato
+QUEM_REATIVA = ("dono", "gestor")
+SITUACOES_A_REATIVAR = ("nao_contatar", "sem_interesse")   # iguais ao botão (conversa.py)
+
+
 @router.post("/{lead}/reativar-contato")
-def reativar_contato(lead: str, sessao: dict = Depends(escrever_conversa)):
-    """Só dono e gerente. Grava no Registro (lacuna 1). Nada a reativar: não grava."""
-    from app import situacao_lead
-    from app.ator import como
-    from app.registro import registrar
-    from banco import conectar
-    if sessao["papel"] not in ("dono", "gestor"):
+def reativar_contato(alvo: tuple = Depends(escrever_conversa)):
+    """Só dono e gerente (x-papeis). O cliente pediu para voltar a ser procurado.
+    - Grava 'reativar_contato' no Registro, na mesma transação (lacuna 9).
+    - Nada a reativar (o botão está desligado): devolve a conversa e não grava.
+    - Conversa de outra loja: 404. O papel é conferido antes de tudo."""
+    sessao, lead = alvo
+    if sessao["papel"] not in QUEM_REATIVA:
         raise ErroApi("sem_permissao")
     loja_id = sessao["loja_id"]
-    if not situacao_lead.pode_contatar(loja_id, lead):
+    _fatos_ou_404(loja_id, lead)
+    antes = (interesse.situacao_do_lead(loja_id, lead) or {}).get("situacao")
+    if antes in SITUACOES_A_REATIVAR:
         conexao = conectar()
         try:
-            with como(sessao["nome"], "cliente", "api", loja_id):
-                situacao_lead.reativar_contato(loja_id, lead, conexao=conexao)
-                registrar("reativar_contato", loja_id, f"lead:{lead}", conexao=conexao)
+            with _como(sessao):
+                interesse.reativar_contato(loja_id, lead, conexao=conexao)
+                registrar("reativar_contato", loja_id, {"situacao": antes}, {"situacao": None},
+                          conexao=conexao, alvo=f"lead:{lead}")
             conexao.commit()
         finally:
             conexao.close()
-    return montar_conversa(sessao, lead)
+    return _conversa(sessao, lead)
