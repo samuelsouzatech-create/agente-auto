@@ -165,3 +165,10 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
 10. Carro vendido não se edita pela API: 422 `invalido` (dado falso `estoque_editar__vendido`).
 11. `pausar`/`retomar` repetidos: 200 com a situação atual, sem gravar de novo.
 12. `bloqueios`: cliente que não existe na loja = 422; desfazer bloqueio de outra loja = 404; já desfeito = 204 sem gravar.
+
+### Lacunas resolvidas no C2e (11/11)
+
+13. `trocar-senha`: o vendedor do link não troca senha (403), como o C2a já testava. `x-papeis` sem `vendedor_link` e com a resposta 403.
+14. `GET /leads` e `GET /estoque`: número mal escrito na URL (ex. `periodo=abc`) = 422 `invalido`. Valor fora da lista (ex. `periodo=15`) é trocado pelo padrão, sem erro.
+15. `resultado__loja_em_teste`: `contando_desde` é `null` enquanto a loja está em teste (a contagem só começa ao colocar no ar).
+16. `reativar-contato`: só dono e gerente; nada a reativar devolve a conversa sem gravar; conversa de outra loja = 404. Reativação e Registro na mesma transação.

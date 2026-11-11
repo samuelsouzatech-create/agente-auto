@@ -89,8 +89,5 @@
     }
   ],
   "dados_de_teste": true,
-  "contando_desde": {
-    "iso": "2026-11-08T09:00:00-03:00",
-    "texto": "dom 09:00"
-  }
+  "contando_desde": null
 }

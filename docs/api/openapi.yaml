@@ -67,7 +67,7 @@ paths:
     post:
       tags: [Acesso]
       summary: Trocar a própria senha
-      x-papeis: [dono, gestor, vendedor, vendedor_link]
+      x-papeis: [dono, gestor, vendedor]
       description: As outras sessões da pessoa caem; a sessão de quem trocou continua. Senha atual errada conta no mesmo limite de tentativas do login.
       parameters: [{$ref: '#/components/parameters/Csrf'}]
       requestBody:
@@ -78,6 +78,7 @@ paths:
       responses:
         '204': {description: Senha trocada.}
         '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
         '422': {$ref: '#/components/responses/Invalido'}
         '429': {$ref: '#/components/responses/MuitasTentativas'}
   /auth/esqueci-senha:
@@ -265,6 +266,7 @@ paths:
               schema: {$ref: '#/components/schemas/LeadsPagina'}
         '401': {$ref: '#/components/responses/NaoAutenticado'}
         '403': {$ref: '#/components/responses/SemPermissao'}
+        '422': {$ref: '#/components/responses/Invalido'}
   /resultado:
     get:
       tags: [Resultado]
@@ -377,6 +379,7 @@ paths:
               schema: {$ref: '#/components/schemas/EstoquePagina'}
         '401': {$ref: '#/components/responses/NaoAutenticado'}
         '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '422': {$ref: '#/components/responses/Invalido'}
     post:
       tags: [Estoque]
       summary: Cadastrar carro (nunca como vendido)
