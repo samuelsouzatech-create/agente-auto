@@ -172,3 +172,13 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
 14. `GET /leads` e `GET /estoque`: número mal escrito na URL (ex. `periodo=abc`) = 422 `invalido`. Valor fora da lista (ex. `periodo=15`) é trocado pelo padrão, sem erro.
 15. `resultado__loja_em_teste`: `contando_desde` é `null` enquanto a loja está em teste (a contagem só começa ao colocar no ar).
 16. `reativar-contato`: só dono e gerente; nada a reativar devolve a conversa sem gravar; conversa de outra loja = 404. Reativação e Registro na mesma transação.
+
+
+### Lacunas resolvidas no C2f (11/11)
+
+17. Validade do link: 1 hora quando a pessoa pede ("esqueci a senha"); 24 horas quando o operador gera e manda. Uso único; gerar outro anula o anterior.
+18. O link aponta para o front: `PAINEL_URL` + `/criar-senha#token=...`. O token vai depois do `#`, que o navegador não manda ao servidor; o front lê e envia em `POST /auth/criar-senha`.
+19. Limites: 3 pedidos por e-mail em 15 minutos (exista ou não o e-mail) e 10 links errados da mesma origem em 15 minutos. Passou disso: 429.
+20. Só ganha link quem entra no painel: dono, gerente ou vendedor, ativo, com e-mail e com a loja ligada. Os outros recebem a mesma resposta 202, sem link.
+21. Criar a senha encerra todas as sessões da pessoa e não faz login: ela entra em seguida pelo login normal. Senha fraca não gasta o link.
+22. Até haver provedor de e-mail, o envio só escreve o link no terminal do servidor. No painel do operador (Configuração, Equipe), o botão "Gerar link de senha" mostra o link para copiar. O token nunca vai para o Registro nem para o banco (só o hash).

@@ -30,8 +30,6 @@ PUBLICAS = {("POST", "/auth/login"), ("POST", "/auth/esqueci-senha"),
             ("POST", "/auth/criar-senha"), ("GET", "/v/{token}")}
 # Rotas do contrato que ainda não existem. Cada parte que entrega tira as suas daqui.
 AINDA_NAO_IMPLEMENTADAS = {
-    ("POST", "/auth/esqueci-senha"): "C2f",
-    ("POST", "/auth/criar-senha"): "C2f",
     ("GET", "/v/{token}"): "C3",
 }
 CARRO = {"marca": "Hyundai", "modelo": "HB20 Comfort", "ano": 2020, "km": 48000,
@@ -208,6 +206,8 @@ def test_cada_rota_real_responde_no_formato_do_contrato(envios):
 
         chamar("POST", "/auth/trocar-senha", (200, 204), headers=h,
                json={"senha_atual": SENHA, "senha_nova": NOVA})
+        chamar("POST", "/auth/esqueci-senha", (202,), json={"email": "dona@c2e.com"})
+        chamar("POST", "/auth/criar-senha", (422,), json={"token": "x" * 43, "senha_nova": NOVA})
         chamar("POST", "/auth/logout", (204,), headers=h)
 
     faltou = _da_api() - vistos

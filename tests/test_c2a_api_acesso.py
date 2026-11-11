@@ -39,6 +39,7 @@ NOVA = "Moto-Verde-2027"
 ERRADA = "Errada-Demais-1"
 LOGIN, SAIR, EU, TROCAR = (PREFIXO + r for r in
                            ("/auth/login", "/auth/logout", "/auth/eu", "/auth/trocar-senha"))
+ROTAS_PUBLICAS = {LOGIN, PREFIXO + "/auth/esqueci-senha", PREFIXO + "/auth/criar-senha"}  # C2f
 
 
 # ------------------------------------------------------------ ajudantes
@@ -109,7 +110,7 @@ def _rotas_da_app():
 
 
 def _rotas_protegidas():
-    return sorted((m, p) for m, p in _rotas_da_app() if p != LOGIN)
+    return sorted((m, p) for m, p in _rotas_da_app() if p not in ROTAS_PUBLICAS)
 
 
 def _esquema(rota, metodo, status):
@@ -369,7 +370,9 @@ def test_so_as_rotas_do_c2a_todas_em_api_v1():
                      ("POST", PREFIXO + "/estoque"),
                      ("PUT", PREFIXO + "/estoque/{id}"),
                      ("GET", PREFIXO + "/leads"),                          # C2: leituras
-                     ("GET", PREFIXO + "/resultado")}
+                     ("GET", PREFIXO + "/resultado"),
+                     ("POST", PREFIXO + "/auth/esqueci-senha"),   # C2f
+                     ("POST", PREFIXO + "/auth/criar-senha")}
     assert {r.removeprefix(PREFIXO) for _, r in rotas} <= set(DOC["paths"])
 
 

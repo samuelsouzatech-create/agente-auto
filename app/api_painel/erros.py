@@ -21,6 +21,7 @@ CODIGOS = {
     "csrf_invalido": (403, "Sua sessão precisa ser confirmada. Recarregue a página e tente de novo."),
     "senha_fraca": (422, "A senha é fraca demais. Use pelo menos 10 caracteres e evite senhas comuns."),
     "invalido": (422, "Confira os campos destacados."),
+    "link_invalido": (422, "Este link já foi usado ou venceu. Peça um novo."),
     "muitas_tentativas": (429, "Muitas tentativas. Espere alguns minutos ou fale com o suporte."),
     "nao_encontrado": (404, "Não encontrado."),
     "conflito": (409, "Outra pessoa mudou isto agora. Recarregue e tente de novo."),

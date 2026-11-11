@@ -14,6 +14,9 @@ from app.usuarios import (
     PAPEIS, PessoaMudou, UsuarioInvalido, atualizar_usuario, criar_usuario, definir_ativo,
     rotulo_papel,
 )
+from app.apresentacao import horario_para_tela
+from app.estado_loja import SoOperador
+from app.links_senha import PAPEIS_COM_LINK, SemAcesso, gerar_link_pelo_operador
 from paginas.comum import avisar, exigir_operador, para_streamlit
 
 CONFLITO = ("Outra pessoa mudou este cadastro enquanto você editava. Nada foi gravado. "
@@ -109,6 +112,29 @@ def _pessoa(loja, p: dict, ger: int) -> None:
             _recarregar(loja.id)
             avisar(f"{p['nome']}: {'desativado(a)' if p['ativo'] else 'reativado(a)'}.")
             st.rerun()
+        if p["ativo"] and p["papel"] in PAPEIS_COM_LINK:
+            _link_de_senha(loja, p)
+
+
+AJUDA_LINK = ("Para o primeiro acesso ou quando a pessoa esqueceu a senha. Até existir envio "
+              "por e-mail, copie o link e mande só para a pessoa (pelo WhatsApp, por exemplo).")
+
+
+def _link_de_senha(loja, p: dict) -> None:
+    # C2f: o operador gera o link de criar ou redefinir senha e copia para a pessoa.
+    chave = f"_eq_link_{loja.id}_{p['id']}"
+    if st.button("🔑 Gerar link de senha", key=f"eq_link_{loja.id}_{p['id']}", help=AJUDA_LINK):
+        try:
+            st.session_state[chave] = gerar_link_pelo_operador(p["id"])
+        except (SemAcesso, SoOperador) as erro:
+            st.session_state.pop(chave, None)
+            st.error(str(erro))
+    gerado = st.session_state.get(chave)
+    if gerado:
+        validade = horario_para_tela(loja, gerado["expira_em"])
+        st.caption(f"Copie e mande só para {para_streamlit(p['nome'])}. O link vale uma vez, "
+                   f"até {validade}. Gerar outro anula este.")
+        st.code(gerado["link"], language=None)
 
 
 def mostrar_equipe(loja) -> None:

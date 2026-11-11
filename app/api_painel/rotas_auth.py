@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
 from banco import conectar
-from app import autenticacao, sessoes
+from app import autenticacao, links_senha, sessoes
 from app.ator import como
 from app.api_painel.dependencias import COOKIE, exigir_csrf, exigir_papel, token_do_pedido
 from app.api_painel.erros import ErroApi
@@ -104,4 +104,51 @@ def trocar_senha(entrada: TrocarSenhaEntrada, request: Request,
             raise ErroApi("senha_fraca", {"senha_nova": str(erro)}) from None
         except autenticacao.DadosInvalidos:
             raise ErroApi("invalido") from None
+    return Response(status_code=204)
+
+
+# ------------------------------------------------------------ C2f: criar e recuperar senha
+# As duas rotas são públicas (sem sessão e sem CSRF), como o login.
+
+class EsqueciSenhaEntrada(BaseModel):
+    email: str = ""
+
+
+class CriarSenhaEntrada(BaseModel):
+    token: str = ""
+    senha_nova: str = ""
+
+
+def _origem(request: Request) -> str:
+    return request.client.host if request.client else "desconhecida"
+
+
+@router.post("/esqueci-senha", status_code=202)
+def esqueci_senha(entrada: EsqueciSenhaEntrada):
+    # Sempre a mesma resposta, exista ou não o e-mail.
+    try:
+        links_senha.pedir_link(entrada.email)
+    except autenticacao.MuitasTentativas:
+        raise ErroApi("muitas_tentativas") from None
+    return {"mensagem": links_senha.MENSAGEM_PEDIDO}
+
+
+@router.post("/criar-senha", status_code=204)
+def criar_senha(entrada: CriarSenhaEntrada, request: Request):
+    # O ator é a dona do link, definido antes de chamar app/ (P6).
+    origem = _origem(request)
+    if links_senha.link_errado_demais(origem):
+        raise ErroApi("muitas_tentativas")
+    pessoa = links_senha.pessoa_do_link(entrada.token)
+    if pessoa is None:
+        links_senha.anotar_link_errado(origem)
+        raise ErroApi("link_invalido")
+    with como(pessoa["nome"], "cliente", "api", pessoa["loja_id"]):
+        try:
+            links_senha.criar_senha(entrada.token, entrada.senha_nova)
+        except autenticacao.SenhaFraca as erro:
+            raise ErroApi("senha_fraca", {"senha_nova": str(erro)}) from None
+        except links_senha.LinkInvalido:
+            links_senha.anotar_link_errado(origem)
+            raise ErroApi("link_invalido") from None
     return Response(status_code=204)

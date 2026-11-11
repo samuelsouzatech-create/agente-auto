@@ -147,3 +147,10 @@ ACOES_RELEVANTES.update({
 ACOES_RELEVANTES.update({
     "trocar_senha": "app.autenticacao.trocar_senha",
 })
+
+
+# C2f: links de criar e de redefinir senha.
+ACOES_RELEVANTES.update({
+    "gerar_link_senha": "app.links_senha.gerar_link_pelo_operador",
+    "criar_senha_por_link": "app.links_senha.criar_senha",
+})

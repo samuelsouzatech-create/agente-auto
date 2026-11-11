@@ -106,6 +106,33 @@
         "title": "CarroEntrada",
         "type": "object"
       },
+      "CriarSenhaEntrada": {
+        "properties": {
+          "senha_nova": {
+            "default": "",
+            "title": "Senha Nova",
+            "type": "string"
+          },
+          "token": {
+            "default": "",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "title": "CriarSenhaEntrada",
+        "type": "object"
+      },
+      "EsqueciSenhaEntrada": {
+        "properties": {
+          "email": {
+            "default": "",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "title": "EsqueciSenhaEntrada",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -356,6 +383,79 @@
         "summary": "Atender",
         "tags": [
           "Atender"
+        ]
+      }
+    },
+    "/api/v1/auth/criar-senha": {
+      "post": {
+        "operationId": "criar_senha_api_v1_auth_criar_senha_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CriarSenhaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Criar Senha",
+        "tags": [
+          "Acesso"
+        ]
+      }
+    },
+    "/api/v1/auth/esqueci-senha": {
+      "post": {
+        "operationId": "esqueci_senha_api_v1_auth_esqueci_senha_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EsqueciSenhaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Esqueci Senha",
+        "tags": [
+          "Acesso"
         ]
       }
     },
