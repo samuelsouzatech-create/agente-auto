@@ -14,10 +14,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app import avisos, custos, relogio
+from app import avisos, custos, links_vendedor, relogio
 from app.lojas import Loja, carregar_loja
 from app.lojas_admin import listar_lojas
-from app.usuarios import contatos_para_aviso
+from app.usuarios import contatos_para_aviso, listar_usuarios
 from banco import conectar
 
 COLUNA = {"aviso": "avisado_em", "reaviso": "reavisado_em", "gestor": "gestor_avisado_em"}
@@ -92,7 +92,7 @@ def _brl(valor: float) -> str:
 
 # ---------------------------------------------------------------- handoff
 def _texto_handoff(loja: Loja, h: dict, dados: dict, etapa: str, minutos: int,
-                   no_horario: bool) -> str:
+                   no_horario: bool, link: str | None = None) -> str:
     cabecalho = {
         "aviso": f"🔔 {loja.nome}: cliente esperando um vendedor.",
         "reaviso": f"⏰ {loja.nome}: cliente esperando há {minutos} min e ninguém assumiu ainda.",
@@ -105,10 +105,55 @@ def _texto_handoff(loja: Loja, h: dict, dados: dict, etapa: str, minutos: int,
     resumo = (h["resumo"] or "").strip()
     if resumo:
         linhas.append(f"Resumo: {resumo[:LIMITE_RESUMO]}")
-    linhas += ["", "Para atender: painel da loja > Fila de handoff > Assumir."]
+    if link:                                    # C3b: link do vendedor (uso unico)
+        linhas += ["", f"Abrir a conversa: {link}",
+                   f"O link é só seu e vale uma vez, por {HORAS_DO_LINK} h."]
+    else:
+        linhas += ["", "Para atender: painel da loja > Fila de handoff > Assumir."]
     if etapa == "aviso" and not no_horario:
         linhas.append("Fora do horário de atendimento. O lembrete vem quando a loja abrir.")
     return "\n".join(linhas)
+
+
+# ---------------------------------------------------------------- C3b: link no aviso
+# Cada pessoa recebe o PROPRIO link (uso unico, app/links_vendedor.py).
+# Na tabela avisos o link vira MARCA_LINK: o token nunca fica no banco.
+# Quem ja recebeu nao ganha link de novo; o reaviso traz um novo (so o mais novo vale).
+# Sem API_PUBLICA_URL no .env, o aviso fica como antes (texto igual para todos).
+MARCA_LINK = "[link]"
+HORAS_DO_LINK = int(links_vendedor.VALIDADE.total_seconds() // 3600)
+
+
+def _ids_por_chat(loja_id: int) -> dict:
+    return {u["contato_telegram"]: u["id"] for u in listar_usuarios(loja_id)
+            if u["contato_telegram"]}
+
+
+def _avisar_handoff(loja: Loja, h: dict, dados: dict, etapa: str, destinos, minutos: int,
+                    no_horario: bool) -> dict:
+    tipo, referencia = f"handoff_{etapa}", f"handoff:{h['id']}"
+    sem_link = _texto_handoff(loja, h, dados, etapa, minutos, no_horario)
+    chats = list(dict.fromkeys(str(d).strip() for d in (destinos or []) if str(d or "").strip()))
+    if not chats or not links_vendedor.links_ligados():
+        return avisos.avisar_uma_vez(loja.id, tipo, referencia, destinos, sem_link)
+    ids = _ids_por_chat(loja.id)
+    total = {"enviados": 0, "falhas": 0, "pulados": 0, "concluido": True}
+    for chat in chats:
+        texto, guardado = sem_link, None
+        if chat in ids and not avisos.ja_resolvido(tipo, referencia, chat):
+            try:
+                # Relogio real: o link vale 12 h a partir de agora, nao do ciclo.
+                link = links_vendedor.gerar_link(loja.id, ids[chat], h["lead_id"])
+            except links_vendedor.SemAcesso:
+                link = None
+            if link:
+                texto = _texto_handoff(loja, h, dados, etapa, minutos, no_horario, link)
+                guardado = texto.replace(link, MARCA_LINK)
+        r = avisos.avisar_uma_vez(loja.id, tipo, referencia, [chat], texto, texto_guardado=guardado)
+        for chave in ("enviados", "falhas", "pulados"):
+            total[chave] += r[chave]
+        total["concluido"] = total["concluido"] and r["concluido"]
+    return total
 
 
 def _handoffs_da_loja(loja: Loja, agora: datetime) -> int:
@@ -140,10 +185,7 @@ def _handoffs_da_loja(loja: Loja, agora: datetime) -> int:
         for etapa, destinos, minutos in etapas:
             if not _ainda_esperando(h["id"]):   # alguém assumiu no meio do ciclo
                 break
-            r = avisos.avisar_uma_vez(
-                loja.id, f"handoff_{etapa}", f"handoff:{h['id']}", destinos,
-                _texto_handoff(loja, h, dados, etapa, minutos, no_horario),
-            )
+            r = _avisar_handoff(loja, h, dados, etapa, destinos, minutos, no_horario)
             enviados += r["enviados"]
             if r["concluido"]:
                 _marcar(h["id"], etapa, agora)

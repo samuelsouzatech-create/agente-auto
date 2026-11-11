@@ -67,6 +67,13 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _quem(linha) -> str:
+    """O que vai na coluna email de acessos (obrigatória). Pessoa sem e-mail
+    (só Telegram, por exemplo) também recebe link: fica 'usuario:<id>',
+    que não é e-mail e não se mistura com o limite do login."""
+    return linha["email"] or f"usuario:{linha['usuario_id']}"
+
+
 def _token_ok(token) -> bool:
     return isinstance(token, str) and MIN_TOKEN <= len(token) <= MAX_TOKEN
 
@@ -167,7 +174,7 @@ def usar_link(token, agora=None) -> dict:
                                           agora=momento, conexao=conexao)
         except sessoes.SessaoInvalida:
             raise LinkRecusado(REVOGADO) from None
-        conexao.execute(_SQL_ACESSO, (linha["usuario_id"], linha["email"], texto, ENTROU))
+        conexao.execute(_SQL_ACESSO, (linha["usuario_id"], _quem(linha), texto, ENTROU))
         conexao.commit()
     finally:
         conexao.close()
@@ -202,3 +209,7 @@ def anotar_link_errado(origem, agora=None) -> None:
         conexao.commit()
     finally:
         conexao.close()
+
+def links_ligados() -> bool:
+    """C3b: o aviso so leva link quando a API tem endereco publico no .env."""
+    return bool((os.environ.get("API_PUBLICA_URL") or "").strip())

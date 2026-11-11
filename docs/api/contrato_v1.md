@@ -192,3 +192,11 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
 26. O link aponta para a API: `API_PUBLICA_URL` + `/api/v1/v/{token}`. Depois de abrir, a API leva ao front (`PAINEL_URL`), sem o token no endereço. O log do servidor mostra `/v/***`.
 27. Abrir o link anota em `acessos` (como o login), não no Registro. Gerar o link é do sistema (aviso), sem Registro.
 28. A sessão de escopo `link` dura o mesmo que as outras (7 dias). A confirmar com o analista.
+
+### Lacunas resolvidas no C3b (11/11)
+
+29. O aviso de cliente esperando (Telegram) leva o link do vendedor só quando `API_PUBLICA_URL` está no `.env`. Sem ela, o aviso fica como antes ("painel da loja > Fila de handoff > Assumir").
+30. Cada pessoa recebe o próprio link: vendedor no aviso e no reaviso, gerente no aviso dele. O reaviso traz um link novo e anula o do aviso (só o mais novo vale).
+31. A tabela `avisos` guarda o texto com `[link]` no lugar do link: o token nunca fica no banco.
+32. Quem já recebeu o aviso não ganha link de novo. Envio que falhou: a próxima tentativa leva um link novo.
+33. Revogação pelo operador: desativar a pessoa em Configuração > Equipe derruba o link e as sessões dela (S4b), sem botão novo.
