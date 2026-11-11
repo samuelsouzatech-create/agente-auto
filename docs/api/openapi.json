@@ -1206,6 +1206,46 @@
           "Estado"
         ]
       }
+    },
+    "/api/v1/v/{token}": {
+      "get": {
+        "operationId": "abrir_link_api_v1_v__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Abrir Link",
+        "tags": [
+          "Link"
+        ]
+      }
     }
   }
 }

@@ -11,11 +11,12 @@ import logging
 import re
 
 _CONVERSA = re.compile(r"(/conversas/)[^/?#\s]+")
+_LINK = re.compile(r"(/v/)[^/?#\s]+")          # C3: o token do link do vendedor
 LOGGERS = ("uvicorn.access",)
 
 
 def esconder(texto: str) -> str:
-    return _CONVERSA.sub(r"\1***", texto)
+    return _LINK.sub(r"\1***", _CONVERSA.sub(r"\1***", texto))
 
 
 class EsconderConversa(logging.Filter):

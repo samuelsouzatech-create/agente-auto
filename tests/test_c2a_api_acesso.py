@@ -39,7 +39,8 @@ NOVA = "Moto-Verde-2027"
 ERRADA = "Errada-Demais-1"
 LOGIN, SAIR, EU, TROCAR = (PREFIXO + r for r in
                            ("/auth/login", "/auth/logout", "/auth/eu", "/auth/trocar-senha"))
-ROTAS_PUBLICAS = {LOGIN, PREFIXO + "/auth/esqueci-senha", PREFIXO + "/auth/criar-senha"}  # C2f
+ROTAS_PUBLICAS = {LOGIN, PREFIXO + "/auth/esqueci-senha", PREFIXO + "/auth/criar-senha",
+                  PREFIXO + "/v/{token}"}  # C2f e C3
 
 
 # ------------------------------------------------------------ ajudantes
@@ -372,7 +373,8 @@ def test_so_as_rotas_do_c2a_todas_em_api_v1():
                      ("GET", PREFIXO + "/leads"),                          # C2: leituras
                      ("GET", PREFIXO + "/resultado"),
                      ("POST", PREFIXO + "/auth/esqueci-senha"),   # C2f
-                     ("POST", PREFIXO + "/auth/criar-senha")}
+                     ("POST", PREFIXO + "/auth/criar-senha"),
+                     ("GET", PREFIXO + "/v/{token}")}   # C3
     assert {r.removeprefix(PREFIXO) for _, r in rotas} <= set(DOC["paths"])
 
 

@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api_painel import rotas_acompanhamento, rotas_estoque, rotas_leads
+from app.api_painel import rotas_acompanhamento, rotas_estoque, rotas_leads, rotas_link
 from app.api_painel import erros, logs, rotas_atender, rotas_auth, rotas_conversas
 from app.api_painel.dependencias import CABECALHO_CSRF
 
@@ -43,6 +43,7 @@ def criar_app() -> FastAPI:
     app.include_router(rotas_conversas.router, prefix=PREFIXO)   # C2c
     app.include_router(rotas_acompanhamento.router, prefix=PREFIXO)
     app.include_router(rotas_estoque.router, prefix=PREFIXO)
+    app.include_router(rotas_link.router, prefix=PREFIXO)      # C3: link do vendedor
     app.include_router(rotas_leads.router, prefix=PREFIXO)     # C2: Leads e Resultado
     logs.instalar()                                  # D3: log sem o número do cliente
     return app

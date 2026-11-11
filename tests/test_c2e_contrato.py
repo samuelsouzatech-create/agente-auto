@@ -29,9 +29,7 @@ PAPEIS = ("dono", "gestor", "vendedor", "vendedor_link")
 PUBLICAS = {("POST", "/auth/login"), ("POST", "/auth/esqueci-senha"),
             ("POST", "/auth/criar-senha"), ("GET", "/v/{token}")}
 # Rotas do contrato que ainda não existem. Cada parte que entrega tira as suas daqui.
-AINDA_NAO_IMPLEMENTADAS = {
-    ("GET", "/v/{token}"): "C3",
-}
+AINDA_NAO_IMPLEMENTADAS = {}   # C3a: todas as rotas do contrato existem
 CARRO = {"marca": "Hyundai", "modelo": "HB20 Comfort", "ano": 2020, "km": 48000,
          "cor": "Prata", "cambio": "Manual", "preco": 62900, "status": "disponivel",
          "fotos": ["https://fotos.exemplo.example/hb20-1.jpg"]}
@@ -208,6 +206,9 @@ def test_cada_rota_real_responde_no_formato_do_contrato(envios):
                json={"senha_atual": SENHA, "senha_nova": NOVA})
         chamar("POST", "/auth/esqueci-senha", (202,), json={"email": "dona@c2e.com"})
         chamar("POST", "/auth/criar-senha", (422,), json={"token": "x" * 43, "senha_nova": NOVA})
+        r = c.get(PREFIXO + "/v/" + "x" * 43, follow_redirects=False)   # C3
+        assert r.status_code == 302 and "/link-invalido?motivo=" in r.headers["location"]
+        vistos.add(("GET", "/v/{token}"))
         chamar("POST", "/auth/logout", (204,), headers=h)
 
     faltou = _da_api() - vistos

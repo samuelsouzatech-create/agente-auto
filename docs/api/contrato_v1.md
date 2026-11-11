@@ -182,3 +182,13 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
 20. Só ganha link quem entra no painel: dono, gerente ou vendedor, ativo, com e-mail e com a loja ligada. Os outros recebem a mesma resposta 202, sem link.
 21. Criar a senha encerra todas as sessões da pessoa e não faz login: ela entra em seguida pelo login normal. Senha fraca não gasta o link.
 22. Até haver provedor de e-mail, o envio só escreve o link no terminal do servidor. No painel do operador (Configuração, Equipe), o botão "Gerar link de senha" mostra o link para copiar. O token nunca vai para o Registro nem para o banco (só o hash).
+
+
+### Lacunas resolvidas no C3a (11/11)
+
+23. Link do vendedor: vale 12 horas e uma vez só. Gerar outro para a mesma pessoa e a mesma conversa anula o anterior.
+24. Motivos: link usado = `usado`; vencido, desconhecido ou mal escrito = `vencido`; anulado por um mais novo, pessoa desativada, de outra loja ou loja desligada = `revogado`.
+25. Dez links errados da mesma origem em 15 minutos: 429 (formato de erro de sempre, sem redirecionar).
+26. O link aponta para a API: `API_PUBLICA_URL` + `/api/v1/v/{token}`. Depois de abrir, a API leva ao front (`PAINEL_URL`), sem o token no endereço. O log do servidor mostra `/v/***`.
+27. Abrir o link anota em `acessos` (como o login), não no Registro. Gerar o link é do sistema (aviso), sem Registro.
+28. A sessão de escopo `link` dura o mesmo que as outras (7 dias). A confirmar com o analista.
