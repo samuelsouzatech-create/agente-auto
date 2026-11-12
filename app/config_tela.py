@@ -45,6 +45,7 @@ _ROTULO_MODULO = {
     "whatsapp": "WhatsApp", "instagram": "Instagram",
     "agendamento": "Agendamento de visita e test-drive", "fotos": "Envio de fotos",
     "remarketing": "Remarketing", "pos_venda": "Pós-venda",
+    "estoque": "Aba Estoque no painel da loja",
 }
 
 

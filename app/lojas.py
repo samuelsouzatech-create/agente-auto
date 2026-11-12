@@ -31,7 +31,8 @@ from app.segmentos import segmento_existe, segmentos_disponiveis
 MAX_BOLHAS = 3
 TETO_TOQUES_REMARKETING = 3
 MIN_HORAS_SEM_RESPOSTA = 24
-MODULOS = ("whatsapp", "instagram", "agendamento", "fotos", "remarketing", "pos_venda")
+MODULOS = ("whatsapp", "instagram", "agendamento", "fotos", "remarketing", "pos_venda",
+           "estoque")   # C2a (D2): estoque = a aba Estoque do painel da loja
 TIPOS_ENVIO = ("remarketing", "pos_venda", "reativacao")
 
 # Chaves que alguém pode tentar editar, mas que são regra de produto.
@@ -76,6 +77,7 @@ PADROES: dict = {
     "modulos": {
         "whatsapp": True, "instagram": False, "agendamento": True,
         "fotos": True, "remarketing": False, "pos_venda": False,
+        "estoque": True,                          # C2a (D2): nenhuma loja perde a aba
     },
     "handoff": {"reaviso_min": 5, "gestor_min": 10},
     "remarketing": {

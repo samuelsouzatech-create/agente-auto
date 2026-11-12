@@ -1,0 +1,66 @@
+{
+  "cliente": {
+    "lead": "5581999990002",
+    "nome": "Carlos Mendes",
+    "telefone": "(81) 9 9999-0002",
+    "origem": "WhatsApp",
+    "carro": "Corolla XEi 2019",
+    "pagamento": "À vista",
+    "troca": "",
+    "prazo": "",
+    "visita": "",
+    "motivo_do_chamado": "",
+    "etiqueta": "Interesse médio",
+    "etapa": "em_conversa",
+    "etapa_rotulo": "Em conversa",
+    "proximo_passo": "Léo retoma amanhã 09:00",
+    "ultimo_contato": {
+      "iso": "2026-11-03T16:12:00-03:00",
+      "texto": "ter 16:12"
+    }
+  },
+  "mensagens": [
+    {
+      "id": 77,
+      "de": "cliente",
+      "autor": null,
+      "tipo": "texto",
+      "texto": "Vou pensar e te falo.",
+      "canal": "whatsapp",
+      "quando": {
+        "iso": "2026-11-03T16:12:00-03:00",
+        "texto": "ter 16:12"
+      }
+    }
+  ],
+  "estado_do_chamado": "humano_assumiu",
+  "assumido_por": "Ricardo Alves",
+  "janela": {
+    "aberta": false,
+    "fecha_em": null,
+    "explicacao": "Faz mais de 24 h que o cliente não escreve. Só uma mensagem modelo aprovada pelo WhatsApp pode reabrir a conversa."
+  },
+  "aviso": null,
+  "acoes": {
+    "assumir": {
+      "permitida": false,
+      "motivo": "Você já assumiu esta conversa."
+    },
+    "responder": {
+      "permitida": false,
+      "motivo": "Fora da janela de 24 h. O campo fica desligado até o cliente escrever de novo."
+    },
+    "devolver": {
+      "permitida": true,
+      "motivo": null
+    },
+    "registrar_venda": {
+      "permitida": true,
+      "motivo": null
+    },
+    "reativar_contato": {
+      "permitida": false,
+      "motivo": "Indisponível agora."
+    }
+  }
+}

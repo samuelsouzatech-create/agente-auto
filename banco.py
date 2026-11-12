@@ -749,7 +749,72 @@ CREATE INDEX IF NOT EXISTS idx_custos_data ON uso_custos(criado_em, tipo, latenc
 """
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12, 13: _MIGRACAO_13, 14: _MIGRACAO_14}
+_MIGRACAO_15 = """
+-- C2a (Plano Mestre, bloco C2): sessões do painel do cliente (API, porta 8001).
+-- Só o HASH do token fica aqui; o token vai só no cookie leo_sessao.
+-- papel e escopo sem CHECK de propósito (como o papel do registro_acoes): a
+-- lista mora em app/sessoes.py e pode crescer sem recriar a tabela.
+-- lead_id: só no escopo "link" (C3, a única conversa liberada); vazio no resto.
+-- Sem a coluna usuarios.senha_provisoria: saiu com a decisão D5 B.
+-- Pode rodar de novo (IF NOT EXISTS): testes antigos voltam o user_version.
+CREATE TABLE IF NOT EXISTS sessoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT NOT NULL UNIQUE,
+    usuario_id INTEGER NOT NULL,
+    loja_id INTEGER NOT NULL,
+    papel TEXT NOT NULL,
+    escopo TEXT NOT NULL,
+    lead_id TEXT,
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expira_em TIMESTAMP NOT NULL,
+    revogada_em TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sessoes_usuario ON sessoes(usuario_id, revogada_em);
+"""
+
+
+_MIGRACAO_16 = """
+-- C2f (Plano Mestre, bloco C2): links de criar e de redefinir senha.
+-- Só o HASH do token fica aqui; o token vai só no link. Sem senha provisória (D5).
+-- loja_id: a loja da pessoa (toda consulta começa pela loja, como em sessoes).
+-- Pode rodar de novo (IF NOT EXISTS): testes antigos voltam o user_version.
+CREATE TABLE IF NOT EXISTS links_senha (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT NOT NULL UNIQUE,
+    usuario_id INTEGER NOT NULL,
+    loja_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('criar','redefinir')),
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expira_em TIMESTAMP NOT NULL,
+    usado_em TIMESTAMP,
+    revogado_em TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_links_senha_loja ON links_senha(loja_id, usuario_id, usado_em);
+"""
+
+
+_MIGRACAO_17 = """
+-- C3 (Plano Mestre): link do vendedor que vem no aviso. Uso único, validade curta.
+-- Só o HASH do token fica aqui; o token vai só no link.
+-- Abrir o link cria uma sessão de escopo 'link' (tabela sessoes, migração 15).
+-- Pode rodar de novo (IF NOT EXISTS): testes antigos voltam o user_version.
+CREATE TABLE IF NOT EXISTS links_vendedor (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT NOT NULL UNIQUE,
+    loja_id INTEGER NOT NULL,
+    usuario_id INTEGER NOT NULL,
+    lead_id TEXT NOT NULL,
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expira_em TIMESTAMP NOT NULL,
+    usado_em TIMESTAMP,
+    revogado_em TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_links_vendedor_loja
+    ON links_vendedor(loja_id, usuario_id, lead_id, usado_em);
+"""
+
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12, 13: _MIGRACAO_13, 14: _MIGRACAO_14, 15: _MIGRACAO_15, 16: _MIGRACAO_16, 17: _MIGRACAO_17}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

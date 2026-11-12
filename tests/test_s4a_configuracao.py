@@ -52,7 +52,7 @@ def test_todo_campo_tem_um_destino_so():
     destinos = {c.chave: destino_do_campo(c.chave) for c in CAMPOS}
     assert set(destinos.values()) <= set(ASSUNTOS_COM_CAMPOS) | {MENSAGENS_AUTOMATICAS, A_DECIDIR}
     mostrados = [c.chave for a in ASSUNTOS_COM_CAMPOS for c in campos_do_assunto(a)]
-    assert len(mostrados) == len(set(mostrados)) == 20
+    assert len(mostrados) == len(set(mostrados)) == 21   # C2a: + modulos.estoque
     assert set(mostrados) == {k for k, d in destinos.items() if d in ASSUNTOS_COM_CAMPOS}
 
 

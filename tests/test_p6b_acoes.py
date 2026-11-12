@@ -496,3 +496,40 @@ CENARIOS.update({
         lambda s: _custos_precos.recalcular_periodo(date(2026, 10, 1), date(2026, 10, 31)),
         "SELECT COUNT(*) FROM uso_custos WHERE custo_completo = 1"),
 })
+
+
+# ------------------------------------------------------------ C2a: troca de senha
+
+def _prep_com_login():
+    return {"id": autenticacao.criar_usuario_com_login(1, "Ana", "gestor", "ana@loja.com",
+                                                       SENHA_BOA)}
+
+
+CENARIOS.update({
+    "trocar_senha": (
+        _prep_com_login,
+        lambda s: autenticacao.trocar_senha(s["id"], SENHA_BOA, "Moto-Verde-2027"),
+        "SELECT COUNT(*) FROM acessos WHERE resultado = 'senha_trocada'"),
+})
+
+
+# ------------------------------------------------------------ C2f: links de senha
+from app import links_senha as _links_senha
+
+
+def _prep_link():
+    uid = autenticacao.criar_usuario_com_login(1, "Ana", "gestor", "ana@loja.com", SENHA_BOA)
+    link = _links_senha.gerar_link_pelo_operador(uid)["link"]
+    return {"token": link.split("#token=", 1)[1]}
+
+
+CENARIOS.update({
+    "gerar_link_senha": (
+        _prep_com_login,
+        lambda s: _links_senha.gerar_link_pelo_operador(s["id"]),
+        "SELECT COUNT(*) FROM links_senha"),
+    "criar_senha_por_link": (
+        _prep_link,
+        lambda s: _links_senha.criar_senha(s["token"], "Moto-Verde-2027"),
+        "SELECT COUNT(*) FROM links_senha WHERE usado_em IS NOT NULL"),
+})

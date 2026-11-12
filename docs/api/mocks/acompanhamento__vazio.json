@@ -1,0 +1,43 @@
+{
+  "modo": {
+    "estado": "enviando",
+    "rotulo": "Enviando",
+    "detalhe": "As mensagens automáticas estão saindo de verdade.",
+    "por_tipo": [
+      {
+        "tipo": "remarketing",
+        "tipo_rotulo": "Retomada",
+        "situacao": "Enviando de verdade"
+      },
+      {
+        "tipo": "pos_venda",
+        "tipo_rotulo": "Pós-venda",
+        "situacao": "Enviando de verdade"
+      },
+      {
+        "tipo": "reativacao",
+        "tipo_rotulo": "Reativação",
+        "situacao": "Só simulando"
+      }
+    ]
+  },
+  "pausa": {
+    "ativa": false,
+    "por": null,
+    "desde": null,
+    "motivo": null
+  },
+  "uso_mes": {
+    "usados": 0,
+    "limite": null,
+    "texto": "Limite mensal ainda não definido"
+  },
+  "proximos": [],
+  "historico": [],
+  "bloqueios_ativos": [],
+  "resultado_do_mes": {
+    "enviados": 0,
+    "responderam": 0,
+    "agendaram": 0
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "nome": "Patrícia Gomes",
+  "papel": "vendedor",
+  "papel_rotulo": "Vendedor",
+  "escopo": "atendimento",
+  "conversa_do_link": null,
+  "loja": {
+    "nome": "Garagem Recife Veículos",
+    "fuso": "America/Recife",
+    "estado": {
+      "codigo": "no_ar",
+      "rotulo": "No ar"
+    }
+  },
+  "modulos": {
+    "acompanhamento": true,
+    "estoque": true
+  },
+  "abas": [
+    "atender",
+    "leads"
+  ],
+  "csrf": "k3Jx9vQ1mZp2LrT8wY5aB7cD0eF4gH6i"
+}

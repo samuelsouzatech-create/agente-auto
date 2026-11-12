@@ -141,3 +141,16 @@ ACOES_RELEVANTES.update({
     "apagar_preco": "app.custos_precos.apagar_preco",
     "recalcular_custos": "app.custos_precos.recalcular_periodo",
 })
+
+
+# C2a: a própria pessoa troca a senha (painel da loja, pela API).
+ACOES_RELEVANTES.update({
+    "trocar_senha": "app.autenticacao.trocar_senha",
+})
+
+
+# C2f: links de criar e de redefinir senha.
+ACOES_RELEVANTES.update({
+    "gerar_link_senha": "app.links_senha.gerar_link_pelo_operador",
+    "criar_senha_por_link": "app.links_senha.criar_senha",
+})

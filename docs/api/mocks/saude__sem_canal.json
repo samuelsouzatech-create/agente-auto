@@ -1,0 +1,23 @@
+{
+  "luz": "vermelha",
+  "titulo": "Léo fora do ar",
+  "detalhe": "Nenhum canal está ativo.",
+  "estado": {
+    "codigo": "no_ar",
+    "rotulo": "No ar"
+  },
+  "pausa": {
+    "ativa": false,
+    "por": null,
+    "desde": null,
+    "motivo": null
+  },
+  "canais": [
+    {
+      "tipo": "whatsapp",
+      "rotulo": "WhatsApp",
+      "ativo": false
+    }
+  ],
+  "faixa": null
+}

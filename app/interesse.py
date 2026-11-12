@@ -108,15 +108,20 @@ def pode_contatar(loja_id: int, lead_id: str, hoje: date | None = None) -> bool:
     return False
 
 
-def reativar_contato(loja_id: int, lead_id: str) -> None:
-    """Botão do painel: o cliente pediu pessoalmente para voltar a ser procurado."""
-    conexao = conectar()
+def reativar_contato(loja_id: int, lead_id: str, conexao=None) -> None:
+    """Botão do painel: o cliente pediu pessoalmente para voltar a ser procurado.
+    Com 'conexao', usa a de quem chamou e NÃO dá commit (Registro na mesma transação)."""
+    propria = conexao is None
+    if propria:
+        conexao = conectar()
     try:
         conexao.execute("DELETE FROM situacao_lead WHERE loja_id = ? AND lead_id = ?", (loja_id, lead_id))
         conexao.execute("DELETE FROM optouts WHERE loja_id = ? AND lead_id = ?", (loja_id, lead_id))
-        conexao.commit()
+        if propria:
+            conexao.commit()
     finally:
-        conexao.close()
+        if propria:
+            conexao.close()
 
 
 def listar_situacoes(loja_id: int) -> list[dict]:

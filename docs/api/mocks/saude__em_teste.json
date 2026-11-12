@@ -1,0 +1,26 @@
+{
+  "luz": "amarela",
+  "titulo": "Léo com atenção",
+  "detalhe": "Sua loja está em teste.",
+  "estado": {
+    "codigo": "em_teste",
+    "rotulo": "Em teste"
+  },
+  "pausa": {
+    "ativa": false,
+    "por": null,
+    "desde": null,
+    "motivo": null
+  },
+  "canais": [
+    {
+      "tipo": "whatsapp",
+      "rotulo": "WhatsApp",
+      "ativo": true
+    }
+  ],
+  "faixa": {
+    "tipo": "azul",
+    "texto": "Sua loja está em teste: o Léo só responde aos números de teste."
+  }
+}

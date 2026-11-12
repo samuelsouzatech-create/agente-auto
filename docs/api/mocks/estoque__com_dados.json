@@ -1,0 +1,109 @@
+{
+  "pagina": 1,
+  "paginas": 1,
+  "total": 5,
+  "tamanho": 50,
+  "itens": [
+    {
+      "id": 12,
+      "marca": "Hyundai",
+      "modelo": "HB20 Comfort",
+      "ano": 2020,
+      "km": 48000,
+      "cor": "Prata",
+      "cambio": "Manual",
+      "preco": {
+        "valor": 62900.0,
+        "texto": "R$ 62.900,00"
+      },
+      "status": "disponivel",
+      "status_rotulo": "Disponível",
+      "fotos": [
+        "https://fotos.exemplo.example/hb20-1.jpg",
+        "https://fotos.exemplo.example/hb20-2.jpg"
+      ],
+      "interessados": 3,
+      "pode_editar": true
+    },
+    {
+      "id": 14,
+      "marca": "Toyota",
+      "modelo": "Corolla XEi",
+      "ano": 2019,
+      "km": 61000,
+      "cor": "Branco",
+      "cambio": "Automático",
+      "preco": {
+        "valor": 98500.0,
+        "texto": "R$ 98.500,00"
+      },
+      "status": "reservado",
+      "status_rotulo": "Reservado",
+      "fotos": [
+        "https://fotos.exemplo.example/corolla-1.jpg"
+      ],
+      "interessados": 1,
+      "pode_editar": true
+    },
+    {
+      "id": 15,
+      "marca": "Chevrolet",
+      "modelo": "Onix LT",
+      "ano": 2021,
+      "km": 32000,
+      "cor": "Preto",
+      "cambio": "Manual",
+      "preco": {
+        "valor": 71900.0,
+        "texto": "R$ 71.900,00"
+      },
+      "status": "disponivel",
+      "status_rotulo": "Disponível",
+      "fotos": [],
+      "interessados": 0,
+      "pode_editar": true
+    },
+    {
+      "id": 16,
+      "marca": "Hyundai",
+      "modelo": "Creta Comfort",
+      "ano": 2022,
+      "km": 21000,
+      "cor": "Cinza",
+      "cambio": "Automático",
+      "preco": {
+        "valor": 112000.0,
+        "texto": "R$ 112.000,00"
+      },
+      "status": "indisponivel",
+      "status_rotulo": "Indisponível",
+      "fotos": [],
+      "interessados": 2,
+      "pode_editar": true
+    },
+    {
+      "id": 9,
+      "marca": "Volkswagen",
+      "modelo": "Gol 1.0",
+      "ano": 2018,
+      "km": 70000,
+      "cor": "Vermelho",
+      "cambio": "Manual",
+      "preco": {
+        "valor": 41000.0,
+        "texto": "R$ 41.000,00"
+      },
+      "status": "vendido",
+      "status_rotulo": "Vendido",
+      "fotos": [],
+      "interessados": 0,
+      "pode_editar": false
+    }
+  ],
+  "totais": {
+    "disponivel": 2,
+    "reservado": 1,
+    "indisponivel": 1,
+    "vendido": 1
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "pagina": 1,
+  "paginas": 1,
+  "total": 0,
+  "tamanho": 50,
+  "itens": [],
+  "totais": {
+    "disponivel": 0,
+    "reservado": 0,
+    "indisponivel": 0,
+    "vendido": 0
+  }
+}

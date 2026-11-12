@@ -1,0 +1,14 @@
+{
+  "marca": "Hyundai",
+  "modelo": "HB20 Comfort",
+  "ano": 2020,
+  "km": 48000,
+  "cor": "Prata",
+  "cambio": "Manual",
+  "preco": 62900.0,
+  "status": "disponivel",
+  "fotos": [
+    "https://fotos.exemplo.example/hb20-1.jpg",
+    "https://fotos.exemplo.example/hb20-2.jpg"
+  ]
+}

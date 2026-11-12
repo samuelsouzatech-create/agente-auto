@@ -1,0 +1,12 @@
+{
+  "id": 105,
+  "de": "vendedor",
+  "autor": "Ricardo Alves",
+  "tipo": "texto",
+  "texto": "Oi, Juliana! Aqui é o Ricardo, da Garagem Recife. Posso te receber amanhã às 10h?",
+  "canal": "whatsapp",
+  "quando": {
+    "iso": "2026-11-06T21:58:00-03:00",
+    "texto": "hoje 21:58"
+  }
+}

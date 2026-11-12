@@ -1,0 +1,24 @@
+{
+  "venda_id": 31,
+  "carro": "HB20 Comfort 2020",
+  "data": "06/11/2026",
+  "forma": "Financiado em 48 meses",
+  "efeitos": [
+    {
+      "codigo": "venda",
+      "texto": "Venda registrada"
+    },
+    {
+      "codigo": "resultado",
+      "texto": "Resultado do cliente: comprou"
+    },
+    {
+      "codigo": "baixa_no_estoque",
+      "texto": "HB20 Comfort 2020 saiu do estoque"
+    },
+    {
+      "codigo": "pos_venda",
+      "texto": "Pós-venda agendado: primeiro contato em 7 dias"
+    }
+  ]
+}

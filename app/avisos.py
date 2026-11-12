@@ -44,13 +44,14 @@ def _enviar(chat_id: str, texto: str) -> tuple[bool, str | None]:
 
 
 def avisar_uma_vez(loja_id: int | None, tipo: str, referencia: str,
-                   destinos, texto: str) -> dict:
+                   destinos, texto: str, texto_guardado: str | None = None) -> dict:
     """Manda o aviso para cada destino que ainda não recebeu.
 
     Devolve {"enviados", "falhas", "pulados", "concluido"}. concluido=False
     quando algum destino falhou e ainda tem tentativa sobrando (o relógio
     chama de novo no próximo ciclo)."""
     resultado = {"enviados": 0, "falhas": 0, "pulados": 0, "concluido": True}
+    guardado = texto if texto_guardado is None else texto_guardado   # C3b: sem o token
     chats = list(dict.fromkeys(
         str(d).strip() for d in (destinos or []) if str(d or "").strip()))
 
@@ -60,7 +61,7 @@ def avisar_uma_vez(loja_id: int | None, tipo: str, referencia: str,
             cursor = conexao.execute(
                 "INSERT OR IGNORE INTO avisos (loja_id, tipo, referencia, destino, texto, status, erro) "
                 "VALUES (?, ?, ?, ?, ?, 'sem_destino', 'ninguém com Telegram cadastrado')",
-                (loja_id, tipo, referencia, SEM_DESTINO, texto),
+                (loja_id, tipo, referencia, SEM_DESTINO, guardado),
             )
             conexao.commit()
             if cursor.rowcount:
@@ -85,7 +86,7 @@ def avisar_uma_vez(loja_id: int | None, tipo: str, referencia: str,
                        status = excluded.status, erro = excluded.erro,
                        tentativas = avisos.tentativas + 1,
                        atualizado_em = CURRENT_TIMESTAMP""",
-                (loja_id, tipo, referencia, chat, texto, "enviado" if ok else "falhou", erro),
+                (loja_id, tipo, referencia, chat, guardado, "enviado" if ok else "falhou", erro),
             )
             conexao.commit()
 
@@ -101,3 +102,16 @@ def avisar_uma_vez(loja_id: int | None, tipo: str, referencia: str,
     finally:
         conexao.close()
     return resultado
+
+def ja_resolvido(tipo: str, referencia: str, destino: str) -> bool:
+    """C3b: True se este destino ja recebeu o aviso (ou esgotou as tentativas).
+    Quem poe link no aviso pergunta antes, para nao gerar link a toa."""
+    conexao = conectar()
+    try:
+        linha = conexao.execute(
+            "SELECT status, tentativas FROM avisos WHERE tipo = ? AND referencia = ? AND destino = ?",
+            (tipo, referencia, str(destino).strip()),
+        ).fetchone()
+    finally:
+        conexao.close()
+    return bool(linha) and (linha["status"] == "enviado" or linha["tentativas"] >= MAX_TENTATIVAS)

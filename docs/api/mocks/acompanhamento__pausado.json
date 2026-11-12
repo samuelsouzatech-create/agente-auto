@@ -1,0 +1,154 @@
+{
+  "modo": {
+    "estado": "pausadas",
+    "rotulo": "Pausadas",
+    "detalhe": "Nada sai até você retomar.",
+    "por_tipo": [
+      {
+        "tipo": "remarketing",
+        "tipo_rotulo": "Retomada",
+        "situacao": "Pausada"
+      },
+      {
+        "tipo": "pos_venda",
+        "tipo_rotulo": "Pós-venda",
+        "situacao": "Pausada"
+      },
+      {
+        "tipo": "reativacao",
+        "tipo_rotulo": "Reativação",
+        "situacao": "Pausada"
+      }
+    ]
+  },
+  "pausa": {
+    "ativa": true,
+    "por": "Camila Rocha",
+    "desde": {
+      "iso": "2026-11-06T17:05:00-03:00",
+      "texto": "hoje 17:05"
+    },
+    "motivo": "Feriado prolongado"
+  },
+  "uso_mes": {
+    "usados": 38,
+    "limite": 200,
+    "texto": "38 de 200 contatos neste mês"
+  },
+  "proximos": [
+    {
+      "tipo": "remarketing",
+      "tipo_rotulo": "Retomada",
+      "lead": "5581999990002",
+      "cliente": "Carlos Mendes",
+      "canal": "WhatsApp",
+      "passo": 1,
+      "quando": {
+        "iso": "2026-11-07T09:00:00-03:00",
+        "texto": "amanhã 09:00"
+      },
+      "situacao": "Vai sair",
+      "detalhe": "1ª retomada",
+      "bloqueio": null,
+      "pode_bloquear": true
+    },
+    {
+      "tipo": "remarketing",
+      "tipo_rotulo": "Retomada",
+      "lead": "5581999990006",
+      "cliente": "Rafael Tavares",
+      "canal": "WhatsApp",
+      "passo": 2,
+      "quando": {
+        "iso": "2026-11-08T09:00:00-03:00",
+        "texto": "dom 09:00"
+      },
+      "situacao": "Não será enviada",
+      "detalhe": "2ª retomada",
+      "bloqueio": {
+        "id": 7,
+        "lead": "5581999990006",
+        "cliente": "Rafael Tavares",
+        "tipo": "remarketing",
+        "tipo_rotulo": "Retomada",
+        "passo": 2,
+        "descricao": "Não enviar a 2ª retomada para Rafael Tavares",
+        "criado_em": {
+          "iso": "2026-11-06T15:10:00-03:00",
+          "texto": "hoje 15:10"
+        },
+        "por": "Camila Rocha"
+      },
+      "pode_bloquear": false
+    },
+    {
+      "tipo": "pos_venda",
+      "tipo_rotulo": "Pós-venda",
+      "lead": "5581999990005",
+      "cliente": "Marina Lopes",
+      "canal": "",
+      "passo": 14,
+      "quando": {
+        "iso": "2026-11-11T10:00:00-03:00",
+        "texto": "qua 10:00"
+      },
+      "situacao": "Agendado",
+      "detalhe": "Como está seu carro novo?",
+      "bloqueio": null,
+      "pode_bloquear": true
+    }
+  ],
+  "historico": [
+    {
+      "tipo": "remarketing",
+      "tipo_rotulo": "Retomada",
+      "lead": "5581999990004",
+      "cliente": "Bruno Costa",
+      "estado": "enviado",
+      "estado_rotulo": "Enviada",
+      "motivo": "",
+      "texto": "Oi, Bruno! O Creta 2022 que você viu continua aqui. Quer passar para dar uma olhada?",
+      "detalhe": "1ª retomada · WhatsApp",
+      "quando": {
+        "iso": "2026-11-05T09:02:00-03:00",
+        "texto": "qui 09:02"
+      }
+    },
+    {
+      "tipo": "pos_venda",
+      "tipo_rotulo": "Pós-venda",
+      "lead": "5581999990005",
+      "cliente": "Marina Lopes",
+      "estado": "cancelado",
+      "estado_rotulo": "Cancelada",
+      "motivo": "Cliente abriu um chamado de pós-venda",
+      "texto": "",
+      "detalhe": "Primeiro contato",
+      "quando": {
+        "iso": "2026-11-04T10:00:00-03:00",
+        "texto": "qua 10:00"
+      }
+    }
+  ],
+  "bloqueios_ativos": [
+    {
+      "id": 7,
+      "lead": "5581999990006",
+      "cliente": "Rafael Tavares",
+      "tipo": "remarketing",
+      "tipo_rotulo": "Retomada",
+      "passo": 2,
+      "descricao": "Não enviar a 2ª retomada para Rafael Tavares",
+      "criado_em": {
+        "iso": "2026-11-06T15:10:00-03:00",
+        "texto": "hoje 15:10"
+      },
+      "por": "Camila Rocha"
+    }
+  ],
+  "resultado_do_mes": {
+    "enviados": 38,
+    "responderam": 14,
+    "agendaram": 5
+  }
+}

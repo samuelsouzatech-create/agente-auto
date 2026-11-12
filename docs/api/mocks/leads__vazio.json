@@ -1,0 +1,45 @@
+{
+  "pagina": 1,
+  "paginas": 1,
+  "total": 0,
+  "tamanho": 50,
+  "periodo_dias": 30,
+  "itens": [],
+  "contagem_por_etapa": [
+    {
+      "etapa": "novo",
+      "rotulo": "Novo",
+      "total": 0
+    },
+    {
+      "etapa": "em_conversa",
+      "rotulo": "Em conversa",
+      "total": 0
+    },
+    {
+      "etapa": "pediu_tempo",
+      "rotulo": "Pediu tempo",
+      "total": 0
+    },
+    {
+      "etapa": "com_vendedor",
+      "rotulo": "Com vendedor",
+      "total": 0
+    },
+    {
+      "etapa": "visita_marcada",
+      "rotulo": "Visita marcada",
+      "total": 0
+    },
+    {
+      "etapa": "venda_registrada",
+      "rotulo": "Venda registrada",
+      "total": 0
+    },
+    {
+      "etapa": "nao_seguiu",
+      "rotulo": "Não seguiu",
+      "total": 0
+    }
+  ]
+}

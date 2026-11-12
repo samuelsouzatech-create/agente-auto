@@ -1,0 +1,7 @@
+{
+  "codigo": "senha_fraca",
+  "mensagem": "A senha é fraca demais. Use pelo menos 10 caracteres e evite senhas comuns.",
+  "campos": {
+    "senha_nova": "Muito comum. Tente uma frase com várias palavras."
+  }
+}
