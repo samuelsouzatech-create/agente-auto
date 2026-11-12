@@ -49,6 +49,7 @@ from app.chaves import exigir_loja
 from app.pausa import pausado
 from app.modo_envio import real_para
 from app.custos import Uso, registrar_uso, uso_das_mensagens
+from app.filtro_remarketing import acao_inventada, preco_fora, precos_da_conversa, precos_do_estoque
 from app.elegibilidade import Decisao, avaliar, candidatos, elegiveis
 from app.lojas import PADROES, TETO_TOQUES_REMARKETING, Loja, carregar_loja, modulo_ativo
 from app.relogio import agora_utc, do_banco, para_banco
@@ -201,12 +202,13 @@ def escrever_com_ia(loja: Loja, lead_id: str, canal: str, toque: int,
     return _texto_da_ia(resposta), uso_das_mensagens([resposta])
 
 
-def _limpar_texto(texto) -> str:
+def _limpar_texto(texto, permitidos=frozenset()) -> str:
+    """Bloco S1: barra também ação inventada e preço fora de permitidos (centavos)."""
     if not isinstance(texto, str):
         return ""
     t = texto.replace("**", "").replace("__", "").strip().strip('"').strip()
     t = re.sub(r"\n{3,}", "\n\n", t)
-    if not t or len(t) > LIMITE_TEXTO_LIVRE or _CARA_DE_ROBO.search(t) or _PROMESSA.search(t):
+    if not t or len(t) > LIMITE_TEXTO_LIVRE or _CARA_DE_ROBO.search(t) or _PROMESSA.search(t) or acao_inventada(t) or preco_fora(t, permitidos):
         return ""
     return t
 
@@ -441,7 +443,9 @@ def _mensagem_livre(loja, d, agora, dados, *, real, redator, enviador) -> str:
     except Exception as erro:
         print(f"[Remarketing][loja {loja.id}] IA falhou ({type(erro).__name__}); usando texto reserva.")
         bruto, uso = "", Uso()
-    texto, origem = _limpar_texto(bruto), "ia"
+    historico = _historico(loja.id, d.lead_id, d.canal)
+    permitidos = precos_da_conversa(historico) | precos_do_estoque(loja.id, dados)
+    texto, origem = _limpar_texto(bruto, permitidos), "ia"
     if not texto:
         texto, origem = _texto_reserva(loja, dados), "reserva"
     comum = dict(real=real, texto=texto, origem=origem, categoria="livre",

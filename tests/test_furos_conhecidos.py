@@ -36,9 +36,9 @@ def furo(numero, motivo):
 
 @pytest.mark.parametrize("resposta", [
     "Sai por R$ 75.000, quer ver?",  # controle: já funciona
-    pytest.param("O Civic sai por uns 75 mil.", marks=furo(1, "valor sem R$ passa pela guarda")),
-    pytest.param("Consigo por 75 mil reais.", marks=furo(1, "valor sem R$ passa pela guarda")),
-    pytest.param("Fica 48x de 1.800 no financiamento.", marks=furo(1, "parcela sem R$ passa pela guarda")),
+    "O Civic sai por uns 75 mil.",
+    "Consigo por 75 mil reais.",
+    "Fica 48x de 1.800 no financiamento.",
 ])
 def test_guarda_enxerga_valor_na_resposta(resposta):
     assert valores_em_reais(resposta), "a guarda não viu nenhum valor nesta resposta"
@@ -55,8 +55,8 @@ def test_valor_dito_pelo_cliente_continua_liberado():
 
 
 @pytest.mark.parametrize("fala", [
-    pytest.param("tem 90 mil km e está bem conservado", marks=furo(2, "km do cliente libera R$ inventado")),
-    pytest.param("ele está com 90.000 km rodados", marks=furo(2, "km do cliente libera R$ inventado")),
+    "tem 90 mil km e está bem conservado",
+    "ele está com 90.000 km rodados",
 ])
 def test_quilometragem_nao_libera_preco(fala):
     inventado = valores_em_reais("Esse sai por R$ 90.000.")
