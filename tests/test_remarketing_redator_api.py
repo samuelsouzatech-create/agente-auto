@@ -36,6 +36,7 @@ import pytest
 # Garante que o Python encontre os módulos da raiz do projeto
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.filtro_remarketing import precos_da_conversa  # noqa: E402
 from app.jobs.remarketing import _limpar_texto, _texto_reserva, escrever_com_ia  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -219,7 +220,7 @@ def checar(caso, texto):
 
 
 def avaliar_resposta(caso, bruto):
-    final, origem, extra = _limpar_texto(bruto), "ia", []
+    final, origem, extra = _limpar_texto(bruto, precos_da_conversa(caso["historico"])), "ia", []
     if not final:
         final, origem = _texto_reserva(LOJA, caso["dados"]), "reserva"
         extra.append((AVISO, "a IA foi barrada pelo filtro e saiu o texto reserva"))
@@ -269,14 +270,10 @@ def test_detector_pega_textos_reais_da_rodada_20261107():
     assert checar(caso["toque3_ultima"], limpo) == []
 
 
-@pytest.mark.xfail(strict=True, reason="Furo 15: o filtro do remarketing não barra ação inventada "
-                                       "('falei com o gerente'). Correção em app/ com aprovação do analista.")
 def test_furo15_filtro_do_remarketing_barra_acao_inventada():
     assert _limpar_texto(TEXTO_PAULO) == ""
 
 
-@pytest.mark.xfail(strict=True, reason="Furo 3: o filtro do remarketing não confere preço. "
-                                       "Correção em app/ é bloco à parte, com aprovação do analista.")
 def test_furo3_filtro_do_remarketing_barra_preco_inventado():
     assert _limpar_texto("Oi, Carla! O Onix 2020 sai por R$ 65.000, quer ver?") == ""
 
