@@ -70,10 +70,10 @@ def test_quilometragem_nao_libera_preco(fala):
 @pytest.mark.parametrize("fala", [
     "para de me mandar mensagem",  # controle
     "não me procure mais",         # controle
-    pytest.param("me esquece", marks=furo(7, "parada não reconhecida")),
-    pytest.param("sai fora", marks=furo(7, "parada não reconhecida")),
-    pytest.param("bloqueia meu número", marks=furo(7, "parada não reconhecida")),
-    pytest.param("n manda mais nada", marks=furo(7, "parada não reconhecida")),
+    "me esquece",
+    "sai fora",
+    "bloqueia meu número",
+    "n manda mais nada",
 ])
 def test_checagem_fixa_reconhece_pedido_de_parada(fala):
     assert pediu_para_parar(fala), "a checagem fixa não reconheceu o pedido de parada"
