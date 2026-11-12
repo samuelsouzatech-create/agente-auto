@@ -3,7 +3,7 @@ Rotas de acesso (C2a): login, logout, eu e trocar-senha.
 
 - login responde SEMPRE igual para qualquer falha (e-mail desconhecido, senha
   errada, operador, suporte, loja desligada). Erros demais: 429.
-- O cookie leo_sessao é HttpOnly, Secure e SameSite=Lax, e vale 7 dias.
+- O cookie leo_sessao é HttpOnly, Secure e SameSite=Lax, e vale 7 dias (12 h no link do vendedor, C3c).
 - Nenhuma rota lê loja_id do pedido: a loja vem só da sessão.
 - trocar-senha define o ator a partir da sessão antes de chamar app/.
 """
@@ -33,8 +33,8 @@ class TrocarSenhaEntrada(BaseModel):
     senha_nova: str = ""
 
 
-def _gravar_cookie(resposta: Response, token: str) -> None:
-    resposta.set_cookie(COOKIE, token, max_age=int(sessoes.DURACAO.total_seconds()), path="/",
+def _gravar_cookie(resposta: Response, token: str, escopo=None) -> None:
+    resposta.set_cookie(COOKIE, token, max_age=int(sessoes.duracao_do_escopo(escopo).total_seconds()), path="/",
                         secure=True, httponly=True, samesite="lax")
 
 

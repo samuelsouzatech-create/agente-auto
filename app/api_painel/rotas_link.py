@@ -7,13 +7,16 @@ Rota do C3: o link do vendedor que vem no aviso.
 - Link usado, vencido ou anulado: leva a /link-invalido?motivo=... no front.
 - Links errados demais da mesma origem: 429, no formato de erro de sempre.
 - O log de acesso mostra /v/*** (logs.py), nunca o token.
+- A sessão do link vale 12 h (C3c). Ela usa o mesmo cookie leo_sessao:
+  aberto no navegador em que a pessoa já estava logada, o link troca a
+  sessão completa pela de uma conversa só (lacuna 35 do contrato).
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
-from app import links_vendedor
+from app import links_vendedor, sessoes
 from app.api_painel.erros import ErroApi
 from app.api_painel.rotas_auth import _gravar_cookie
 
@@ -31,5 +34,5 @@ def abrir_link(token: str, request: Request):
         links_vendedor.anotar_link_errado(origem)
         return RedirectResponse(links_vendedor.url_link_invalido(erro.motivo), status_code=302)
     resposta = RedirectResponse(links_vendedor.url_da_conversa(feito["lead_id"]), status_code=302)
-    _gravar_cookie(resposta, feito["sessao"])
+    _gravar_cookie(resposta, feito["sessao"], sessoes.LINK)
     return resposta

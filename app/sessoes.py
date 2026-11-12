@@ -11,7 +11,7 @@ Sessões do painel do cliente (C2a do Plano Mestre; tabela da migração 15).
     vendedor      -> escopo "atendimento" (login; só Atender e Leads)
     vendedor_link -> escopo "link"        (link do aviso, C3; uma conversa só)
   Operador e suporte não ganham sessão aqui: o painel deles é o Streamlit.
-- A sessão deixa de valer quando vence (7 dias), quando é revogada (sair,
+- A sessão deixa de valer quando vence (7 dias; 12 h na de link), quando é revogada (sair,
   troca de senha), quando a pessoa é desativada, muda de loja ou de papel,
   ou quando a loja é desligada. ler_sessao devolve None, sem dizer o motivo.
 - sessao_sem_acesso: sessão em dia, mas de quem não usa este painel
@@ -34,6 +34,15 @@ COMPLETO = "completo"
 ATENDIMENTO = "atendimento"
 LINK = "link"
 ESCOPOS = (COMPLETO, ATENDIMENTO, LINK)
+# C3c (analista): a sessão do link dura o mesmo que o link, 12 h.
+DURACAO_LINK = timedelta(hours=12)
+
+
+def duracao_do_escopo(escopo) -> timedelta:
+    """Quanto a sessão vale: 12 h no escopo link, 7 dias nos outros."""
+    return DURACAO_LINK if escopo == LINK else DURACAO
+
+
 PAPEL_LINK = "vendedor_link"
 ESCOPO_DO_PAPEL = {"dono": COMPLETO, "gestor": COMPLETO, "vendedor": ATENDIMENTO, PAPEL_LINK: LINK}
 PAPEIS_COM_LOGIN = ("dono", "gestor", "vendedor")
@@ -110,7 +119,7 @@ def criar_sessao(usuario_id: int, loja_id, papel: str, escopo=None, lead_id=None
             "INSERT INTO sessoes (token_hash, usuario_id, loja_id, papel, escopo, lead_id, "
             "criado_em, expira_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (_hash(token), usuario_id, loja, papel, escopo, lead,
-             para_banco(momento), para_banco(momento + DURACAO)))
+             para_banco(momento), para_banco(momento + duracao_do_escopo(escopo))))
         if propria:
             con.commit()
     finally:

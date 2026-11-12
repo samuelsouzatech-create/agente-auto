@@ -200,3 +200,7 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
 31. A tabela `avisos` guarda o texto com `[link]` no lugar do link: o token nunca fica no banco.
 32. Quem já recebeu o aviso não ganha link de novo. Envio que falhou: a próxima tentativa leva um link novo.
 33. Revogação pelo operador: desativar a pessoa em Configuração > Equipe derruba o link e as sessões dela (S4b), sem botão novo.
+34. (C3c, analista) A sessão de escopo `link` vale 12 h, igual à validade do link, no banco (`expira_em`) e no cookie (`Max-Age`). O login continua com 7 dias. Substitui a decisão provisória da lacuna 28.
+35. (C3c, analista) O link usa o mesmo cookie `leo_sessao`. Aberto no navegador em que a pessoa já está logada, ele troca a sessão completa pela de uma conversa só; para voltar, basta entrar de novo pelo login. É um incômodo conhecido, não uma falha de segurança. Cookie separado só se incomodar na prática.
+36. (C3c, analista) A tela “Equipe” (dono convida pessoas) está fora do contrato v1. Até ela existir, o operador gera o link de senha em Configuração > Equipe (C2f).
+37. (C3c, analista) O limite de links errados conta por origem (`request.client.host`). Atrás de proxy, a API precisa rodar com `--proxy-headers` e `--forwarded-allow-ips` apontando só para o proxy. Ver `docs/api/publicacao.md`.
