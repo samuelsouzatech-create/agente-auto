@@ -83,8 +83,6 @@ def test_checagem_fixa_reconhece_pedido_de_parada(fala):
 # Furo 8: troca gravada com km = 0 (achado na rodada de 06/11)
 # ----------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="furo 8: registrar_troca grava linha nova a cada chamada; "
-                                       "a primeira, sem km, fica com km = 0")
 def test_troca_nao_fica_com_km_zero():
     """O Léo registrou antes de saber a km e depois registrou de novo.
     O vendedor tem que ver só 90.000 km, sem uma linha com km = 0."""
