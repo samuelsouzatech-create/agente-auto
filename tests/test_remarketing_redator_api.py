@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.filtro_remarketing import precos_da_conversa  # noqa: E402
 from app.jobs.remarketing import _limpar_texto, _texto_reserva, escrever_com_ia  # noqa: E402
 from app.jobs.remarketing import _CARA_DE_ROBO, _PROMESSA, LIMITE_TEXTO_LIVRE  # noqa: E402
-from app.filtro_remarketing import _ACAO_INVENTADA  # noqa: E402
+from app.filtro_remarketing import _ACAO_INVENTADA, _FATO_INVENTADO  # noqa: E402
 from app.guarda_politica import valores_em_reais as valores_da_guarda  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -246,7 +246,8 @@ def regra_que_barrou(bruto, permitidos):
         regras.append(f"longo demais ({len(t)} caracteres; limite {LIMITE_TEXTO_LIVRE})")
     for rotulo, padrao in (("cara de robô", _CARA_DE_ROBO),
                            ("promessa (separei/reservei/já mandei)", _PROMESSA),
-                           ("ação inventada", _ACAO_INVENTADA)):
+                           ("ação inventada", _ACAO_INVENTADA),
+                           ("fato inventado", _FATO_INVENTADO)):
         m = padrao.search(t)
         if m:
             regras.append(f'{rotulo}: "{m.group(0)}"')

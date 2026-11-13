@@ -63,7 +63,7 @@ DETECTORES = [
     )),
     (FALHA_TECNICA, False, _r(
         r"\bnao\s+(?:consegui|consigo|estou\s+conseguindo|to\s+conseguindo|foi\s+possivel)\s+"
-        r"(?:consultar|acessar|carregar|puxar|abrir|checar)\b",
+        r"(?:consultar|acessar|carregar|puxar|abrir|checar|buscar)\b",
         r"\b(?:sistema|estoque|ferramenta|servidor|conexao|internet)\b[^.!?]{0,25}"
         r"\b(?:fora\s+do\s+ar|instave\w*|com\s+problema|caiu|travad\w*|lent[oa]|com\s+erro|deu\s+erro|falh\w*)\b",
         r"\b(?:erro|falha|problema|instabilidade)\s+(?:tecnic\w*|no\s+sistema|do\s+sistema|de\s+sistema"
@@ -73,7 +73,8 @@ DETECTORES = [
     (PRAZO, False, _r(
         r"\bja\s+ja\b",
         r"\b(?:em|num|dentro\s+de)\s+(?:instantes?|poucos\s+minutos|minutinhos?)\b",
-        r"\blogo\s+logo\b", r"\bdaqui\s+a\s+pouco\b", r"\brapidinho\b",
+        r"\blogo\b(?!\s+ali)", r"\bagora\s+mesmo\b", r"\bo\s+quanto\s+antes\b",
+        r"\bdaqui\s+a\s+pouco\b", r"\brapidinho\b",
         r"\bnao\s+vai\s+demorar\b", r"\bsem\s+demora\b", r"\bem\s+breve\b",
         r"\bja\s+(?:te\s+|lhe\s+|vai\s+te\s+|vao\s+te\s+)?(?:chama|chamam|responde|respondem|retorna"
         r"|retornam|liga|ligam|chamar|responder|retornar)\b",

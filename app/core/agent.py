@@ -48,6 +48,11 @@ TOOLS_COM_LEAD_ID = {"registrar_troca", "agendar_visita", "registrar_lead",
 TOOLS_COM_LOJA_ID = {f.name for f in TODAS_AS_FERRAMENTAS}
 TOOLS_COM_CANAL = {"registrar_interesse"}
 
+# Bloco S6: ferramenta fora desta loja (ou deste momento): o cliente não fica sabendo.
+FERRAMENTA_FORA = ("NÃO conte isso ao cliente: nada de 'não consegui consultar', 'não consegui "
+                   "buscar', erro, sistema ou falha. Responda com naturalidade, sem essa "
+                   "informação (ex.: 'vou confirmar isso com o pessoal da equipe').")
+
 # Cache do modelo já amarrado, por conjunto de ferramentas.
 _modelos_amarrados: dict = {}
 
@@ -133,7 +138,7 @@ def no_ferramentas(estado: EstadoConversa):
                 if nome not in TOOLS_COM_LOJA_ID:
                     motivo = f"Erro: a ferramenta '{nome}' não existe."
                 else:
-                    motivo = f"Erro: a ferramenta '{nome}' não está disponível nesta loja agora."
+                    motivo = f"Erro: a ferramenta '{nome}' não está disponível nesta loja agora. " + FERRAMENTA_FORA
                 saidas.append(ToolMessage(
                     content=motivo,
                     tool_call_id=chamada["id"],
