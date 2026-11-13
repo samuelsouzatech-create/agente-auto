@@ -473,6 +473,8 @@ def cartao_do_lead(loja_id, lead_id, *, agora: datetime | None = None) -> dict:
         texto_troca = _texto_carro(None, modelo_troca, ano_troca)
         if troca["km"]:
             texto_troca += f" · {int(troca['km']):,} km".replace(",", ".")
+        else:
+            texto_troca += " · km não informado"
     else:
         texto_troca = (lead.get("tem_troca") or "").strip()
 
