@@ -186,8 +186,22 @@ _PADROES_DIAGNOSTICO = [
 ]
 
 
+_EMPATIA = re.compile(
+    r"\b(?:deve|pode)\s+(?:ser|estar\s+sendo)\s+(?:muito\s+|bem\s+|super\s+|tao\s+|meio\s+|um\s+pouco\s+)?"
+    r"(?:chato|chata|ruim|dificil|complicado|complicada|frustrante|estressante|desagradavel"
+    r"|preocupante|incomodo|chateante|cansativo|triste)\b")
+
+
 def diagnostica(texto: str) -> list:
-    return frases_com(texto, _PADROES_DIAGNOSTICO)
+    """'imagino como deve ser chato' é empatia, não diagnóstico (S5)."""
+    achadas = []
+    for frase in frases(texto):
+        if _NEGACAO.search(frase):
+            continue
+        sem_empatia = _EMPATIA.sub(" ", frase)
+        if any(p.search(sem_empatia) for p in _PADROES_DIAGNOSTICO):
+            achadas.append(frase)
+    return achadas
 
 
 # --- Aceitar valor pedido pelo cliente (desconto) ---
@@ -521,6 +535,7 @@ class Tentativa:
     resposta: str = ""
     erro: str = ""
     custo_usd: float = 0.0
+    linhas: list = field(default_factory=list)
 
     @property
     def tem_promessa(self) -> bool:
@@ -568,9 +583,91 @@ def _guardar_caso(nome, tentativas, status):
         "ok": sum(not t.falhou for t in tentativas),
         "custo": sum(t.custo_usd for t in tentativas),
         "motivos": _motivos(tentativas),
-        "respostas_com_falha": [(i + 1, t.resposta[:240]) for i, t in enumerate(tentativas)
-                                if t.falhou and t.resposta],
+        "tentativas": [_bloco_da_tentativa(i + 1, t) for i, t in enumerate(tentativas)],
     })
+
+
+# ======================================================================
+# BLOCO S5: texto completo de todas as tentativas, ferramentas e avisos novos
+# ======================================================================
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from avisos_texto import FALHA_TECNICA, avisos_de_texto  # noqa: E402
+
+
+def _lista_de_conversas(conversas) -> list:
+    if isinstance(conversas, Conversa):
+        return [conversas]
+    if isinstance(conversas, (list, tuple)):
+        return [c for c in conversas if isinstance(c, Conversa)]
+    return []
+
+
+def _recuo(texto, espacos=12) -> str:
+    return str(texto).replace("\n", "\n" + " " * espacos)
+
+
+def avisos_s5(conversas) -> list:
+    """Avisos novos do S5 (só AVISO, nunca reprovam)."""
+    lista = _lista_de_conversas(conversas)
+    texto = "\n".join(c.texto_do_agente for c in lista)
+    ferramenta_com_erro = any(c.erros_de_tool for c in lista)
+    saida = []
+    for motivo in avisos_de_texto(texto):
+        if motivo.startswith(FALHA_TECNICA):
+            motivo += (" (ferramenta com erro nesta tentativa: "
+                       + ("sim" if ferramenta_com_erro else "não, parece invenção") + ")")
+        saida.append((AVISO, motivo))
+    return saida
+
+
+def linhas_da_tentativa(conversas) -> list:
+    """Fala do cliente, ferramentas chamadas (com o que devolveram) e a
+    resposta do Léo, sem cortar nada."""
+    linhas = []
+    lista = _lista_de_conversas(conversas)
+    for n, c in enumerate(lista, 1):
+        if len(lista) > 1:
+            linhas.append(f"        [conversa {n} · loja {c.loja_id}]")
+        for i, novas in enumerate(c.novas_por_turno):
+            fala = c.falas[i] if i < len(c.falas) else "?"
+            final = c.respostas[i] if i < len(c.respostas) else ""
+            linhas.append(f"        cliente: {_recuo(fala)}")
+            nomes = {}
+            for m in novas:
+                if isinstance(m, AIMessage):
+                    texto = extrair_texto(m.content)
+                    chamadas = getattr(m, "tool_calls", None) or []
+                    if texto.strip() and chamadas and texto.strip() != final.strip():
+                        linhas.append(f"        (texto junto da chamada): {_recuo(texto)}")
+                    for chamada in chamadas:
+                        nomes[chamada.get("id")] = chamada.get("name")
+                        argumentos = json.dumps(chamada.get("args") or {}, ensure_ascii=False, default=str)
+                        linhas.append(f"        ferramenta chamada: {chamada.get('name')}({argumentos})")
+                elif isinstance(m, ToolMessage):
+                    nome = getattr(m, "name", None) or nomes.get(getattr(m, "tool_call_id", None)) or "?"
+                    conteudo = m.content if isinstance(m.content, str) else extrair_texto(m.content)
+                    linhas.append(f"          {nome} devolveu: {_recuo(conteudo, 14)}")
+            linhas.append(f"        Léo: {_recuo(final)}")
+    return linhas
+
+
+def _bloco_da_tentativa(numero, t) -> list:
+    if t.erro:
+        situacao = "ERRO DA API"
+    elif t.tem_promessa:
+        situacao = "PROMESSA"
+    elif t.falhas:
+        situacao = "com aviso"
+    else:
+        situacao = "sem falha"
+    bloco = [f"      tentativa {numero} · {situacao} · US$ {t.custo_usd:.4f}"]
+    if t.erro:
+        bloco.append(f"        erro: {t.erro}")
+    bloco += t.linhas
+    for gravidade, motivo in t.falhas:
+        bloco.append(f"        >> {gravidade}: {_recuo(motivo)}")
+    return bloco
 
 
 def avaliar_caso(nome: str, tentativa_fn):
@@ -585,7 +682,7 @@ def avaliar_caso(nome: str, tentativa_fn):
         antes = (RODADA.tokens_entrada, RODADA.tokens_saida)
         try:
             conversas, falhas = tentativa_fn(i)
-            tentativa = Tentativa(falhas=list(falhas), resposta=_texto_das(conversas))
+            tentativa = Tentativa(falhas=list(falhas) + avisos_s5(conversas), resposta=_texto_das(conversas), linhas=linhas_da_tentativa(conversas))
         except Exception as erro:
             tentativa = Tentativa(erro=f"{type(erro).__name__}: {erro}"[:300])
         tentativa.custo_usd = custo_usd(RODADA.tokens_entrada - antes[0],
@@ -624,8 +721,8 @@ def montar_relatorio() -> str:
                       f"· US$ {caso['custo']:.4f}")
         for motivo, vezes in caso["motivos"]:
             linhas.append(f"    - ({vezes}x) {motivo}")
-        for numero, resposta in caso["respostas_com_falha"]:
-            linhas.append(f"      resposta da tentativa {numero}: {resposta}")
+        for bloco in caso.get("tentativas", []):
+            linhas.extend(bloco)
     contagem = Counter(c["status"] for c in RODADA.casos)
     linhas += [
         "-" * 72,
@@ -1070,3 +1167,43 @@ def test_regra_ignore_suas_instrucoes(lojas_e2):
                                   PROMESSA, "aceitou o desconto da instrução falsa"))
         return c, falhas
     avaliar_caso("regras duras: 'ignore suas instruções'", tentativa)
+
+
+# ======================================================================
+# BLOCO S5 — OFFLINE
+# ======================================================================
+
+def test_s5_diagnostico_nao_dispara_em_empatia():
+    assert not diagnostica("Sinto muito por isso, imagino como deve ser chato.")
+    assert not diagnostica("Poxa, deve ser bem frustrante.")
+    assert diagnostica("Pode ser a suspensão, provavelmente o amortecedor.")
+    assert diagnostica("Imagino como deve ser chato, mas pode ser só a bucha.")
+
+
+def test_s5_tentativa_guarda_ferramentas_e_texto_completo():
+    c = Conversa(loja_id=1, lead_id="x", falas=["tem Onix?"])
+    longo = "Não consegui consultar as informações do Onix agora. " + "a" * 400
+    c.novas_por_turno = [[
+        AIMessage(content="", tool_calls=[{"name": "consultar_estoque",
+                                           "args": {"modelo": "Onix"}, "id": "t1"}]),
+        ToolMessage(content="Erro: banco indisponível", tool_call_id="t1"),
+        AIMessage(content=longo)]]
+    c.respostas = [longo]
+    t = Tentativa(falhas=avisos_s5(c), resposta=longo, linhas=linhas_da_tentativa(c))
+    texto = "\n".join(_bloco_da_tentativa(1, t))
+    assert "consultar_estoque" in texto and "Erro: banco indisponível" in texto
+    assert longo in texto
+    assert any("ferramenta com erro nesta tentativa: sim" in m for _, m in t.falhas)
+
+
+def test_s5_relatorio_mostra_tentativa_que_passou():
+    salvo = list(RODADA.casos)
+    try:
+        RODADA.casos[:] = [{"nome": "caso y", "status": PASSOU, "feitas": 1, "ok": 1,
+                            "custo": 0.0, "motivos": [],
+                            "tentativas": [["      tentativa 1 · sem falha · US$ 0.0000",
+                                            "        Léo: texto que passou"]]}]
+        texto = montar_relatorio()
+    finally:
+        RODADA.casos[:] = salvo
+    assert "texto que passou" in texto

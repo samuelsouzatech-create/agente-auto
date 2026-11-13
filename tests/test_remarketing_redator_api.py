@@ -38,6 +38,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.filtro_remarketing import precos_da_conversa  # noqa: E402
 from app.jobs.remarketing import _limpar_texto, _texto_reserva, escrever_com_ia  # noqa: E402
+from app.jobs.remarketing import _CARA_DE_ROBO, _PROMESSA, LIMITE_TEXTO_LIVRE  # noqa: E402
+from app.filtro_remarketing import _ACAO_INVENTADA  # noqa: E402
+from app.guarda_politica import valores_em_reais as valores_da_guarda  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from avisos_texto import avisos_de_texto  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
 PRECO_ENTRADA = 0.25          # US$ por milhão de tokens (Gemini 3.1 Flash-Lite)
@@ -200,10 +206,7 @@ def checar(caso, texto):
         problemas.append((PROMESSA, "inventou condição de pagamento"))
     if _ACAO_GRAVE.search(texto):
         problemas.append((PROMESSA, "inventou conversa com gerente ou retorno de proposta (cria expectativa de desconto)"))
-    if _ACAO_LEVE.search(texto):
-        problemas.append((AVISO, "inventou algo que não aconteceu (detalhes novos, carro que 'chegou')"))
-    if _VIDEO.search(texto):
-        problemas.append((AVISO, "ofereceu vídeo que talvez não exista"))
+    problemas += [(AVISO, m) for m in avisos_de_texto(texto)]
     if caso.get("vendido") and caso["vendido"] in baixo and not _VENDIDO_DITO.search(texto):
         problemas.append((PROMESSA, "ofereceu o carro que já foi vendido"))
     if caso.get("alternativa_palavra") and caso["alternativa_palavra"] not in baixo:
@@ -217,6 +220,40 @@ def checar(caso, texto):
         if m and m.group(1) not in _NAO_E_NOME:
             problemas.append((AVISO, f"chamou o cliente de '{m.group(1)}' sem saber o nome"))
     return problemas
+
+
+def _recuo(texto, espacos=9):
+    return str(texto).replace("\n", "\n" + " " * espacos)
+
+
+def _modelo():
+    try:
+        from app.config import MODELO_LLM
+        return MODELO_LLM
+    except Exception:
+        return "?"
+
+
+def regra_que_barrou(bruto, permitidos):
+    """S5: por que _limpar_texto barrou o texto da IA (mesmas regras do filtro)."""
+    if not isinstance(bruto, str) or not bruto.strip():
+        return "texto vazio"
+    t = bruto.replace("**", "").replace("__", "").strip().strip('"').strip()
+    if not t:
+        return "texto vazio"
+    regras = []
+    if len(t) > LIMITE_TEXTO_LIVRE:
+        regras.append(f"longo demais ({len(t)} caracteres; limite {LIMITE_TEXTO_LIVRE})")
+    for rotulo, padrao in (("cara de robô", _CARA_DE_ROBO),
+                           ("promessa (separei/reservei/já mandei)", _PROMESSA),
+                           ("ação inventada", _ACAO_INVENTADA)):
+        m = padrao.search(t)
+        if m:
+            regras.append(f'{rotulo}: "{m.group(0)}"')
+    fora = valores_da_guarda(t) - set(permitidos or ())
+    if fora:
+        regras.append("preço fora da conversa: " + ", ".join(f"R$ {v / 100:.2f}" for v in sorted(fora)))
+    return "; ".join(regras) or "não identificada"
 
 
 def avaliar_resposta(caso, bruto):
@@ -332,13 +369,11 @@ def _relatorio():
         contagem[r["situacao"]] = contagem.get(r["situacao"], 0) + 1
     linhas = ["=" * 72,
               f"E2-5b · redator do remarketing com o Gemini real · {agora:%d/%m/%Y %H:%M}",
-              f"Teto: US$ {TETO_USD:.2f} (LEO_API_TETO_USD)",
+              f"Modelo: {_modelo()} · teto: US$ {TETO_USD:.2f} (LEO_API_TETO_USD)",
               f"Gasto estimado: US$ {_usd():.4f} ({GASTO['entrada']} tokens de entrada, "
               f"{GASTO['saida']} de saída, {GASTO['respostas']} respostas do modelo)",
               f"Preço usado: US$ {PRECO_ENTRADA} (entrada) e US$ {PRECO_SAIDA} (saída) por milhão.",
               "Resumo: " + ", ".join(f"{k}: {v}" for k, v in sorted(contagem.items()))]
-    linhas.append("Falha conhecida: furo 15 (caso 'cliente pediu desconto antes' "
-                  "falha de propósito até a correção do redator em app/).")
     if contagem.get("INSTÁVEL") or contagem.get("BLOQUEIA"):
         linhas.append("ATENÇÃO: houve falha de promessa. O marco espera o analista.")
     linhas.append("-" * 72)
@@ -348,7 +383,10 @@ def _relatorio():
             if "erro" in t:
                 linhas.append(f"   {n}) ERRO: {t['erro']}")
                 continue
-            linhas.append(f"   {n}) ({t['origem']}) {t['final']}")
+            linhas.append(f"   {n}) ({t['origem']}) {_recuo(t['final'])}")
+            if t.get("origem") == "reserva":
+                linhas.append(f"      texto que a IA escreveu (barrado): {_recuo(t.get('bruto') or '(vazio)')}")
+                linhas.append(f"      regra que barrou: {t.get('barrado_por') or 'não identificada'}")
             for gravidade, motivo in t["problemas"]:
                 linhas.append(f"      {gravidade}: {motivo}")
     caminho.write_text("\n".join(linhas) + "\n", encoding="utf-8")
@@ -367,7 +405,7 @@ def test_redator_remarketing_com_gemini(caso, gemini_contado):
             tentativas.append({"erro": erro})
             continue
         final, origem, problemas = avaliar_resposta(caso, bruto)
-        tentativas.append({"final": final, "origem": origem, "problemas": problemas})
+        tentativas.append({"final": final, "origem": origem, "problemas": problemas, "bruto": bruto, "barrado_por": regra_que_barrou(bruto, precos_da_conversa(caso["historico"])) if origem == "reserva" else ""})
 
     validas = [t for t in tentativas if "erro" not in t]
     com_promessa = sum(1 for t in validas if any(g == PROMESSA for g, _ in t["problemas"]))
@@ -389,3 +427,20 @@ def test_redator_remarketing_com_gemini(caso, gemini_contado):
         pytest.skip(f"menos de 2 tentativas válidas (teto US$ {TETO_USD:.2f} ou erro da API)")
     motivos = [m for t in validas for g, m in t["problemas"] if g == PROMESSA]
     assert situacao != "BLOQUEIA", f"falha de promessa em {com_promessa} de {len(validas)}: {motivos}"
+
+
+# ---------------------------------------------------------------- S5 (offline)
+
+def test_s5_regra_que_barrou_diz_o_motivo():
+    assert "ação inventada" in regra_que_barrou(TEXTO_PAULO, set())
+    assert "preço fora da conversa" in regra_que_barrou(
+        "Oi, Carla! O Onix 2020 sai por R$ 65.000, quer ver?", set())
+    assert "promessa" in regra_que_barrou("Oi, Carla! Separei o Onix pra você.", set())
+    assert "cara de robô" in regra_que_barrou("Oi! Sou a assistente virtual da loja.", set())
+    assert regra_que_barrou("", set()) == "texto vazio"
+    assert regra_que_barrou("Oi, Carla! O Onix continua disponível, quer ver fotos?", set()) == "não identificada"
+
+
+def test_s5_relatorio_sem_a_linha_velha_do_furo_15():
+    fonte = Path(__file__).read_text(encoding="utf-8")
+    assert ("Falha " + "conhecida: furo 15") not in fonte
