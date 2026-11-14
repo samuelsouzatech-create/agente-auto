@@ -18,6 +18,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.leitura_config import valor_config
+from app.relogio import descrever_horarios, status_agora
 from app.segmentos import (
     PASTA_SEGMENTOS,  # noqa: F401  (compatibilidade; quem manda é app/segmentos.py)
     ferramentas_de_modulo_do_segmento, ferramentas_do_segmento, pasta_do_segmento,
@@ -115,7 +116,6 @@ def opcao_de_espera(loja) -> str:
     return valor if valor in TEXTOS_EM_ESPERA else OPCAO_ESPERA_PADRAO
 
 
-NOMES_DIAS = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
 DIAS_SEMANA = ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
                "sexta-feira", "sábado", "domingo")
 
@@ -178,19 +178,18 @@ def fuso_da_loja(loja) -> ZoneInfo:
         return ZoneInfo(FUSO_PADRAO)
 
 
-def descrever_dias(dias) -> str:
-    try:
-        dias = sorted({int(d) for d in dias if 0 <= int(d) <= 6})
-    except (TypeError, ValueError):
-        return ""
-    if not dias:
-        return ""
-    if len(dias) > 2 and dias == list(range(dias[0], dias[-1] + 1)):
-        return f"de {NOMES_DIAS[dias[0]]} a {NOMES_DIAS[dias[-1]]}"
-    return ", ".join(NOMES_DIAS[d] for d in dias)
+_CHAVES_DO_HORARIO = ("fuso", "atendimento.horario_humano", "atendimento.dias_humano",
+                      "atendimento.horario_semana")
 
 
-def _camada_da_loja(loja) -> str:
+def _loja_para_relogio(loja) -> dict:
+    """H13: o relógio (app/relogio.py) é a fonte única do horário. Ele lê a
+    config por chave com ponto; aqui vai só o que ele precisa."""
+    cfg = getattr(loja, "config", None) or {}
+    return {chave: valor_config(cfg, chave) for chave in _CHAVES_DO_HORARIO}
+
+
+def _camada_da_loja(loja, agora=None) -> str:
     cfg = loja.config
     nome_agente = valor_config(cfg, "nome_agente", "Léo")
     tom = valor_config(cfg, "tom", "simples, cordial e direto")
@@ -201,13 +200,20 @@ def _camada_da_loja(loja) -> str:
         + (f", em {cidade}." if cidade else "."),
         f"- Tom de voz: {tom}.",
     ]
-    horario = valor_config(cfg, "atendimento.horario_humano", "")
-    dias = descrever_dias(valor_config(cfg, "atendimento.dias_humano", []))
-    if horario and "-" in horario:
-        inicio, fim = horario.split("-", 1)
-        linhas.append(f"- Atendimento com vendedores: {dias}, das {inicio} às {fim}.".replace(": ,", ":"))
+    vista = _loja_para_relogio(loja)
+    horario = descrever_horarios(vista)
+    if horario:
+        linhas.append(f"- Atendimento com vendedores: {horario}.")
         linhas.append("- Horário de atendimento: use SEMPRE a linha acima (vem do cadastro da loja). "
                       "Não busque horário em documento nem na base de conhecimento.")
+        if agora is not None:
+            try:
+                linhas.append(f"- STATUS AGORA: {status_agora(vista, agora)}")
+                linhas.append("- Para dizer se a loja está aberta, até quando ou quando abre, use o "
+                              "STATUS AGORA do jeito que está: ele já vem calculado. "
+                              "Não faça conta de horário.")
+            except Exception:
+                pass
     return "\n".join(linhas)
 
 
@@ -313,7 +319,7 @@ def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
     data = (f"DATA E HORA ATUAL: {agora.strftime('%d/%m/%Y %H:%M')} "
             f"({DIAS_SEMANA[agora.weekday()]}).")
     camadas = [
-        _camada_da_loja(loja),
+        _camada_da_loja(loja, agora),
         base,
         segmento,
         _guia_ferramentas(loja, ferramentas),

@@ -1,5 +1,5 @@
 """Fila de handoff da loja escolhida. As cores vêm da configuração da loja."""
-from datetime import datetime, timezone
+from app.relogio import agora_utc, do_banco, minutos_no_expediente
 
 import streamlit as st
 
@@ -18,12 +18,12 @@ MIN_VERMELHO = loja.get("handoff.gestor_min", 10)
 
 
 def _minutos_esperando(criado_em):
-    """O banco grava no horário universal; a conta compara com o agora universal."""
+    """H13: mesma conta da API e do aviso ao gerente (app/relogio.py):
+    só minutos dentro do expediente da loja."""
     if not criado_em:
         return 0.0
     try:
-        marcado = datetime.strptime(str(criado_em), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-        return max(0.0, (datetime.now(timezone.utc) - marcado).total_seconds() / 60.0)
+        return float(minutos_no_expediente(loja, do_banco(criado_em), agora_utc()))
     except (ValueError, TypeError):
         return 0.0
 

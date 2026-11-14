@@ -1,6 +1,6 @@
 # Correção proposta: horário de atendimento por dia da semana (furo 13)
 
-Situação: proposta. Precisa do analista. Só começa depois do merge do `operador-completo` na `main`.
+Situação: feito no H13 (14/11/2026, tag `agente-h13`). Decisões no fim deste arquivo.
 Teste pronto: `tests/test_horario_por_dia.py` (3 controles e 6 falhas esperadas).
 
 ## Problema
@@ -31,3 +31,13 @@ Não é problema da loja 1. É limite do produto e aconteceria com a primeira lo
 2. O horário de envio do remarketing e do pós-venda (`remarketing.horario_envio`) também precisa ser por dia, ou continua uma janela só? Esse horário é a janela de envio da loja, não o horário em que ela está aberta.
 3. Furo 14: o texto de políticas fala em feriados, mas o sistema não conhece feriado. Entra nesta correção ou fica para depois?
 4. A correção vem depois do merge do `operador-completo`, para não entrar em conflito com a tela de configuração da `painel-operador`?
+
+## Decisões do H13 (14/11/2026)
+
+- Chave `atendimento.horario_semana` (0 = segunda, dia ausente = fechado). Sem ela, vale o formato antigo.
+- Fonte única: `app/relogio.py` (`horario_do_dia`, `no_horario`, `abertura_do_dia`, `status_agora`, `descrever_horarios`, `horario_da_semana`). A cópia `descrever_dias` saiu de `app/core/montagem.py`; `paginas/handoff.py` usa a mesma conta da API.
+- Status calculado no prompt: o código escreve "Agora a loja está FECHADA; abre amanhã, sábado, às 08:00" (ou "ABERTA até 13:00"). O Léo não faz conta de horário.
+- Loja 1: dias úteis 08:00-18:00, sábado 08:00-13:00, domingo fechado. O documento de políticas não repete o horário.
+- Janela de envio: única, cortada pela abertura do dia (sábado só até 13:00; domingo não envia).
+- Expediente que passa da meia-noite: recusado no cadastro.
+- Pendência: `agendar_visita` fora do expediente (bloco próprio, antes da primeira loja real).

@@ -66,6 +66,30 @@ def horarios_sem_fuso(valor, caminho="$"):
     return ruins
 
 
+def horario_da_loja_incoerente(arquivo, dado):
+    """H13: se a loja traz 'horario', são 7 dias em ordem e cada dia faz sentido."""
+    loja = dado.get("loja") if isinstance(dado, dict) else None
+    if not isinstance(loja, dict) or "horario" not in loja:
+        return []
+    dias = loja["horario"]
+    if not isinstance(dias, list):
+        return [f"{arquivo}: loja.horario precisa ser uma lista"]
+    erros = []
+    if [d.get("dia") for d in dias if isinstance(d, dict)] != list(range(7)):
+        erros.append(f"{arquivo}: loja.horario precisa ter os 7 dias, de 0 (segunda) a 6 (domingo), em ordem")
+    for d in dias:
+        if not isinstance(d, dict):
+            continue
+        if d.get("fechado"):
+            if d.get("abre") is not None or d.get("fecha") is not None:
+                erros.append(f"{arquivo}: dia {d.get('dia')} fechado não pode ter abre/fecha")
+        elif not d.get("abre") or not d.get("fecha") or d["abre"] >= d["fecha"]:
+            erros.append(f"{arquivo}: dia {d.get('dia')} precisa abrir antes de fechar (sem passar da meia-noite)")
+    if not loja.get("horario_texto"):
+        erros.append(f"{arquivo}: loja.horario sem horario_texto")
+    return erros
+
+
 def principal():
     doc = carregar()
     validar_openapi(doc)
@@ -108,6 +132,7 @@ def principal():
             erros.append(f"{arquivo}: tem loja_id em {c}")
         for c in horarios_sem_fuso(dado):
             erros.append(f"{arquivo}: horário sem fuso em {c}")
+        erros += horario_da_loja_incoerente(arquivo, dado)
     for rota, ops in doc["paths"].items():
         for metodo, op in ops.items():
             sucesso = [s for s in op["responses"] if s.startswith("2")]

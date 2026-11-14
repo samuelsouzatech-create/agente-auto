@@ -206,10 +206,14 @@ def test_buscar_conhecimento_nao_e_para_horario():
     assert "cadastro" in buscar_conhecimento.description
 
 
-def test_documento_de_teste_bate_com_o_cadastro():
+def test_documento_de_teste_nao_repete_o_horario():
+    # H13: o horário fica só no cadastro da loja; o documento de políticas não repete.
+    from app import relogio
     doc = (RAIZ / "conhecimento" / "troca_garantia_horario.txt").read_text(encoding="utf-8")
-    assert montagem.descrever_dias(PADROES["atendimento"]["dias_humano"]) == "de segunda a sábado"
-    assert PADROES["atendimento"]["horario_humano"] == "09:00-18:00"
-    assert "de segunda a sábado, das 9h às 18h" in doc
-    assert "13h" not in doc and "8h às" not in doc
+    assert "cadastro da loja" in doc
+    assert "9h às 18h" not in doc and "13h" not in doc and "8h às" not in doc
     assert "vendedor retorna" not in doc
+    assert not hasattr(montagem, "descrever_dias")       # cópia da regra saiu
+    vista = montagem._loja_para_relogio(_loja())
+    assert relogio.descrever_horarios(vista) == (
+        "de segunda a sábado, das 09:00 às 18:00; domingo, fechado")

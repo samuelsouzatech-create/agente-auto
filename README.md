@@ -9,7 +9,7 @@ Agente de atendimento e qualificação de leads para lojas de veículos, constru
 - **Simulação de financiamento**: estimativa com aviso claro de que depende de análise de crédito.
 - **Registro de troca**: coleta os dados do carro do cliente (sem dar valor de avaliação).
 - **Agendamento**: visita, test-drive ou ligação com vendedor.
-- **Base de conhecimento (RAG)**: responde sobre financiamento, troca, garantia, test-drive e horário a partir dos documentos da loja.
+- **Base de conhecimento (RAG)**: responde sobre financiamento, troca, garantia, test-drive a partir dos documentos da loja (o horário vem do cadastro da loja).
 - **Handoff humano**: aciona um vendedor em casos de negociação, crédito ou reclamação.
 
 ## Stack

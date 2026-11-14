@@ -49,7 +49,7 @@ from app.janela import (
 from app.lojas import (
     MIN_HORAS_SEM_RESPOSTA, TETO_TOQUES_REMARKETING, carregar_loja, modulo_ativo,
 )
-from app.relogio import dia_local, do_banco, fuso, hora_local, para_banco
+from app.relogio import dia_local, do_banco, fuso, hora_local, horario_do_dia, para_banco
 
 CANAIS_COM_REMARKETING = ("whatsapp", "telegram")   # telegram: modo de testes
 HORARIO_ENVIO_PADRAO = "09:00-19:00"
@@ -116,10 +116,24 @@ def _dias_envio(loja) -> set[int]:
     return set(loja.get("remarketing.dias_envio") or DIAS_ENVIO_PADRAO)
 
 
+def _janela_do_dia(loja, dia: date):
+    """H13: a janela de envio daquele dia, cortada pela abertura da loja
+    (sábado 08:00-13:00 com janela 09:00-19:00 = 09:00-13:00). None = não envia."""
+    if dia.weekday() not in _dias_envio(loja):
+        return None
+    aberta = horario_do_dia(loja, dia.weekday())
+    if aberta is None:
+        return None
+    inicio, fim = _faixa_envio(loja)
+    inicio = max(inicio, time.fromisoformat(aberta[0]))
+    fim = min(fim, time.fromisoformat(aberta[1]))
+    return (inicio, fim) if inicio < fim else None
+
+
 def no_horario_de_envio(loja, quando: datetime) -> bool:
     local = hora_local(loja, _utc(quando))
-    inicio, fim = _faixa_envio(loja)
-    return local.weekday() in _dias_envio(loja) and inicio <= local.time() < fim
+    janela = _janela_do_dia(loja, local.date())
+    return janela is not None and janela[0] <= local.time() < janela[1]
 
 
 def proxima_abertura(loja, quando: datetime) -> datetime:
@@ -127,17 +141,16 @@ def proxima_abertura(loja, quando: datetime) -> datetime:
     quando = _utc(quando)
     if no_horario_de_envio(loja, quando):
         return quando
-    inicio, _ = _faixa_envio(loja)
-    dias = _dias_envio(loja)
     local = hora_local(loja, quando)
     for d in range(8):
         dia = local.date() + timedelta(days=d)
-        if dia.weekday() not in dias:
+        janela = _janela_do_dia(loja, dia)
+        if janela is None:
             continue
-        abertura = datetime.combine(dia, inicio, tzinfo=fuso(loja))
+        abertura = datetime.combine(dia, janela[0], tzinfo=fuso(loja))
         if abertura > local:
             return abertura.astimezone(timezone.utc)
-    return quando   # não acontece: o validador exige ao menos um dia
+    return quando   # loja sem nenhum dia em comum com os dias de envio
 
 
 def _inicio_do_dia_utc(loja, dia: date) -> datetime:

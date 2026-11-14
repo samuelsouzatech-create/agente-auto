@@ -14,7 +14,7 @@ from banco import conectar
 from app.autenticacao import rotulo_papel
 from app.estado_loja import EM_TESTE, NO_AR, ROTULOS, esta_no_ar
 from app.lojas import carregar_loja
-from app.relogio import FUSO_PADRAO
+from app.relogio import FUSO_PADRAO, descrever_horarios, horario_da_semana
 from app.sessoes import ATENDIMENTO, LINK, PAPEL_LINK, csrf_da
 
 ATENDER, LEADS, RESULTADO, ACOMPANHAMENTO, ESTOQUE = (
@@ -41,6 +41,15 @@ def abas(escopo: str, modulos: dict) -> list:
     return lista
 
 
+def campos_de_horario(loja) -> dict:
+    """H13: campos opcionais da loja em /auth/eu (o front só mostra).
+    Sem aberta_agora: muda a cada minuto e o front não precisa hoje."""
+    texto = descrever_horarios(loja)
+    if not texto:
+        return {}
+    return {"horario": horario_da_semana(loja), "horario_texto": texto[:1].upper() + texto[1:]}
+
+
 def _nome_da_loja(loja_id: int) -> str:
     conexao = conectar()
     try:
@@ -65,7 +74,7 @@ def montar_eu(sessao: dict, token: str) -> dict:
         "loja": {
             "nome": _nome_da_loja(loja_id),
             "fuso": loja.get("fuso") or FUSO_PADRAO,
-            "fuso": loja.get("fuso") or FUSO_PADRAO,
+            **campos_de_horario(loja),
             "estado": {"codigo": estado, "rotulo": ROTULOS[estado]},
         },
         "modulos": modulos,
