@@ -155,3 +155,21 @@ def promessas_de_contato(texto) -> dict:
                 achados[tipo] = frase
                 break
     return achados
+
+
+# ======================================================================
+# Bloco S8: o Léo não pode sugerir que vai avisar quando chegar um carro
+# (a loja não tem esse aviso). Só AVISO, nunca reprova.
+# ======================================================================
+AVISO_DE_CHEGADA = "prometeu avisar quando chegar carro"
+
+_CHEGAR = r"(?:caso|quando|assim\s+que|se)\s+(?:chegar|chegue|entrar|aparecer|apareca)\b"
+_AVISO_EU = (r"(?:te\s+aviso|lhe\s+aviso|eu\s+aviso|avisamos|a\s+gente\s+avisa|te\s+avisar"
+             r"|lhe\s+avisar|avisa-l[oa]|avisar\s+(?:voce|o\s+senhor|a\s+senhora)"
+             r"|te\s+chamo|lhe\s+chamo)")
+
+DETECTORES.append((AVISO_DE_CHEGADA, True, _r(
+    r"\b" + _AVISO_EU + r"\b[^.!?]{0,40}\b" + _CHEGAR,
+    r"\b" + _CHEGAR + r"[^.!?]{0,40}\b" + _AVISO_EU + r"\b",
+    r"\b(?:anot\w*|registr\w*)\b[^.!?]{0,40}\binteresse\b[^.!?]{0,30}\b" + _CHEGAR,
+)))

@@ -595,7 +595,7 @@ def _guardar_caso(nome, tentativas, status):
 # ======================================================================
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from avisos_texto import FALHA_TECNICA, avisos_de_texto  # noqa: E402
+from avisos_texto import FALHA_TECNICA, VIDEO_FOTO, avisos_de_texto  # noqa: E402
 
 
 def _lista_de_conversas(conversas) -> list:
@@ -617,6 +617,9 @@ def avisos_s5(conversas) -> list:
     ferramenta_com_erro = any(c.erros_de_tool for c in lista)
     saida = []
     for motivo in avisos_de_texto(texto):
+        if (motivo.startswith(VIDEO_FOTO) and "video" not in motivo.split(":", 1)[-1]
+                and fotos_valem_s8(lista)):
+            continue   # S8: foto vale com módulo ligado e carro com foto; vídeo sempre avisa
         if motivo.startswith(FALHA_TECNICA):
             motivo += (" (ferramenta com erro nesta tentativa: "
                        + ("sim" if ferramenta_com_erro else "não, parece invenção") + ")")
@@ -1339,3 +1342,90 @@ def avisos_visita(conversas) -> list:
         if leads and not any(str((ch.get("args") or {}).get("prazo") or "").strip() for ch in leads):
             saida.append((AVISO, f"{VISITA_SEM_PRAZO} (registrar_lead sem o campo prazo)"))
     return saida
+
+
+# ======================================================================
+# BLOCO S8: avisos mais justos (só AVISO, nunca reprovam)
+# - "já registrei" vale quando o chamado já estava aberto (turno anterior)
+#   ou foi aberto neste turno.
+# - Oferta de FOTO só avisa se o módulo de fotos está desligado ou se a
+#   loja não tem carro com foto. Oferta de VÍDEO continua avisando.
+# ======================================================================
+from avisos_texto import REGISTRO_SEM_FERRAMENTA, promessas_de_contato  # noqa: E402
+
+_FERRAMENTAS_QUE_REGISTRAM = {"registrar_lead", "registrar_troca", "agendar_visita",
+                              "registrar_interesse", "acionar_handoff"}
+_SEM_FOTO = ("não tem fotos", "nenhum carro do estoque tem fotos",
+             "nenhum carro disponível encontrado para enviar fotos")
+
+
+def _texto_do_turno_s8(c, i, novas) -> str:
+    """Texto do Léo no turno i: de c.respostas, ou das mensagens da IA."""
+    respostas = list(getattr(c, "respostas", None) or [])
+    if i < len(respostas) and respostas[i]:
+        return str(respostas[i])
+    partes = []
+    for m in novas:
+        if isinstance(m, AIMessage):
+            conteudo = m.content
+            if isinstance(conteudo, list):
+                conteudo = " ".join(p.get("text", "") if isinstance(p, dict) else str(p)
+                                    for p in conteudo)
+            partes.append(str(conteudo or ""))
+    return " ".join(partes)
+
+
+def _registro_s8(conversas) -> tuple:
+    """(achou 'registrei', algum sem ferramenta e sem chamado aberto)."""
+    achou = sem = False
+    for c in _lista_de_conversas(conversas):
+        chamado = False
+        espera = list(getattr(c, "espera_por_turno", None) or [])
+        for i, novas in enumerate(c.novas_por_turno):
+            nomes = {ch.get("name") for m in novas
+                     for ch in (getattr(m, "tool_calls", None) or [])}
+            antes = espera[i] if i < len(espera) else False
+            if "registro" in promessas_de_contato(_texto_do_turno_s8(c, i, novas)):
+                achou = True
+                if not (nomes & _FERRAMENTAS_QUE_REGISTRAM) and not (chamado or antes):
+                    sem = True
+            if "acionar_handoff" in nomes:
+                chamado = True
+    return achou, sem
+
+
+def registro_sem_ferramenta_s8(conversas) -> bool:
+    """True se alguma resposta diz 'registrei/anotei' sem ferramenta que
+    registre nesse turno e sem chamado aberto antes."""
+    return _registro_s8(conversas)[1]
+
+
+_avisos_s7_antes_do_s8 = avisos_s7
+
+
+def avisos_s7(conversas) -> list:  # noqa: F811
+    """Só tira o aviso de registro quando CONFIRMA que havia chamado aberto."""
+    saida = _avisos_s7_antes_do_s8(conversas)
+    achou, sem = _registro_s8(conversas)
+    if sem or not achou:
+        return saida
+    return [(g, m) for g, m in saida if not str(m).startswith(REGISTRO_SEM_FERRAMENTA)]
+
+
+def fotos_valem_s8(conversas) -> bool:
+    """Oferecer foto é válido: módulo ligado e a loja tem carro com foto."""
+    lista = _lista_de_conversas(conversas)
+    if not lista:
+        return False
+    for c in lista:
+        if not lojas.modulo_ativo(lojas.carregar_loja(c.loja_id), "fotos"):
+            return False
+        for m in c.mensagens:
+            if isinstance(m, ToolMessage) and any(s in str(m.content).lower() for s in _SEM_FOTO):
+                return False
+        com_foto = ler("SELECT COUNT(*) AS n FROM estoque WHERE loja_id = ? "
+                       "AND status = 'disponivel' AND TRIM(COALESCE(fotos, '')) <> ''",
+                       (c.loja_id,))
+        if not com_foto or not com_foto[0]["n"]:
+            return False
+    return True
