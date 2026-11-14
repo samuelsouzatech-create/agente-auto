@@ -204,3 +204,11 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
 35. (C3c, analista) O link usa o mesmo cookie `leo_sessao`. Aberto no navegador em que a pessoa já está logada, ele troca a sessão completa pela de uma conversa só; para voltar, basta entrar de novo pelo login. É um incômodo conhecido, não uma falha de segurança. Cookie separado só se incomodar na prática.
 36. (C3c, analista) A tela “Equipe” (dono convida pessoas) está fora do contrato v1. Até ela existir, o operador gera o link de senha em Configuração > Equipe (C2f).
 37. (C3c, analista) O limite de links errados conta por origem (`request.client.host`). Atrás de proxy, a API precisa rodar com `--proxy-headers` e `--forwarded-allow-ips` apontando só para o proxy. Ver `docs/api/publicacao.md`.
+
+## Lacunas registradas para a v1.1 (S7, 14/11/2026)
+
+- `GET /leads`: o item da lista não traz o `prazo` do lead (ex.: "quer visitar
+  sábado", gravado pelo Léo com registrar_lead quando o agendamento está
+  desligado). Hoje o vendedor vê o prazo só no cartão "O que o Léo já sabe",
+  na conversa. Candidato à v1.1: campo opcional `prazo` (texto, pode vir
+  vazio) no item de `LeadsPagina`. A v1 não muda.

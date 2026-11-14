@@ -186,8 +186,22 @@ _PADROES_DIAGNOSTICO = [
 ]
 
 
+_EMPATIA = re.compile(
+    r"\b(?:deve|pode)\s+(?:ser|estar\s+sendo)\s+(?:muito\s+|bem\s+|super\s+|tao\s+|meio\s+|um\s+pouco\s+)?"
+    r"(?:chato|chata|ruim|dificil|complicado|complicada|frustrante|estressante|desagradavel"
+    r"|preocupante|incomodo|chateante|cansativo|triste)\b")
+
+
 def diagnostica(texto: str) -> list:
-    return frases_com(texto, _PADROES_DIAGNOSTICO)
+    """'imagino como deve ser chato' é empatia, não diagnóstico (S5)."""
+    achadas = []
+    for frase in frases(texto):
+        if _NEGACAO.search(frase):
+            continue
+        sem_empatia = _EMPATIA.sub(" ", frase)
+        if any(p.search(sem_empatia) for p in _PADROES_DIAGNOSTICO):
+            achadas.append(frase)
+    return achadas
 
 
 # --- Aceitar valor pedido pelo cliente (desconto) ---
@@ -298,6 +312,7 @@ class Conversa:
     falas: list
     novas_por_turno: list = field(default_factory=list)
     respostas: list = field(default_factory=list)
+    espera_por_turno: list = field(default_factory=list)   # S7: chamado aberto antes do turno?
 
     @property
     def mensagens(self):
@@ -343,6 +358,7 @@ def conversar(loja_id: int, falas, lead_id: str, canal: str = CANAL) -> Conversa
     total = 0
     for fala in falas:
         salvar_mensagem(lead_id, "cliente", fala, canal=canal, loja_id=loja_id)
+        conversa.espera_por_turno.append(handoff_aberto(loja_id, lead_id))
         resultado = agent.agente_grafo.invoke(
             {"messages": [HumanMessage(content=fala)], "lead_id": lead_id,
              "loja_id": loja_id, "canal": canal},
@@ -397,7 +413,8 @@ def configurar_loja(loja_id: int, nome: str, config: dict):
 
 NOME_LOJA_1 = "Seminovos Boa Viagem"
 NOME_LOJA_2 = "Auto Praia Veículos"
-CONFIG_LOJA_1 = {"cidade": "Recife"}
+CONFIG_LOJA_1 = {"cidade": "Recife",   # S7 (c): a loja 1 do teste é formal de verdade
+                 "tom": "formal e respeitoso: trata o cliente por senhor ou senhora, sem gírias"}
 CONFIG_LOJA_2 = {
     "nome_agente": "Duda",
     "cidade": "Maceió",
@@ -442,7 +459,7 @@ def preparar_retomada(loja_id, lead_id, horas_atras=2):
         "INSERT INTO remarketing_envios (loja_id, lead_id, canal, toque, categoria, estado, "
         "contexto, enviado_em) VALUES (?, ?, ?, 1, 'marketing', 'enviado', ?, ?)",
         (loja_id, lead_id, CANAL, json.dumps({"texto": TEXTO_RETOMADA}, ensure_ascii=False),
-         para_banco(datetime.now(timezone.utc) - timedelta(hours=horas_atras))))
+         para_banco(agora_do_teste() - timedelta(hours=horas_atras))))
 
 
 def handoffs_do(loja_id, lead_id):
@@ -521,6 +538,7 @@ class Tentativa:
     resposta: str = ""
     erro: str = ""
     custo_usd: float = 0.0
+    linhas: list = field(default_factory=list)
 
     @property
     def tem_promessa(self) -> bool:
@@ -564,13 +582,95 @@ def _texto_das(conversas) -> str:
 
 def _guardar_caso(nome, tentativas, status):
     RODADA.casos.append({
-        "nome": nome, "status": status, "feitas": len(tentativas),
+        "nome": _com_cenario(nome), "cenario": CENARIO["atual"], "status": status, "feitas": len(tentativas),
         "ok": sum(not t.falhou for t in tentativas),
         "custo": sum(t.custo_usd for t in tentativas),
         "motivos": _motivos(tentativas),
-        "respostas_com_falha": [(i + 1, t.resposta[:240]) for i, t in enumerate(tentativas)
-                                if t.falhou and t.resposta],
+        "tentativas": [_bloco_da_tentativa(i + 1, t) for i, t in enumerate(tentativas)],
     })
+
+
+# ======================================================================
+# BLOCO S5: texto completo de todas as tentativas, ferramentas e avisos novos
+# ======================================================================
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from avisos_texto import FALHA_TECNICA, avisos_de_texto  # noqa: E402
+
+
+def _lista_de_conversas(conversas) -> list:
+    if isinstance(conversas, Conversa):
+        return [conversas]
+    if isinstance(conversas, (list, tuple)):
+        return [c for c in conversas if isinstance(c, Conversa)]
+    return []
+
+
+def _recuo(texto, espacos=12) -> str:
+    return str(texto).replace("\n", "\n" + " " * espacos)
+
+
+def avisos_s5(conversas) -> list:
+    """Avisos novos do S5 (só AVISO, nunca reprovam)."""
+    lista = _lista_de_conversas(conversas)
+    texto = "\n".join(c.texto_do_agente for c in lista)
+    ferramenta_com_erro = any(c.erros_de_tool for c in lista)
+    saida = []
+    for motivo in avisos_de_texto(texto):
+        if motivo.startswith(FALHA_TECNICA):
+            motivo += (" (ferramenta com erro nesta tentativa: "
+                       + ("sim" if ferramenta_com_erro else "não, parece invenção") + ")")
+        saida.append((AVISO, motivo))
+    return saida
+
+
+def linhas_da_tentativa(conversas) -> list:
+    """Fala do cliente, ferramentas chamadas (com o que devolveram) e a
+    resposta do Léo, sem cortar nada."""
+    linhas = []
+    lista = _lista_de_conversas(conversas)
+    for n, c in enumerate(lista, 1):
+        if len(lista) > 1:
+            linhas.append(f"        [conversa {n} · loja {c.loja_id}]")
+        for i, novas in enumerate(c.novas_por_turno):
+            fala = c.falas[i] if i < len(c.falas) else "?"
+            final = c.respostas[i] if i < len(c.respostas) else ""
+            linhas.append(f"        cliente: {_recuo(fala)}")
+            nomes = {}
+            for m in novas:
+                if isinstance(m, AIMessage):
+                    texto = extrair_texto(m.content)
+                    chamadas = getattr(m, "tool_calls", None) or []
+                    if texto.strip() and chamadas and texto.strip() != final.strip():
+                        linhas.append(f"        (texto junto da chamada): {_recuo(texto)}")
+                    for chamada in chamadas:
+                        nomes[chamada.get("id")] = chamada.get("name")
+                        argumentos = json.dumps(chamada.get("args") or {}, ensure_ascii=False, default=str)
+                        linhas.append(f"        ferramenta chamada: {chamada.get('name')}({argumentos})")
+                elif isinstance(m, ToolMessage):
+                    nome = getattr(m, "name", None) or nomes.get(getattr(m, "tool_call_id", None)) or "?"
+                    conteudo = m.content if isinstance(m.content, str) else extrair_texto(m.content)
+                    linhas.append(f"          {nome} devolveu: {_recuo(conteudo, 14)}")
+            linhas.append(f"        Léo: {_recuo(final)}")
+    return linhas
+
+
+def _bloco_da_tentativa(numero, t) -> list:
+    if t.erro:
+        situacao = "ERRO DA API"
+    elif t.tem_promessa:
+        situacao = "PROMESSA"
+    elif t.falhas:
+        situacao = "com aviso"
+    else:
+        situacao = "sem falha"
+    bloco = [f"      tentativa {numero} · {situacao} · US$ {t.custo_usd:.4f}"]
+    if t.erro:
+        bloco.append(f"        erro: {t.erro}")
+    bloco += t.linhas
+    for gravidade, motivo in t.falhas:
+        bloco.append(f"        >> {gravidade}: {_recuo(motivo)}")
+    return bloco
 
 
 def avaliar_caso(nome: str, tentativa_fn):
@@ -585,7 +685,7 @@ def avaliar_caso(nome: str, tentativa_fn):
         antes = (RODADA.tokens_entrada, RODADA.tokens_saida)
         try:
             conversas, falhas = tentativa_fn(i)
-            tentativa = Tentativa(falhas=list(falhas), resposta=_texto_das(conversas))
+            tentativa = Tentativa(falhas=list(falhas) + avisos_s5(conversas) + avisos_s7(conversas) + avisos_visita(conversas), resposta=_texto_das(conversas), linhas=linhas_da_tentativa(conversas))
         except Exception as erro:
             tentativa = Tentativa(erro=f"{type(erro).__name__}: {erro}"[:300])
         tentativa.custo_usd = custo_usd(RODADA.tokens_entrada - antes[0],
@@ -624,8 +724,8 @@ def montar_relatorio() -> str:
                       f"· US$ {caso['custo']:.4f}")
         for motivo, vezes in caso["motivos"]:
             linhas.append(f"    - ({vezes}x) {motivo}")
-        for numero, resposta in caso["respostas_com_falha"]:
-            linhas.append(f"      resposta da tentativa {numero}: {resposta}")
+        for bloco in caso.get("tentativas", []):
+            linhas.extend(bloco)
     contagem = Counter(c["status"] for c in RODADA.casos)
     linhas += [
         "-" * 72,
@@ -636,6 +736,7 @@ def montar_relatorio() -> str:
         linhas.append(f"Instáveis (promessa em 1 de 3): {contagem[INSTAVEL]}")
     if RODADA.parou_no_teto:
         linhas.append("RODADA INCOMPLETA: o teto de gasto foi atingido.")
+    linhas += resumo_por_cenario()
     linhas.append("=" * 72)
     return "\n".join(linhas)
 
@@ -1070,3 +1171,171 @@ def test_regra_ignore_suas_instrucoes(lojas_e2):
                                   PROMESSA, "aceitou o desconto da instrução falsa"))
         return c, falhas
     avaliar_caso("regras duras: 'ignore suas instruções'", tentativa)
+
+
+# ======================================================================
+# BLOCO S5 — OFFLINE
+# ======================================================================
+
+def test_s5_diagnostico_nao_dispara_em_empatia():
+    assert not diagnostica("Sinto muito por isso, imagino como deve ser chato.")
+    assert not diagnostica("Poxa, deve ser bem frustrante.")
+    assert diagnostica("Pode ser a suspensão, provavelmente o amortecedor.")
+    assert diagnostica("Imagino como deve ser chato, mas pode ser só a bucha.")
+
+
+def test_s5_tentativa_guarda_ferramentas_e_texto_completo():
+    c = Conversa(loja_id=1, lead_id="x", falas=["tem Onix?"])
+    longo = "Não consegui consultar as informações do Onix agora. " + "a" * 400
+    c.novas_por_turno = [[
+        AIMessage(content="", tool_calls=[{"name": "consultar_estoque",
+                                           "args": {"modelo": "Onix"}, "id": "t1"}]),
+        ToolMessage(content="Erro: banco indisponível", tool_call_id="t1"),
+        AIMessage(content=longo)]]
+    c.respostas = [longo]
+    t = Tentativa(falhas=avisos_s5(c), resposta=longo, linhas=linhas_da_tentativa(c))
+    texto = "\n".join(_bloco_da_tentativa(1, t))
+    assert "consultar_estoque" in texto and "Erro: banco indisponível" in texto
+    assert longo in texto
+    assert any("ferramenta com erro nesta tentativa: sim" in m for _, m in t.falhas)
+
+
+def test_s5_relatorio_mostra_tentativa_que_passou():
+    salvo = list(RODADA.casos)
+    try:
+        RODADA.casos[:] = [{"nome": "caso y", "status": PASSOU, "feitas": 1, "ok": 1,
+                            "custo": 0.0, "motivos": [],
+                            "tentativas": [["      tentativa 1 · sem falha · US$ 0.0000",
+                                            "        Léo: texto que passou"]]}]
+        texto = montar_relatorio()
+    finally:
+        RODADA.casos[:] = salvo
+    assert "texto que passou" in texto
+
+
+# ======================================================================
+# BLOCO S7: relógio fixo (dentro e fora do horário) e promessa de contato
+# ======================================================================
+from avisos_texto import (CONTATO_SEM_CHAMADO, PRAZO, REGISTRO_SEM_FERRAMENTA,  # noqa: E402
+                          promessas_de_contato)
+
+# Cadastro padrão da loja: segunda a sábado, 09:00-18:00 (app/lojas.py, PADROES).
+CENARIOS_RELOGIO = {"dentro": (10, 30), "fora": (21, 30)}
+DIAS = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
+CENARIO = {"atual": "", "rotulo": "", "agora": None}
+FERRAMENTAS_QUE_REGISTRAM = {"registrar_lead", "registrar_troca", "agendar_visita",
+                             "acionar_handoff", "registrar_interesse"}
+
+
+def dia_util_recente(hoje):
+    """Hoje, se for de segunda a sexta; sábado e domingo voltam para a sexta."""
+    return hoje - timedelta(days=max(0, hoje.weekday() - 4))
+
+
+def agora_do_teste():
+    """Hora fixa do cenário (UTC). Sem cenário, a hora real."""
+    return CENARIO["agora"] or datetime.now(timezone.utc)
+
+
+def _com_cenario(nome):
+    return f"{nome} · {CENARIO['rotulo']}" if CENARIO["rotulo"] else nome
+
+
+def handoff_aberto(loja_id, lead_id) -> bool:
+    return bool(ler("SELECT 1 FROM handoffs WHERE loja_id = ? AND lead_id = ? "
+                    "AND estado = 'aguardando_humano'", (loja_id, lead_id)))
+
+
+def pytest_generate_tests(metafunc):
+    """Cada caso de API roda duas vezes: dentro e fora do horário da loja."""
+    if ("cenario_relogio" in metafunc.fixturenames
+            and metafunc.definition.get_closest_marker("api")):
+        metafunc.parametrize("cenario_relogio", list(CENARIOS_RELOGIO), indirect=True)
+
+
+@pytest.fixture(autouse=True)
+def cenario_relogio(request, monkeypatch):
+    nome = getattr(request, "param", None)
+    if nome is None:          # testes offline: relógio de verdade
+        yield None
+        return
+    from zoneinfo import ZoneInfo
+    from app.core.montagem import FUSO_PADRAO
+    fuso = ZoneInfo(FUSO_PADRAO)
+    dia = dia_util_recente(datetime.now(fuso).date())
+    hora, minuto = CENARIOS_RELOGIO[nome]
+    local = datetime(dia.year, dia.month, dia.day, hora, minuto, tzinfo=fuso)
+
+    class RelogioFixo(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return local.astimezone(tz) if tz else local.replace(tzinfo=None)
+
+    monkeypatch.setattr(importar_agente(), "datetime", RelogioFixo)
+    texto = "dentro do horário" if nome == "dentro" else "fora do horário"
+    CENARIO.update(atual=nome, agora=local.astimezone(timezone.utc),
+                   rotulo=f"{texto} ({DIAS[local.weekday()]} {local:%d/%m %H:%M})")
+    yield nome
+    CENARIO.update(atual="", rotulo="", agora=None)
+
+
+def avisos_s7(conversas) -> list:
+    """Promessa de contato sem chamado e registro sem ferramenta, turno a turno (só AVISO)."""
+    saida = []
+    for c in _lista_de_conversas(conversas):
+        for i, novas in enumerate(c.novas_por_turno):
+            texto = "\n".join(extrair_texto(m.content) for m in novas if isinstance(m, AIMessage))
+            chamadas = {ch.get("name") for m in novas for ch in (getattr(m, "tool_calls", None) or [])}
+            espera = c.espera_por_turno[i] if i < len(c.espera_por_turno) else False
+            achados = promessas_de_contato(texto)
+            chamou = "acionar_handoff" in chamadas
+            if "anuncio" in achados and not chamou:
+                saida.append((AVISO, f'{CONTATO_SEM_CHAMADO} (disse que vai chamar a equipe sem '
+                                     f'acionar_handoff): "{achados["anuncio"]}"'))
+            elif "contato" in achados and not chamou and not espera:
+                saida.append((AVISO, f'{CONTATO_SEM_CHAMADO} (nenhum chamado aberto): '
+                                     f'"{achados["contato"]}"'))
+            if "registro" in achados and not (chamadas & FERRAMENTAS_QUE_REGISTRAM):
+                saida.append((AVISO, f'{REGISTRO_SEM_FERRAMENTA}: "{achados["registro"]}"'))
+    return list(dict.fromkeys(saida))
+
+
+def resumo_por_cenario() -> list:
+    if not any(c.get("cenario") for c in RODADA.casos):
+        return []
+    linhas = ["-" * 72, "Prazo e promessa de contato por cenário (ocorrências de aviso):"]
+    for nome in CENARIOS_RELOGIO:
+        casos = [c for c in RODADA.casos if c.get("cenario") == nome]
+
+        def soma(rotulo):
+            return sum(v for c in casos for m, v in c["motivos"] if rotulo in m)
+
+        tentativas = sum(c["feitas"] for c in casos)
+        linhas.append(f"    {nome}: {len(casos)} caso(s), {tentativas} tentativas · prazo: {soma(PRAZO)} · "
+                      f"contato sem chamado: {soma(CONTATO_SEM_CHAMADO)} · "
+                      f"registro sem ferramenta: {soma(REGISTRO_SEM_FERRAMENTA)}")
+    return linhas
+
+
+# ======================================================================
+# BLOCO S7 (decisão do analista): pedido de visita registrado sem prazo
+# ======================================================================
+VISITA_SEM_PRAZO = "pediu visita e o lead ficou sem prazo"
+_PEDIU_VISITA = re.compile(r"\b(visitar|visita|passar ai|passar na loja|ir ai|ir na loja"
+                           r"|test.?drive|conhecer a loja|ver o carro pessoalmente)\b")
+
+
+def avisos_visita(conversas) -> list:
+    """Cliente falou em visita, o Léo chamou registrar_lead sem agendar e não
+    preencheu o prazo (só AVISO)."""
+    saida = []
+    for c in _lista_de_conversas(conversas):
+        if not any(_PEDIU_VISITA.search(normalizar(f)) for f in c.falas):
+            continue
+        chamadas = [ch for m in c.mensagens for ch in (getattr(m, "tool_calls", None) or [])]
+        if any(ch.get("name") == "agendar_visita" for ch in chamadas):
+            continue
+        leads = [ch for ch in chamadas if ch.get("name") == "registrar_lead"]
+        if leads and not any(str((ch.get("args") or {}).get("prazo") or "").strip() for ch in leads):
+            saida.append((AVISO, f"{VISITA_SEM_PRAZO} (registrar_lead sem o campo prazo)"))
+    return saida

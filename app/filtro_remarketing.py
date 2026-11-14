@@ -56,6 +56,28 @@ def acao_inventada(texto) -> bool:
     return bool(_ACAO_INVENTADA.search(texto or ""))
 
 
+# Bloco S6: fato que não está nos dados do redator.
+# "Chegou a ver as fotos?", "alguma novidade?" e "quer ver as fotos?" passam.
+_FATO_INVENTADO = re.compile(
+    r"\bcheg(?:ou|aram)\b(?!\s+a\s)"
+    r"|\bacab(?:ou|aram)\s+de\s+chegar"
+    r"|\brec[eé]m[\s-]?chegad"
+    r"|(?<!alguma\s)\bnovidades?\b"
+    r"|\bimpec[aá]ve"
+    r"|\b(?:perfeito|[oó]timo)\s+estado\b"
+    r"|\bzeradinh"
+    r"|\bconsegu(?:i|imos)\s+(?:(?:mais|uns|umas|alguns|algumas|novos|novas|outros|outras)\s+)*"
+    r"(?:detalhes|informa[çc][õo]es|infos?|fotos|novidades?|dados)\b"
+    r"|\bv[ií]deos?\b",
+    re.I,
+)
+
+
+def fato_inventado(texto) -> bool:
+    """True se o texto traz novidade que ninguém informou (chegou, impecável, vídeo...)."""
+    return bool(_FATO_INVENTADO.search(texto or ""))
+
+
 def preco_fora(texto, permitidos) -> bool:
     """True se o texto cita dinheiro fora de permitidos (centavos)."""
     return bool(valores_em_reais(texto) - set(permitidos or ()))

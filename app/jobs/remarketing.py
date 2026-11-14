@@ -49,7 +49,8 @@ from app.chaves import exigir_loja
 from app.pausa import pausado
 from app.modo_envio import real_para
 from app.custos import Uso, registrar_uso, uso_das_mensagens
-from app.filtro_remarketing import acao_inventada, preco_fora, precos_da_conversa, precos_do_estoque
+from app.filtro_remarketing import (acao_inventada, fato_inventado, preco_fora,
+                                    precos_da_conversa, precos_do_estoque)
 from app.elegibilidade import Decisao, avaliar, candidatos, elegiveis
 from app.lojas import PADROES, TETO_TOQUES_REMARKETING, Loja, carregar_loja, modulo_ativo
 from app.relogio import agora_utc, do_banco, para_banco
@@ -139,9 +140,9 @@ class EnviadorReal:
 
 _ORIENTACAO_DO_TOQUE = {
     1: "Primeira retomada: lembre do que ele estava vendo e ofereça uma ajuda concreta "
-       "(mais detalhes, fotos, marcar uma visita).",
-    2: "Segunda retomada: traga um motivo novo para conversar (tirar uma dúvida, facilitar "
-       "a visita, uma opção parecida), sem pressionar.",
+       "(tirar uma dúvida, marcar uma visita).",
+    2: "Segunda retomada: puxe a conversa de novo, sem inventar novidade (tirar uma dúvida, facilitar "
+       "a visita), sem pressionar.",
     3: "Última retomada: leve e sem pressão, deixe a porta aberta para quando ele quiser.",
 }
 _QUEM = {"cliente": "Cliente", "leo": "Você", "vendedor": "Vendedor da loja"}
@@ -176,6 +177,11 @@ Como escrever:
 - Não invente preço, condição nem desconto. Só fale de carros que aparecem na conversa
   ou na linha "Carro de interesse" abaixo.
 - Não fale de robô, IA ou assistente virtual e não dê instruções como "responda SAIR".
+- Só fale fatos que estão na conversa ou nas linhas abaixo. Não invente novidade: nada de
+  "chegou", "acabou de chegar", "novidade", "consegui mais detalhes", "impecável" ou
+  estado do carro que ninguém informou.
+- Não ofereça vídeo nem material que não existe.
+- Não diga prazo nem palavra de tempo ("já já", "em breve", "logo").
 - {_ORIENTACAO_DO_TOQUE.get(toque, _ORIENTACAO_DO_TOQUE[3])}
 - Escreva só a mensagem, sem aspas.
 
@@ -208,7 +214,7 @@ def _limpar_texto(texto, permitidos=frozenset()) -> str:
         return ""
     t = texto.replace("**", "").replace("__", "").strip().strip('"').strip()
     t = re.sub(r"\n{3,}", "\n\n", t)
-    if not t or len(t) > LIMITE_TEXTO_LIVRE or _CARA_DE_ROBO.search(t) or _PROMESSA.search(t) or acao_inventada(t) or preco_fora(t, permitidos):
+    if not t or len(t) > LIMITE_TEXTO_LIVRE or _CARA_DE_ROBO.search(t) or _PROMESSA.search(t) or acao_inventada(t) or fato_inventado(t) or preco_fora(t, permitidos):
         return ""
     return t
 
