@@ -312,6 +312,7 @@ class Conversa:
     falas: list
     novas_por_turno: list = field(default_factory=list)
     respostas: list = field(default_factory=list)
+    espera_por_turno: list = field(default_factory=list)   # S7: chamado aberto antes do turno?
 
     @property
     def mensagens(self):
@@ -357,6 +358,7 @@ def conversar(loja_id: int, falas, lead_id: str, canal: str = CANAL) -> Conversa
     total = 0
     for fala in falas:
         salvar_mensagem(lead_id, "cliente", fala, canal=canal, loja_id=loja_id)
+        conversa.espera_por_turno.append(handoff_aberto(loja_id, lead_id))
         resultado = agent.agente_grafo.invoke(
             {"messages": [HumanMessage(content=fala)], "lead_id": lead_id,
              "loja_id": loja_id, "canal": canal},
@@ -411,7 +413,8 @@ def configurar_loja(loja_id: int, nome: str, config: dict):
 
 NOME_LOJA_1 = "Seminovos Boa Viagem"
 NOME_LOJA_2 = "Auto Praia Veículos"
-CONFIG_LOJA_1 = {"cidade": "Recife"}
+CONFIG_LOJA_1 = {"cidade": "Recife",   # S7 (c): a loja 1 do teste é formal de verdade
+                 "tom": "formal e respeitoso: trata o cliente por senhor ou senhora, sem gírias"}
 CONFIG_LOJA_2 = {
     "nome_agente": "Duda",
     "cidade": "Maceió",
@@ -456,7 +459,7 @@ def preparar_retomada(loja_id, lead_id, horas_atras=2):
         "INSERT INTO remarketing_envios (loja_id, lead_id, canal, toque, categoria, estado, "
         "contexto, enviado_em) VALUES (?, ?, ?, 1, 'marketing', 'enviado', ?, ?)",
         (loja_id, lead_id, CANAL, json.dumps({"texto": TEXTO_RETOMADA}, ensure_ascii=False),
-         para_banco(datetime.now(timezone.utc) - timedelta(hours=horas_atras))))
+         para_banco(agora_do_teste() - timedelta(hours=horas_atras))))
 
 
 def handoffs_do(loja_id, lead_id):
@@ -579,7 +582,7 @@ def _texto_das(conversas) -> str:
 
 def _guardar_caso(nome, tentativas, status):
     RODADA.casos.append({
-        "nome": nome, "status": status, "feitas": len(tentativas),
+        "nome": _com_cenario(nome), "cenario": CENARIO["atual"], "status": status, "feitas": len(tentativas),
         "ok": sum(not t.falhou for t in tentativas),
         "custo": sum(t.custo_usd for t in tentativas),
         "motivos": _motivos(tentativas),
@@ -682,7 +685,7 @@ def avaliar_caso(nome: str, tentativa_fn):
         antes = (RODADA.tokens_entrada, RODADA.tokens_saida)
         try:
             conversas, falhas = tentativa_fn(i)
-            tentativa = Tentativa(falhas=list(falhas) + avisos_s5(conversas), resposta=_texto_das(conversas), linhas=linhas_da_tentativa(conversas))
+            tentativa = Tentativa(falhas=list(falhas) + avisos_s5(conversas) + avisos_s7(conversas) + avisos_visita(conversas), resposta=_texto_das(conversas), linhas=linhas_da_tentativa(conversas))
         except Exception as erro:
             tentativa = Tentativa(erro=f"{type(erro).__name__}: {erro}"[:300])
         tentativa.custo_usd = custo_usd(RODADA.tokens_entrada - antes[0],
@@ -733,6 +736,7 @@ def montar_relatorio() -> str:
         linhas.append(f"Instáveis (promessa em 1 de 3): {contagem[INSTAVEL]}")
     if RODADA.parou_no_teto:
         linhas.append("RODADA INCOMPLETA: o teto de gasto foi atingido.")
+    linhas += resumo_por_cenario()
     linhas.append("=" * 72)
     return "\n".join(linhas)
 
@@ -1207,3 +1211,131 @@ def test_s5_relatorio_mostra_tentativa_que_passou():
     finally:
         RODADA.casos[:] = salvo
     assert "texto que passou" in texto
+
+
+# ======================================================================
+# BLOCO S7: relógio fixo (dentro e fora do horário) e promessa de contato
+# ======================================================================
+from avisos_texto import (CONTATO_SEM_CHAMADO, PRAZO, REGISTRO_SEM_FERRAMENTA,  # noqa: E402
+                          promessas_de_contato)
+
+# Cadastro padrão da loja: segunda a sábado, 09:00-18:00 (app/lojas.py, PADROES).
+CENARIOS_RELOGIO = {"dentro": (10, 30), "fora": (21, 30)}
+DIAS = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
+CENARIO = {"atual": "", "rotulo": "", "agora": None}
+FERRAMENTAS_QUE_REGISTRAM = {"registrar_lead", "registrar_troca", "agendar_visita",
+                             "acionar_handoff", "registrar_interesse"}
+
+
+def dia_util_recente(hoje):
+    """Hoje, se for de segunda a sexta; sábado e domingo voltam para a sexta."""
+    return hoje - timedelta(days=max(0, hoje.weekday() - 4))
+
+
+def agora_do_teste():
+    """Hora fixa do cenário (UTC). Sem cenário, a hora real."""
+    return CENARIO["agora"] or datetime.now(timezone.utc)
+
+
+def _com_cenario(nome):
+    return f"{nome} · {CENARIO['rotulo']}" if CENARIO["rotulo"] else nome
+
+
+def handoff_aberto(loja_id, lead_id) -> bool:
+    return bool(ler("SELECT 1 FROM handoffs WHERE loja_id = ? AND lead_id = ? "
+                    "AND estado = 'aguardando_humano'", (loja_id, lead_id)))
+
+
+def pytest_generate_tests(metafunc):
+    """Cada caso de API roda duas vezes: dentro e fora do horário da loja."""
+    if ("cenario_relogio" in metafunc.fixturenames
+            and metafunc.definition.get_closest_marker("api")):
+        metafunc.parametrize("cenario_relogio", list(CENARIOS_RELOGIO), indirect=True)
+
+
+@pytest.fixture(autouse=True)
+def cenario_relogio(request, monkeypatch):
+    nome = getattr(request, "param", None)
+    if nome is None:          # testes offline: relógio de verdade
+        yield None
+        return
+    from zoneinfo import ZoneInfo
+    from app.core.montagem import FUSO_PADRAO
+    fuso = ZoneInfo(FUSO_PADRAO)
+    dia = dia_util_recente(datetime.now(fuso).date())
+    hora, minuto = CENARIOS_RELOGIO[nome]
+    local = datetime(dia.year, dia.month, dia.day, hora, minuto, tzinfo=fuso)
+
+    class RelogioFixo(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return local.astimezone(tz) if tz else local.replace(tzinfo=None)
+
+    monkeypatch.setattr(importar_agente(), "datetime", RelogioFixo)
+    texto = "dentro do horário" if nome == "dentro" else "fora do horário"
+    CENARIO.update(atual=nome, agora=local.astimezone(timezone.utc),
+                   rotulo=f"{texto} ({DIAS[local.weekday()]} {local:%d/%m %H:%M})")
+    yield nome
+    CENARIO.update(atual="", rotulo="", agora=None)
+
+
+def avisos_s7(conversas) -> list:
+    """Promessa de contato sem chamado e registro sem ferramenta, turno a turno (só AVISO)."""
+    saida = []
+    for c in _lista_de_conversas(conversas):
+        for i, novas in enumerate(c.novas_por_turno):
+            texto = "\n".join(extrair_texto(m.content) for m in novas if isinstance(m, AIMessage))
+            chamadas = {ch.get("name") for m in novas for ch in (getattr(m, "tool_calls", None) or [])}
+            espera = c.espera_por_turno[i] if i < len(c.espera_por_turno) else False
+            achados = promessas_de_contato(texto)
+            chamou = "acionar_handoff" in chamadas
+            if "anuncio" in achados and not chamou:
+                saida.append((AVISO, f'{CONTATO_SEM_CHAMADO} (disse que vai chamar a equipe sem '
+                                     f'acionar_handoff): "{achados["anuncio"]}"'))
+            elif "contato" in achados and not chamou and not espera:
+                saida.append((AVISO, f'{CONTATO_SEM_CHAMADO} (nenhum chamado aberto): '
+                                     f'"{achados["contato"]}"'))
+            if "registro" in achados and not (chamadas & FERRAMENTAS_QUE_REGISTRAM):
+                saida.append((AVISO, f'{REGISTRO_SEM_FERRAMENTA}: "{achados["registro"]}"'))
+    return list(dict.fromkeys(saida))
+
+
+def resumo_por_cenario() -> list:
+    if not any(c.get("cenario") for c in RODADA.casos):
+        return []
+    linhas = ["-" * 72, "Prazo e promessa de contato por cenário (ocorrências de aviso):"]
+    for nome in CENARIOS_RELOGIO:
+        casos = [c for c in RODADA.casos if c.get("cenario") == nome]
+
+        def soma(rotulo):
+            return sum(v for c in casos for m, v in c["motivos"] if rotulo in m)
+
+        tentativas = sum(c["feitas"] for c in casos)
+        linhas.append(f"    {nome}: {len(casos)} caso(s), {tentativas} tentativas · prazo: {soma(PRAZO)} · "
+                      f"contato sem chamado: {soma(CONTATO_SEM_CHAMADO)} · "
+                      f"registro sem ferramenta: {soma(REGISTRO_SEM_FERRAMENTA)}")
+    return linhas
+
+
+# ======================================================================
+# BLOCO S7 (decisão do analista): pedido de visita registrado sem prazo
+# ======================================================================
+VISITA_SEM_PRAZO = "pediu visita e o lead ficou sem prazo"
+_PEDIU_VISITA = re.compile(r"\b(visitar|visita|passar ai|passar na loja|ir ai|ir na loja"
+                           r"|test.?drive|conhecer a loja|ver o carro pessoalmente)\b")
+
+
+def avisos_visita(conversas) -> list:
+    """Cliente falou em visita, o Léo chamou registrar_lead sem agendar e não
+    preencheu o prazo (só AVISO)."""
+    saida = []
+    for c in _lista_de_conversas(conversas):
+        if not any(_PEDIU_VISITA.search(normalizar(f)) for f in c.falas):
+            continue
+        chamadas = [ch for m in c.mensagens for ch in (getattr(m, "tool_calls", None) or [])]
+        if any(ch.get("name") == "agendar_visita" for ch in chamadas):
+            continue
+        leads = [ch for ch in chamadas if ch.get("name") == "registrar_lead"]
+        if leads and not any(str((ch.get("args") or {}).get("prazo") or "").strip() for ch in leads):
+            saida.append((AVISO, f"{VISITA_SEM_PRAZO} (registrar_lead sem o campo prazo)"))
+    return saida

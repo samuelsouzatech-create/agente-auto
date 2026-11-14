@@ -12,4 +12,4 @@ Test-drive:
 O test-drive é permitido mediante apresentação de CNH válida do condutor e assinatura de um termo de responsabilidade na loja.
 
 Horário de atendimento:
-A loja funciona de segunda a sexta, das 8h às 18h, e aos sábados das 8h às 13h. Não abrimos aos domingos e feriados. O atendimento do assistente virtual funciona 24 horas; fora do horário comercial, um vendedor retorna no próximo horário de funcionamento.
+A loja funciona de segunda a sábado, das 9h às 18h. Não abrimos aos domingos. O atendimento do assistente virtual funciona 24 horas.

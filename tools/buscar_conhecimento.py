@@ -80,8 +80,8 @@ def _get_banco_conhecimento():
 def buscar_conhecimento(pergunta: str,
                         *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Busca informações sobre as POLÍTICAS da loja: formas de pagamento,
-    regras de financiamento, regras de troca, garantia, test-drive e horário
-    de atendimento. Use sempre que o cliente perguntar COMO a loja funciona
+    regras de financiamento, regras de troca, garantia e test-drive (horário de atendimento não: ele vem do cadastro
+    da loja e já está nas instruções). Use sempre que o cliente perguntar COMO a loja funciona
     (e NÃO sobre quais carros existem - para carros, use consultar_estoque).
 
     Parâmetros:

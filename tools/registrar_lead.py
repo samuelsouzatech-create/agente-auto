@@ -17,7 +17,8 @@ def registrar_lead(nome: str, interesse: str, forma_pagamento: str = "",
     - interesse: o que ele procura (modelo, faixa de preço)
     - forma_pagamento: "à vista" ou "financiado" (se souber)
     - tem_troca: "sim" ou "não" (se souber)
-    - prazo: urgência/quando quer resolver (se souber)
+    - prazo: urgência/quando quer resolver (se souber). Se ele quer visitar a
+      loja, escreva a intenção com as palavras dele (ex.: "quer visitar sábado")
     """
     if not lead_id:
         return "Não registrei o lead: falta o identificador da conversa."

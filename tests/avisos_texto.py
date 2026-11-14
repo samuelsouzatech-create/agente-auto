@@ -112,3 +112,46 @@ def rotulos_de_texto(texto) -> set:
     return {rotulo for rotulo, _, padroes in DETECTORES
             if any(_bate(p, f, pular) for f in frases(texto)
                    for (r, pular, ps) in DETECTORES if r == rotulo for p in ps)}
+
+
+# ======================================================================
+# Bloco S7: promessa de contato e registro. Dependem das ferramentas do
+# turno, por isso não entram em DETECTORES: quem decide é avisos_s7 no
+# teste de API. Só AVISO, nunca reprovam.
+# ======================================================================
+CONTATO_SEM_CHAMADO = "prometeu contato sem chamado"
+REGISTRO_SEM_FERRAMENTA = "disse que registrou sem chamar ferramenta"
+
+_EQUIPE = (r"(?:pessoal|equipe|vendedor|vendedores|vendedora|colega|colegas|consultor"
+           r"|consultora|consultores|alguem|gerente|time)")
+
+PADROES_CONTATO = {
+    "anuncio": _r(
+        r"\b(?:vou|vamos|irei|ja\s+vou)\s+(?:te\s+|lhe\s+)?(?:chamar|acionar|avisar|passar|encaminhar"
+        r"|transferir|repassar|pedir)\b[^.!?]{0,40}\b" + _EQUIPE + r"\b",
+        r"\b(?:chamei|acionei|avisei|encaminhei|repassei)\b[^.!?]{0,40}\b" + _EQUIPE + r"\b",
+    ),
+    "contato": _r(
+        r"\b" + _EQUIPE + r"\b[^.!?]{0,40}\b(?:vai|vao|ira|irao|deve|devem)\s+(?:te\s+|lhe\s+)?"
+        r"(?:falar|entrar\s+em\s+contato|chamar|retornar|ligar|responder|combinar|continuar"
+        r"|conversar|procurar|atender|acertar)\b",
+        r"\b(?:retoma|retomam|retorna|retornam)\b[^.!?]{0,40}\bproximo\s+horario\b",
+    ),
+    "registro": _r(
+        r"\b(?:vou|vamos|ja\s+vou)\s+(?:registrar|anotar|cadastrar|deixar\s+(?:registrad|anotad))",
+        r"\b(?:registrei|anotei|cadastrei)\b",
+        r"\bdeixei\s+(?:registrad|anotad)",
+        r"\bja\s+(?:esta|ta|fica|ficou)\s+(?:registrad|anotad)",
+    ),
+}
+
+
+def promessas_de_contato(texto) -> dict:
+    """{'anuncio'|'contato'|'registro': primeira frase achada}. Só olha o texto."""
+    achados = {}
+    for tipo, padroes in PADROES_CONTATO.items():
+        for frase in frases(texto):
+            if any(_bate(p, frase, True) for p in padroes):
+                achados[tipo] = frase
+                break
+    return achados

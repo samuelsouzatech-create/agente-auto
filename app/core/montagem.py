@@ -12,6 +12,7 @@ Etapa 2, Bloco 1: as ferramentas do ramo vêm da pasta do segmento
 (segmentos/<segmento>/ferramentas.py), via app/segmentos.py.
 Este módulo não cria o modelo de IA, então os testes podem importá-lo sem chave.
 """
+import re
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -57,7 +58,8 @@ DESCRICOES = {
     "registrar_lead": "quando já souber o interesse e algum dado do cliente.",
     "acionar_handoff": "OBRIGATÓRIO em qualquer caso vermelho (ver REGRA OBRIGATÓRIA DO HANDOFF).",
     "buscar_conhecimento": ("dúvidas sobre políticas da loja: financiamento, troca, "
-                            "garantia, test-drive, horário de atendimento."),
+                            "garantia e test-drive. Horário de atendimento não: ele está na "
+                            "IDENTIDADE e vem do cadastro da loja."),
     "registrar_interesse": ("o cliente deixa claro, com as palavras dele, que quer um tempo, "
                             "que não tem mais interesse ou que não quer mais receber mensagens. "
                             "Na dúvida, não use."),
@@ -66,7 +68,12 @@ DESCRICOES = {
 AVISOS_MODULO_DESLIGADO = {
     "agendamento": ("Esta loja não agenda pelo chat. Se o cliente quiser visitar, "
                     "fazer test-drive ou receber ligação, registre o interesse com "
-                    "registrar_lead e diga que um vendedor vai combinar o horário com ele."),
+                    "registrar_lead (chame a ferramenta antes de dizer que anotou; no campo prazo, "
+                    "escreva a intenção de visita com as palavras dele, ex.: 'quer visitar sábado') "
+                    "e informe o "
+                    "horário da loja para ele vir quando quiser. Não diga que alguém vai ligar "
+                    "ou combinar horário; se ele pedir para falar com uma pessoa, é caso "
+                    "vermelho: acionar_handoff."),
     "fotos": ("Esta loja não envia fotos pelo chat. Se o cliente pedir fotos, diga "
               "isso com naturalidade e ofereça a ficha do carro ou uma visita."),
 }
@@ -190,7 +197,7 @@ def _camada_da_loja(loja) -> str:
     cidade = valor_config(cfg, "cidade", "")
     linhas = [
         "IDENTIDADE (desta loja)",
-        f"- Seu nome é {nome_agente}. Você é o assistente virtual da loja {loja.nome}"
+        f"- Seu nome é {nome_agente} e você é assistente virtual da loja {loja.nome}"
         + (f", em {cidade}." if cidade else "."),
         f"- Tom de voz: {tom}.",
     ]
@@ -199,6 +206,8 @@ def _camada_da_loja(loja) -> str:
     if horario and "-" in horario:
         inicio, fim = horario.split("-", 1)
         linhas.append(f"- Atendimento com vendedores: {dias}, das {inicio} às {fim}.".replace(": ,", ":"))
+        linhas.append("- Horário de atendimento: use SEMPRE a linha acima (vem do cadastro da loja). "
+                      "Não busque horário em documento nem na base de conhecimento.")
     return "\n".join(linhas)
 
 
@@ -224,8 +233,8 @@ def _camada_do_momento(loja, em_espera: bool, primeiro_contato: bool) -> str:
         blocos.append(
             "PRIMEIRO CONTATO\n"
             f"- Esta é a sua primeira resposta para este cliente. Cumprimente e se apresente UMA vez, "
-            f"de forma natural, como {nome}, assistente virtual da {loja.nome} "
-            f"(ex.: \"Oi! Aqui é o {nome}, assistente virtual da {loja.nome}.\").\n"
+            f"de forma natural, como {nome}, da {loja.nome}, seguindo a regra QUEM VOCÊ É e o TOM DE VOZ desta loja "
+            f"(ex.: \"Oi! Aqui é {nome}, da {loja.nome}.\").\n"
             "- Depois disso, não repita a apresentação."
         )
     if em_espera:
@@ -274,6 +283,28 @@ def _camada_do_cliente_da_casa(compras) -> str:
     )
 
 
+# S7: o tom entra perto do FIM do prompt (o modelo leve copiava os exemplos
+# informais do meio) e vale também para a primeira mensagem.
+_TOM_FORMAL = re.compile(r"\b(formal|formais|senhor|senhora|respeitos\w*)\b")
+
+
+def _camada_do_tom(loja) -> str:
+    cfg = loja.config
+    tom = str(valor_config(cfg, "tom", "simples, cordial e direto") or "").strip()
+    nome = valor_config(cfg, "nome_agente", "Léo")
+    linhas = [
+        "TOM DE VOZ (vale para TODAS as mensagens, inclusive a primeira)",
+        f"- Tom desta loja: {tom}.",
+        "- As frases de exemplo destas instruções são só ideias: adapte sempre ao tom desta loja.",
+    ]
+    if _TOM_FORMAL.search(tom.lower()):
+        linhas.append('- Tom formal: trate o cliente por "o senhor" ou "a senhora" desde a primeira '
+                      'frase. Nada de gírias, "tá?", "beleza" ou "show".')
+    linhas.append(f'- Ao falar de si, não marque gênero: diga "aqui é {nome}", nunca '
+                  f'"aqui é o {nome}" nem "aqui é a {nome}".')
+    return "\n".join(linhas)
+
+
 def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
                   primeiro_contato: bool = False, retomada: dict | None = None,
                   compras: list | None = None) -> str:
@@ -289,6 +320,7 @@ def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
         _camada_do_momento(loja, em_espera, primeiro_contato),
         _camada_do_cliente_da_casa(compras),
         _camada_da_retomada(retomada, agora),
+        _camada_do_tom(loja),
         data,
     ]
     return "\n\n".join(c for c in camadas if c)
