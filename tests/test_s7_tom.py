@@ -61,7 +61,7 @@ def test_tom_padrao_nao_e_formal():
 
 def test_primeiro_contato_sem_artigo():
     p = _prompt(_loja(nome_agente="Duda"), primeiro_contato=True)
-    assert "Aqui é Duda, da Loja Teste" in p
+    assert "Aqui é Duda, assistente virtual da Loja Teste" in p
     assert "Aqui é o " not in p and "Aqui é a " not in p
 
 

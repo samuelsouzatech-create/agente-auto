@@ -233,8 +233,8 @@ def _camada_do_momento(loja, em_espera: bool, primeiro_contato: bool) -> str:
         blocos.append(
             "PRIMEIRO CONTATO\n"
             f"- Esta é a sua primeira resposta para este cliente. Cumprimente e se apresente UMA vez, "
-            f"de forma natural, como {nome}, da {loja.nome}, seguindo a regra QUEM VOCÊ É e o TOM DE VOZ desta loja "
-            f"(ex.: \"Oi! Aqui é {nome}, da {loja.nome}.\").\n"
+            f"de forma natural, como {nome}, assistente virtual da {loja.nome}, seguindo a regra QUEM VOCÊ É e o TOM DE VOZ desta loja "
+            f"(ex.: \"Oi! Aqui é {nome}, assistente virtual da {loja.nome}.\").\n"
             "- Depois disso, não repita a apresentação."
         )
     if em_espera:
