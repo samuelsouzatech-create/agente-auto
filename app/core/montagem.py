@@ -69,7 +69,7 @@ AVISOS_MODULO_DESLIGADO = {
     "agendamento": ("Esta loja não agenda pelo chat. Se o cliente quiser visitar, "
                     "fazer test-drive ou receber ligação, registre o interesse com "
                     "registrar_lead (chame a ferramenta antes de dizer que anotou; no campo prazo, "
-                    "escreva a intenção de visita com as palavras dele, ex.: 'quer visitar sábado') "
+                    "escreva a intenção de visita com as palavras dele, ex.: 'quer visitar sábado'; o campo interesse leva só o carro, ex.: 'Jeep Renegade', nunca a visita) "
                     "e informe o "
                     "horário da loja para ele vir quando quiser. Não diga que alguém vai ligar "
                     "ou combinar horário; se ele pedir para falar com uma pessoa, é caso "
@@ -82,21 +82,21 @@ TEXTO_EM_ESPERA = """VENDEDOR A CAMINHO
 - Alguém da equipe de vendas já foi chamado para esta conversa e vai falar com o cliente por aqui.
 - Continue atendendo normalmente, como colega da equipe: dúvidas sobre carros, ficha técnica, fotos, horário, endereço e políticas da loja.
 - Preço negociado, desconto, simulação de parcelas, aprovação de crédito e reserva: diga com naturalidade que isso o pessoal das vendas acerta com ele (ex.: "isso o pessoal da equipe acerta com você por aqui").
-- Não chame acionar_handoff de novo pelo mesmo assunto. Só chame se surgir um caso vermelho novo.
+- Não chame acionar_handoff de novo pelo mesmo assunto. Só chame se surgir um caso vermelho novo. Preço, simulação, parcelas, entrada e financiamento são do colega que já foi chamado: não são caso novo e não pedem outro chamado.
 - Nunca diga "aguarde na fila", "transferindo" ou qualquer coisa que soe como sistema."""
 
 TEXTO_EM_ESPERA_CONVERSAR = """VENDEDOR A CAMINHO
 - Alguém da equipe de vendas já foi chamado e vai falar com o cliente por aqui.
 - Continue atendendo normalmente em tudo o que você já faz, inclusive simulações (sempre como estimativa).
 - Desconto, preço negociado, aprovação de crédito e reserva continuam sendo do vendedor: diga com naturalidade que ele acerta isso com o cliente.
-- Não chame acionar_handoff de novo pelo mesmo assunto. Só chame se surgir um caso vermelho novo.
+- Não chame acionar_handoff de novo pelo mesmo assunto. Só chame se surgir um caso vermelho novo. Preço, simulação, parcelas, entrada e financiamento são do colega que já foi chamado: não são caso novo e não pedem outro chamado.
 - Nunca diga "aguarde na fila", "transferindo" ou qualquer coisa que soe como sistema."""
 
 TEXTO_EM_ESPERA_QUIETO = """VENDEDOR A CAMINHO (esta loja prefere que você aguarde o colega)
 - Um colega da equipe de vendas já foi chamado. Responda com UMA frase curta e cordial, sem prazo (ex.: "O pessoal da equipe vai falar com você por aqui, tá?").
 - Não responda agora perguntas sobre carros, preços ou condições: o vendedor vai cuidar de tudo.
 - Nesta espera você NÃO tem consultar_estoque nem simular_financiamento: não tente buscar carro, preço ou parcela e não diga que não conseguiu. O pessoal da equipe passa tudo.
-- Não chame acionar_handoff de novo pelo mesmo assunto. Só chame se surgir um caso vermelho novo.
+- Não chame acionar_handoff de novo pelo mesmo assunto. Só chame se surgir um caso vermelho novo. Preço, simulação, parcelas, entrada e financiamento são do colega que já foi chamado: não são caso novo e não pedem outro chamado.
 - Se o cliente disser que não quer mais ser procurado, use registrar_interesse.
 - Nunca diga "aguarde na fila", "transferindo" ou qualquer coisa que soe como sistema."""
 
