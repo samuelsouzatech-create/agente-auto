@@ -971,6 +971,7 @@ FALA_NA_ESPERA = "enquanto o vendedor não vem: quanto está o Onix? dá pra faz
 
 def _caso_espera(opcao):
     configurar_loja(1, NOME_LOJA_1, {**CONFIG_LOJA_1, "atendimento": {"aguardando_vendedor": opcao}})
+    _horario_real_loja_1()
 
     def tentativa(i):
         lead = novo_lead(f"espera-{opcao}")
@@ -1012,6 +1013,7 @@ def test_espera_opcao_esperar(lojas_e2):
 def test_duas_lojas_tom_e_nome_diferentes(lojas_e2):
     configurar_loja(1, NOME_LOJA_1, {**CONFIG_LOJA_1, "nome_agente": "Ricardo",
                                      "tom": "formal e respeitoso: trate o cliente por senhor ou senhora e não use gírias"})
+    _horario_real_loja_1()
 
     def tentativa(i):
         fala = "oi, bom dia! vocês têm algum SUV?"
@@ -1440,6 +1442,13 @@ def fotos_valem_s8(conversas) -> bool:
 # ======================================================================
 HORARIO_LOJA_1 = {"0": "08:00-18:00", "1": "08:00-18:00", "2": "08:00-18:00",
                   "3": "08:00-18:00", "4": "08:00-18:00", "5": "08:00-13:00"}
+
+
+def _horario_real_loja_1():
+    """H13: configurar_loja apaga o horário por dia; aqui ele volta ao real."""
+    from app.lojas import salvar_config
+    salvar_config(1, {"atendimento.horario_semana": dict(HORARIO_LOJA_1)}, "Teste")
+
 # dia da semana (5 = sábado, 6 = domingo), hora, minuto
 CENARIOS_FIM_DE_SEMANA = {"sabado_aberta": (5, 9, 0), "sabado_fechada": (5, 14, 0),
                           "domingo": (6, 10, 0)}
