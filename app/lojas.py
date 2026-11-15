@@ -70,6 +70,7 @@ PADROES: dict = {
     "fuso": "America/Recife",
     "atendimento": {
         "horario_humano": "09:00-18:00",
+        "horario_semana": None,                   # H13: {"0": "08:00-18:00", ...}; None = vale o horário único
         "dias_humano": [0, 1, 2, 3, 4, 5],        # 0 = segunda ... 6 = domingo
         "debounce_s": 8.0,                        # medição: o PDF sugere 3 a 5 s
         "aguardando_vendedor": "meio_termo",      # decisão 1.12
@@ -206,6 +207,36 @@ def _opcional(validador: Callable) -> Callable:
     return validar
 
 
+_NOME_DIA = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
+
+
+def _semana(v):
+    """H13: horário de cada dia. {"0": "08:00-18:00", ..., "5": "08:00-13:00"};
+    0 = segunda, dia ausente = fechado. None = volta a valer o horário único.
+    Expediente que passa da meia-noite é recusado."""
+    if v is None:
+        return None
+    if not isinstance(v, dict) or not v:
+        raise ValueError('informe ao menos um dia aberto, ex.: {"0": "08:00-18:00", "5": "08:00-13:00"}')
+    saida = {}
+    for dia, faixa in v.items():
+        try:
+            n = None if isinstance(dia, bool) else int(dia)
+        except (TypeError, ValueError):
+            n = None
+        if n is None or not 0 <= n <= 6:
+            raise ValueError(f"dia '{dia}' não existe: use 0 (segunda) a 6 (domingo)")
+        texto = faixa.strip() if isinstance(faixa, str) else faixa
+        if not isinstance(texto, str) or not _HORARIO.match(texto):
+            raise ValueError(f'{_NOME_DIA[n]}: use o formato "HH:MM-HH:MM", ex.: "08:00-18:00"')
+        inicio, fim = texto.split("-")
+        if inicio >= fim:
+            raise ValueError(f"{_NOME_DIA[n]}: a loja precisa abrir e fechar no mesmo dia. "
+                             "Expediente que passa da meia-noite não é aceito.")
+        saida[str(n)] = texto
+    return {d: saida[d] for d in sorted(saida, key=int)}
+
+
 def _fuso(v):
     try:
         ZoneInfo(v)
@@ -222,6 +253,7 @@ EDITAVEIS: dict[str, Callable] = {
     "fuso": _fuso,
     "atendimento.horario_humano": _faixa_horario(),
     "atendimento.dias_humano": _dias,
+    "atendimento.horario_semana": _semana,
     "atendimento.debounce_s": _float(1, 20),
     "atendimento.aguardando_vendedor": _opcao("conversar", "esperar", "meio_termo"),
     "handoff.reaviso_min": _int(1, 120),

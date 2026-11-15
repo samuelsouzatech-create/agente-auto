@@ -72,6 +72,11 @@ CAMPOS: tuple[Campo, ...] = (
     Campo("atendimento.horario_humano", "Horário do atendimento humano", "horario",
           "Atendimento", 'Formato "09:00-18:00".'),
     Campo("atendimento.dias_humano", "Dias do atendimento humano", "dias", "Atendimento"),
+    Campo("atendimento.horario_semana", "Horário de cada dia", "semana", "Atendimento",
+          'Ex.: "Seg 08:00-18:00; Ter 08:00-18:00; Qua 08:00-18:00; Qui 08:00-18:00; '
+          'Sex 08:00-18:00; Sáb 08:00-13:00". Dia que não aparece fica fechado. '
+          'Preenchido, vale no lugar do horário e dos dias acima. Expediente que passa '
+          'da meia-noite não é aceito.'),
     Campo("atendimento.debounce_s", "Espera para juntar mensagens seguidas (segundos)",
           "decimal", "Atendimento",
           "Medição. Por enquanto a espera usada é de 8 s; este valor passa a valer mais adiante."),
@@ -265,6 +270,34 @@ def campos_de_outros_ajustes() -> list[Campo]:
             and c.chave not in CAMPOS_A_DECIDIR]
 
 
+_DIA_DA_TELA = {"seg": 0, "ter": 1, "qua": 2, "qui": 3, "sex": 4, "sab": 5, "sáb": 5, "dom": 6}
+
+
+def semana_para_texto(valor) -> str:
+    """{"0": "08:00-18:00", "5": "08:00-13:00"} -> "Seg 08:00-18:00; Sáb 08:00-13:00"."""
+    if not isinstance(valor, dict) or not valor:
+        return ""
+    return "; ".join(f"{DIAS[int(d)]} {valor[d]}" for d in sorted(valor, key=int))
+
+
+def semana_da_tela(valor):
+    """"Seg 08:00-18:00; Sáb 08:00-13:00" -> dict. Vazio = None (vale o horário único).
+    A conferência final (formato, meia-noite) é do validador em app/lojas.py."""
+    texto = str(valor or "").strip()
+    if not texto:
+        return None
+    saida = {}
+    for parte in texto.replace("\n", ";").split(";"):
+        pedacos = parte.split()
+        if not pedacos:
+            continue
+        dia = pedacos[0].lower().rstrip(".:")
+        if len(pedacos) != 2 or dia not in _DIA_DA_TELA:
+            raise ValueError('use "Seg 08:00-18:00; Sáb 08:00-13:00" (dia que não aparece fica fechado)')
+        saida[str(_DIA_DA_TELA[dia])] = pedacos[1]
+    return saida
+
+
 def padrao(c: Campo):
     valor = PADROES
     for parte in c.chave.split("."):
@@ -286,6 +319,8 @@ def formatar(c: Campo, valor) -> str:
         return ", ".join(str(v) for v in valor)
     if c.tipo == "todos_ou_lista":
         return valor if isinstance(valor, str) else ", ".join(valor)
+    if c.tipo == "semana":
+        return semana_para_texto(valor) or "vazio"
     if c.tipo == "opcao":
         return ROTULO_OPCAO.get(valor, str(valor))
     return str(valor) if valor != "" else "vazio"
@@ -293,6 +328,8 @@ def formatar(c: Campo, valor) -> str:
 
 def para_tela(c: Campo, valor):
     """Valor da configuração -> valor que o widget mostra."""
+    if c.tipo == "semana":
+        return semana_para_texto(valor)
     if c.tipo == "percentual":
         return round(float(valor) * 100, 4)
     if c.tipo == "dias":
@@ -315,6 +352,8 @@ def _separar(texto) -> list[str]:
 def da_tela(c: Campo, valor):
     """Valor do widget -> valor da configuração. Erro de digitação vira ValueError."""
     t = c.tipo
+    if t == "semana":
+        return semana_da_tela(valor)
     if t == "percentual":
         return round(float(valor) / 100, 6)
     if t == "dias":

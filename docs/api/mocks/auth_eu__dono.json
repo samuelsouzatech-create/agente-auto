@@ -7,6 +7,58 @@
   "loja": {
     "nome": "Garagem Recife Veículos",
     "fuso": "America/Recife",
+    "horario": [
+      {
+        "dia": 0,
+        "dia_texto": "Segunda-feira",
+        "abre": "08:00",
+        "fecha": "18:00",
+        "fechado": false
+      },
+      {
+        "dia": 1,
+        "dia_texto": "Terça-feira",
+        "abre": "08:00",
+        "fecha": "18:00",
+        "fechado": false
+      },
+      {
+        "dia": 2,
+        "dia_texto": "Quarta-feira",
+        "abre": "08:00",
+        "fecha": "18:00",
+        "fechado": false
+      },
+      {
+        "dia": 3,
+        "dia_texto": "Quinta-feira",
+        "abre": "08:00",
+        "fecha": "18:00",
+        "fechado": false
+      },
+      {
+        "dia": 4,
+        "dia_texto": "Sexta-feira",
+        "abre": "08:00",
+        "fecha": "18:00",
+        "fechado": false
+      },
+      {
+        "dia": 5,
+        "dia_texto": "Sábado",
+        "abre": "08:00",
+        "fecha": "13:00",
+        "fechado": false
+      },
+      {
+        "dia": 6,
+        "dia_texto": "Domingo",
+        "abre": null,
+        "fecha": null,
+        "fechado": true
+      }
+    ],
+    "horario_texto": "De segunda a sexta, das 08:00 às 18:00; sábado, das 08:00 às 13:00; domingo, fechado",
     "estado": {
       "codigo": "no_ar",
       "rotulo": "No ar"

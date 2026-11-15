@@ -476,8 +476,11 @@ def situacao_do(loja_id, lead_id):
 @pytest.fixture
 def lojas_e2(banco_temporario):
     """Loja 1 com os 7 carros de exemplo e loja 2 com estoque próprio e outro tom."""
+    from app.lojas import salvar_config
     popular_estoque_exemplo()
     configurar_loja(1, NOME_LOJA_1, CONFIG_LOJA_1)
+    # H13: loja 1 com o horário real (dias úteis 08:00-18:00, sábado 08:00-13:00).
+    salvar_config(1, {"atendimento.horario_semana": dict(HORARIO_LOJA_1)}, "Teste")
     configurar_loja(2, NOME_LOJA_2, CONFIG_LOJA_2)
     adicionar_carro(2, "Jeep", "Renegade", 2020, 51000, "Cinza", "Automático", 89900.0)
     adicionar_carro(2, "Fiat", "Argo", 2021, 30000, "Branco", "Manual", 72000.0)
@@ -898,11 +901,10 @@ def test_comprador_pergunta_horario_sem_handoff(lojas_e2):
         registrar_compra(1, lead, "Civic", 2017)
         c = conversar(1, ["oi! que horas vocês abrem no sábado?"], lead)
         falhas = checar_nao_chamou(c, "acionar_handoff") + checar_preco(c)
-        # A loja tem o horário em dois lugares que não batem (furo 13): a
-        # configuração padrão (9h) e o texto de políticas da loja 1 (sábado
-        # das 8h às 13h). O Léo pode usar qualquer um dos dois.
-        if not re.search(r"\b0?[89]\s*(h\b|:00|horas)", normalizar(c.texto_do_agente)):
-            falhas.append((AVISO, "não informou o horário de sábado (8h nas políticas ou 9h na configuração)"))
+        # H13: o horário vem só do cadastro (loja 1: sábado das 08:00 às 13:00).
+        texto = normalizar(c.texto_do_agente)
+        if not (re.search(hora_re(8), texto) and re.search(hora_re(13), texto)):
+            falhas.append((AVISO, "não informou o horário de sábado do cadastro (08:00 às 13:00)"))
         return c, falhas
     avaliar_caso("comprador: horário da loja (sem handoff)", tentativa)
 
@@ -969,6 +971,7 @@ FALA_NA_ESPERA = "enquanto o vendedor não vem: quanto está o Onix? dá pra faz
 
 def _caso_espera(opcao):
     configurar_loja(1, NOME_LOJA_1, {**CONFIG_LOJA_1, "atendimento": {"aguardando_vendedor": opcao}})
+    _horario_real_loja_1()
 
     def tentativa(i):
         lead = novo_lead(f"espera-{opcao}")
@@ -1010,6 +1013,7 @@ def test_espera_opcao_esperar(lojas_e2):
 def test_duas_lojas_tom_e_nome_diferentes(lojas_e2):
     configurar_loja(1, NOME_LOJA_1, {**CONFIG_LOJA_1, "nome_agente": "Ricardo",
                                      "tom": "formal e respeitoso: trate o cliente por senhor ou senhora e não use gírias"})
+    _horario_real_loja_1()
 
     def tentativa(i):
         fala = "oi, bom dia! vocês têm algum SUV?"
@@ -1222,7 +1226,8 @@ def test_s5_relatorio_mostra_tentativa_que_passou():
 from avisos_texto import (CONTATO_SEM_CHAMADO, PRAZO, REGISTRO_SEM_FERRAMENTA,  # noqa: E402
                           promessas_de_contato)
 
-# Cadastro padrão da loja: segunda a sábado, 09:00-18:00 (app/lojas.py, PADROES).
+# Cadastro padrão (loja 2): segunda a sábado, 09:00-18:00 (app/lojas.py, PADROES).
+# H13: a loja 1 usa o horário real (dias úteis 08:00-18:00, sábado 08:00-13:00).
 CENARIOS_RELOGIO = {"dentro": (10, 30), "fora": (21, 30)}
 DIAS = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
 CENARIO = {"atual": "", "rotulo": "", "agora": None}
@@ -1253,7 +1258,10 @@ def pytest_generate_tests(metafunc):
     """Cada caso de API roda duas vezes: dentro e fora do horário da loja."""
     if ("cenario_relogio" in metafunc.fixturenames
             and metafunc.definition.get_closest_marker("api")):
-        metafunc.parametrize("cenario_relogio", list(CENARIOS_RELOGIO), indirect=True)
+        nomes = list(CENARIOS_RELOGIO)
+        if metafunc.function.__name__ in CASOS_FIM_DE_SEMANA:   # H13
+            nomes += list(CENARIOS_FIM_DE_SEMANA)
+        metafunc.parametrize("cenario_relogio", nomes, indirect=True)
 
 
 @pytest.fixture(autouse=True)
@@ -1265,9 +1273,7 @@ def cenario_relogio(request, monkeypatch):
     from zoneinfo import ZoneInfo
     from app.core.montagem import FUSO_PADRAO
     fuso = ZoneInfo(FUSO_PADRAO)
-    dia = dia_util_recente(datetime.now(fuso).date())
-    hora, minuto = CENARIOS_RELOGIO[nome]
-    local = datetime(dia.year, dia.month, dia.day, hora, minuto, tzinfo=fuso)
+    local = momento_do_cenario(nome, datetime.now(fuso).date())   # H13: sábado e domingo também
 
     class RelogioFixo(datetime):
         @classmethod
@@ -1275,7 +1281,7 @@ def cenario_relogio(request, monkeypatch):
             return local.astimezone(tz) if tz else local.replace(tzinfo=None)
 
     monkeypatch.setattr(importar_agente(), "datetime", RelogioFixo)
-    texto = "dentro do horário" if nome == "dentro" else "fora do horário"
+    texto = "dentro do horário" if nome in ABERTOS else "fora do horário"
     CENARIO.update(atual=nome, agora=local.astimezone(timezone.utc),
                    rotulo=f"{texto} ({DIAS[local.weekday()]} {local:%d/%m %H:%M})")
     yield nome
@@ -1307,7 +1313,7 @@ def resumo_por_cenario() -> list:
     if not any(c.get("cenario") for c in RODADA.casos):
         return []
     linhas = ["-" * 72, "Prazo e promessa de contato por cenário (ocorrências de aviso):"]
-    for nome in CENARIOS_RELOGIO:
+    for nome in nomes_no_resumo():
         casos = [c for c in RODADA.casos if c.get("cenario") == nome]
 
         def soma(rotulo):
@@ -1429,3 +1435,98 @@ def fotos_valem_s8(conversas) -> bool:
         if not com_foto or not com_foto[0]["n"]:
             return False
     return True
+
+
+# ======================================================================
+# BLOCO H13: horário por dia (loja 1 com o horário real) e fim de semana
+# ======================================================================
+HORARIO_LOJA_1 = {"0": "08:00-18:00", "1": "08:00-18:00", "2": "08:00-18:00",
+                  "3": "08:00-18:00", "4": "08:00-18:00", "5": "08:00-13:00"}
+
+
+def _horario_real_loja_1():
+    """H13: configurar_loja apaga o horário por dia; aqui ele volta ao real."""
+    from app.lojas import salvar_config
+    salvar_config(1, {"atendimento.horario_semana": dict(HORARIO_LOJA_1)}, "Teste")
+
+# dia da semana (5 = sábado, 6 = domingo), hora, minuto
+CENARIOS_FIM_DE_SEMANA = {"sabado_aberta": (5, 9, 0), "sabado_fechada": (5, 14, 0),
+                          "domingo": (6, 10, 0)}
+ABERTOS = {"dentro", "sabado_aberta"}
+CASOS_FIM_DE_SEMANA = {"test_comprador_pergunta_horario_sem_handoff",
+                       "test_h13_loja_aberta_agora",
+                       "test_h13_pede_vendedor_com_loja_fechada"}
+
+
+def hora_re(h):
+    """'8h', '08:00', '8 horas', '8 da manhã' (texto já normalizado ou não)."""
+    return rf"\b0?{h}\s*(h\b|:00|horas|hrs?\b|da manh)"
+
+
+# O que a resposta precisa ter em cada cenário (loja 1), conferido pelo STATUS AGORA.
+ESPERADO_STATUS = {
+    "dentro": [hora_re(18)],                          # ABERTA até 18:00
+    "fora": [hora_re(8), r"amanh"],                   # abre amanhã às 08:00
+    "sabado_aberta": [hora_re(13)],                   # ABERTA até 13:00
+    "sabado_fechada": [hora_re(8), r"segunda"],       # abre na segunda às 08:00
+    "domingo": [hora_re(8), r"segunda|amanh"],        # abre amanhã, segunda, às 08:00
+}
+
+
+def momento_do_cenario(nome, hoje):
+    """Hora local fixa do cenário. Dentro/fora: dia útil recente. Sábado e domingo:
+    o mais recente até 'hoje' (datas no passado, como o resto dos dados do teste)."""
+    from zoneinfo import ZoneInfo
+    from app.core.montagem import FUSO_PADRAO
+    if nome in CENARIOS_RELOGIO:
+        dia = dia_util_recente(hoje)
+        hora, minuto = CENARIOS_RELOGIO[nome]
+    else:
+        dia_semana, hora, minuto = CENARIOS_FIM_DE_SEMANA[nome]
+        dia = hoje - timedelta(days=(hoje.weekday() - dia_semana) % 7)
+    return datetime(dia.year, dia.month, dia.day, hora, minuto, tzinfo=ZoneInfo(FUSO_PADRAO))
+
+
+def nomes_no_resumo():
+    usados = {c.get("cenario") for c in RODADA.casos}
+    return list(CENARIOS_RELOGIO) + [n for n in CENARIOS_FIM_DE_SEMANA if n in usados]
+
+
+def faltas_do_status(texto, nome, so_fechada=False):
+    """Pedaços do STATUS AGORA que a resposta não trouxe (lista vazia = ok)."""
+    if nome not in ESPERADO_STATUS or (so_fechada and nome in ABERTOS):
+        return []
+    t = normalizar(texto)
+    return [p for p in ESPERADO_STATUS[nome] if not re.search(p, t)]
+
+
+def checar_status_h13(conversa, so_fechada=False):
+    nome = CENARIO["atual"]
+    if not faltas_do_status(conversa.texto_do_agente, nome, so_fechada):
+        return []
+    from app import relogio
+    from app.lojas import carregar_loja
+    esperado = relogio.status_agora(carregar_loja(conversa.loja_id), CENARIO["agora"])
+    return [(AVISO, f"não repetiu o STATUS AGORA do cadastro ({esperado})")]
+
+
+@pytest.mark.api
+def test_h13_loja_aberta_agora(lojas_e2):
+    def tentativa(i):
+        lead = novo_lead("h13-aberta-agora")
+        c = conversar(1, ["oi! vocês estão abertos agora?"], lead)
+        falhas = (checar_nao_chamou(c, "acionar_handoff") + checar_preco(c)
+                  + checar_status_h13(c))
+        return c, falhas
+    avaliar_caso("horário: a loja está aberta agora?", tentativa)
+
+
+@pytest.mark.api
+def test_h13_pede_vendedor_com_loja_fechada(lojas_e2):
+    def tentativa(i):
+        lead = novo_lead("h13-vendedor")
+        c = conversar(1, ["quero falar com um vendedor sobre o Onix"], lead)
+        falhas = (checar_chamou(c, "acionar_handoff") + checar_preco(c)
+                  + checar_status_h13(c, so_fechada=True))
+        return c, falhas
+    avaliar_caso("horário: pede vendedor (loja aberta ou fechada)", tentativa)

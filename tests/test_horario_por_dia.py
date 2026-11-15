@@ -89,36 +89,30 @@ def test_horario_por_dia_segunda_10h_aberta():
 # FURO 13: o sábado diferente não existe para o sistema
 # ----------------------------------------------------------------------
 
-@furo13("sábado 14h conta como aberto (usa 09:00-18:00 para todo dia)")
 def test_sabado_14h_fechada():
     assert not relogio.no_horario(loja_com_horario_por_dia(), SABADO_14H)
 
 
-@furo13("sábado 8h30 conta como fechado (abertura única às 9h)")
 def test_sabado_08h30_aberta():
     assert relogio.no_horario(loja_com_horario_por_dia(), SABADO_08H30)
 
 
-@furo13("a espera do vendedor no sábado é contada a partir das 9h, não das 8h")
 def test_abertura_do_sabado_e_8h():
     assert relogio.abertura_do_dia(loja_com_horario_por_dia(), SABADO_14H) == utc(2026, 11, 7, 11)
 
 
-@furo13("não existe função que diga o horário de um dia específico")
 def test_horario_do_dia():
     loja = loja_com_horario_por_dia()
     assert relogio.horario_do_dia(loja, 5) == ("08:00", "13:00")
     assert relogio.horario_do_dia(loja, 6) is None
 
 
-@furo13("não existe texto de horário por dia para o Léo")
 def test_descricao_para_o_leo_tem_sabado_e_domingo():
     texto = relogio.descrever_horarios(loja_com_horario_por_dia()).lower()
     assert "sábado" in texto and "13" in texto
     assert "domingo" in texto and "fechad" in texto
 
 
-@furo13("a configuração não aceita horário por dia (painel não consegue gravar)")
 def test_configuracao_aceita_horario_por_dia():
     from app.lojas import EDITAVEIS
     assert CHAVE_SEMANA in EDITAVEIS

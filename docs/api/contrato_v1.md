@@ -212,3 +212,9 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
   desligado). Hoje o vendedor vê o prazo só no cartão "O que o Léo já sabe",
   na conversa. Candidato à v1.1: campo opcional `prazo` (texto, pode vir
   vazio) no item de `LeadsPagina`. A v1 não muda.
+
+## Mudanças e lacunas do H13 (14/11/2026)
+
+- `GET /auth/eu` e `POST /auth/login`: o objeto `loja` ganha dois campos **opcionais**: `horario` (os 7 dias, de 0 = segunda a 6 = domingo, cada um com `dia`, `dia_texto`, `abre`, `fecha` e `fechado`) e `horario_texto` (texto pronto para mostrar). Vêm do cadastro da loja. Não existe `aberta_agora`: muda a cada minuto e o front não precisa dele hoje. `/saude` não muda.
+- Lacuna conhecida: a espera de um cliente que atravessa a noite conta a partir da abertura do dia em que é vista (imprecisão de poucos minutos). Fica assim por decisão do analista.
+- Pendência (fora do H13): `agendar_visita` ainda aceita visita fora do expediente (ex.: domingo com a loja fechada). Bloco próprio, depois da demo e antes da primeira loja real.

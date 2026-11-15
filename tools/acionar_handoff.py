@@ -6,7 +6,8 @@ from banco import conectar
 ORIENTACAO = ("Diga ao cliente, com naturalidade e sem anunciar transferência, que o pessoal "
               "da equipe vai falar com ele por aqui. Não prometa prazo nem use palavra de tempo "
               "(já já, já te chamam, em breve, logo, agora mesmo). Se estiver fora "
-              "do horário da loja, diga que retomam no próximo horário de atendimento.")
+              "do horário da loja, diga que retomam no próximo horário de atendimento, com o dia "
+              "e a hora do STATUS AGORA (não faça conta de horário).")
 
 
 @tool

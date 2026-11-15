@@ -142,12 +142,20 @@ def _carros_disponiveis(loja_id: int) -> int:
         conexao.close()
 
 
+def _horario_pendente(loja, pendente) -> list[str]:
+    """H13: com o horário de cada dia confirmado, ele vale no lugar do horário único."""
+    falta = [ROTULOS_CAMPO["fuso"]] if "fuso" in pendente else []
+    if loja.get("atendimento.horario_semana") and "atendimento.horario_semana" not in pendente:
+        return falta
+    return falta + [ROTULOS_CAMPO[c] for c in CHAVES_HORARIO if c != "fuso" and c in pendente]
+
+
 def _automaticos(loja) -> dict[str, tuple[bool, str]]:
     """(feito, detalhe) de cada item automático."""
     pendente = set(pendentes(loja))
     identidade = [] if str(loja.get("cidade") or "").strip() else ["cidade"]
     identidade += [ROTULOS_CAMPO[c] for c in CHAVES_IDENTIDADE if c in pendente]
-    horario = [ROTULOS_CAMPO[c] for c in CHAVES_HORARIO if c in pendente]
+    horario = _horario_pendente(loja, pendente)
 
     equipe = sum(1 for u in listar_usuarios(loja.id) if u["contato_telegram"])
     numeros = len(listar_numeros_de_teste(loja.id))
