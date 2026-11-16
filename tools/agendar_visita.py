@@ -52,23 +52,34 @@ def _data_ou_duvida(d):
     return (d, None) if d else (None, "essa data não existe; qual é o dia certo?")
 
 
-def entender_hora(texto):
-    """-> (hora, dúvida). Aceita '15h', '10h30', '10:30', '14 horas', 'às 14',
-    '3 da tarde'. Sem hora: (None, None)."""
+def _ler_hora(texto):
+    """-> (hora, minuto, ambígua) ou None. H16: separado de entender_hora para
+    a ferramenta saber QUAIS são as duas alternativas de "às 3"."""
     t = _normal(texto)
     m = (re.search(r"\b([01]?\d|2[0-3])\s*(?:h|:)\s*([0-5]\d)?", t)
          or re.search(r"\b([01]?\d|2[0-3])\s*horas?\b()", t)
          or re.search(r"\bas\s+([01]?\d|2[0-3])\b()(?!\s*[/:-])", t)
          or re.search(r"\b([01]?\d)\s+(?:da|de|a)\s+(?:manha|tarde|noite)\b()", t))
     if not m:
-        return None, None
+        return None
     bruto = m.group(1)
     h, mi = int(bruto), int(m.group(2) or 0)
     periodo = _PERIODO.search(t)
     if periodo:
         if periodo.group(1) != "manha" and h < 12:
             h += 12
-    elif h in HORA_AMBIGUA and not bruto.startswith("0"):
+        return h, mi, False
+    return h, mi, (h in HORA_AMBIGUA and not bruto.startswith("0"))
+
+
+def entender_hora(texto):
+    """-> (hora, dúvida). Aceita '15h', '10h30', '10:30', '14 horas', 'às 14',
+    '3 da tarde'. Sem hora: (None, None)."""
+    lida = _ler_hora(texto)
+    if lida is None:
+        return None, None
+    h, mi, ambigua = lida
+    if ambigua:
         return None, f"às {h} da manhã ou às {h + 12}h (da tarde)?"
     return time(h, mi), None
 
@@ -126,6 +137,45 @@ def _quando(dia, hora):
     return f"{relogio.DIAS_COMPLETOS[dia.weekday()]}, {dia:%d/%m}, às {hora:%H:%M}"
 
 
+def _rotulo_hora(h, mi):
+    return f"{h}h" if mi == 0 else f"{h}h{mi:02d}"
+
+
+def _duvida_de_hora(loja, tipo, texto, dia, agora):
+    """H16: na dúvida de "às 3", pergunta só pelo que cabe no expediente.
+    -> (dúvida, recusa). As duas cabem: pergunta as duas (como no H14).
+    Só uma cabe: "seria às 15h (3 da tarde)?". Nenhuma: recusa com o horário."""
+    lida = _ler_hora(texto)
+    if not lida or not lida[2]:
+        return entender_hora(texto)[1], None
+    h, mi, _ = lida
+    duracao = DURACAO_MIN.get(tipo, DURACAO_PADRAO)
+    dias = [dia] if dia is not None else [agora.date() + timedelta(days=n) for n in range(7)]
+
+    def cabe(hora):
+        return any(relogio.conferir_horario_marcado(loja, d, hora, duracao) is None for d in dias)
+
+    manha, tarde = time(h, mi), time(h + 12, mi)
+    texto_manha = f"às {_rotulo_hora(h, mi)} da manhã"
+    texto_tarde = f"às {_rotulo_hora(h + 12, mi)}" + (f" ({h} da tarde)" if mi == 0 else " (da tarde)")
+    cabe_manha, cabe_tarde = cabe(manha), cabe(tarde)
+    if cabe_manha and cabe_tarde:
+        return entender_hora(texto)[1], None
+    if cabe_tarde:
+        return f"seria {texto_tarde}?", None
+    if cabe_manha:
+        return f"seria {texto_manha}?", None
+    if dia is not None:
+        onde = relogio.conferir_horario_marcado(loja, dia, tarde, duracao)
+    else:
+        horario = relogio.descrever_horarios(loja)
+        onde = f"horário da loja: {horario}" if horario else "fora do horário da loja"
+    return None, (f"NÃO AGENDADO: nem {texto_manha} nem {texto_tarde} cabem no expediente "
+                  f"({onde}). Não diga que agendou e não escolha por ele: explique o horário e "
+                  "peça para o cliente confirmar outro dia e hora dentro do expediente; com a "
+                  "resposta, chame agendar_visita de novo.")
+
+
 def _avaliar(loja, tipo, texto, agora):
     """-> (recusa, quando). recusa = 'NÃO AGENDADO: ...' para o Léo, ou None."""
     hora, duvida_hora = entender_hora(texto)
@@ -139,6 +189,10 @@ def _avaliar(loja, tipo, texto, agora):
         fechado = relogio.conferir_horario_marcado(loja, dia, time(0, 0))
         if fechado and fechado.endswith("fechada"):
             return f"NÃO AGENDADO: {fechado}.{fim}{outro}", None
+    if duvida_hora:   # H16: só a alternativa que cabe no expediente
+        duvida_hora, recusa_hora = _duvida_de_hora(loja, tipo, texto, dia, agora)
+        if recusa_hora:
+            return recusa_hora, None
     duvidas = [d for d in (duvida_dia, duvida_hora) if d]
     if duvidas:
         return ("NÃO AGENDADO: preciso confirmar com o cliente: " + " ".join(duvidas)
