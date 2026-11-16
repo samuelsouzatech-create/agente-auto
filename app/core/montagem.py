@@ -72,7 +72,7 @@ DESCRICOES = {
                             "IDENTIDADE e vem do cadastro da loja."),
     "registrar_interesse": ("o cliente deixa claro, com as palavras dele, que quer um tempo, "
                             "que não tem mais interesse ou que não quer mais receber mensagens. "
-                            "Na dúvida, não use."),
+                            "Na dúvida, não use. Quando ficar claro, chame NESTA resposta, com a loja aberta ou fechada, e não pergunte se pode registrar. Ex.: 'agora não dá, talvez mês que vem' = situacao pediu_tempo."),
 }
 
 AVISOS_MODULO_DESLIGADO = {
