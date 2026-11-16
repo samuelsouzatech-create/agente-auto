@@ -136,6 +136,13 @@ PADROES_CONTATO = {
         r"(?:falar|entrar\s+em\s+contato|chamar|retornar|ligar|responder|combinar|continuar"
         r"|conversar|procurar|atender|acertar)\b",
         r"\b(?:retoma|retomam|retorna|retornam)\b[^.!?]{0,40}\bproximo\s+horario\b",
+        # H15: oferta de contato também é promessa ("registro seu interesse
+        # para que o pessoal da equipe fale com você").
+        r"\b(?:para|pra)\s+que\b[^.!?]{0,40}\b" + _EQUIPE + r"\b[^.!?]{0,30}\b(?:fale|falem|entre|entrem"
+        r"|chame|chamem|ligue|liguem|retorne|retornem|procure|procurem|converse|conversem|atenda|atendam"
+        r"|combine|combinem)\b",
+        r"\b" + _EQUIPE + r"\b[^.!?]{0,40}\b(?:possa|possam|pode|podem|poder|poderem)\s+(?:te\s+|lhe\s+)?"
+        r"(?:falar|conversar|ligar|retornar|entrar\s+em\s+contato|chamar|atender|combinar)\b",
     ),
     "registro": _r(
         r"\b(?:vou|vamos|ja\s+vou)\s+(?:registrar|anotar|cadastrar|deixar\s+(?:registrad|anotad))",
