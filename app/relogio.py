@@ -128,12 +128,29 @@ def abertura_do_dia(loja, dt: datetime, chave_horario: str = HORARIO_HUMANO) -> 
     return datetime.combine(local.date(), inicio, tzinfo=fuso(loja)).astimezone(timezone.utc)
 
 
+def fechamento_do_dia(loja, dt: datetime, chave_horario: str = HORARIO_HUMANO) -> datetime:
+    """H14: hora (UTC) em que o expediente de hoje termina, no fuso da loja.
+    Dia fechado: devolve o próprio 'dt' (nenhum minuto de expediente hoje)."""
+    local = hora_local(loja, dt)
+    if chave_horario != HORARIO_HUMANO:
+        _, fim = faixa(loja.get(chave_horario))
+    else:
+        faixa_hoje = _faixa_do_dia(loja, local.weekday())
+        if faixa_hoje is None:
+            return _utc(dt)
+        fim = faixa_hoje[1]
+    return datetime.combine(local.date(), fim, tzinfo=fuso(loja)).astimezone(timezone.utc)
+
+
 def minutos_no_expediente(loja, desde: datetime, agora: datetime,
                           chave_horario: str = HORARIO_HUMANO) -> int:
-    """Minutos de espera contados só a partir da abertura de hoje.
-    Lead que chamou às 23h: às 9h05 conta 5 minutos, e não 10 horas."""
+    """Minutos de espera contados só DENTRO do expediente de hoje:
+    da abertura de hoje (ou da chegada) até o fechamento de hoje (ou agora).
+    Lead que chamou às 23h: às 9h05 conta 5 minutos, e não 10 horas.
+    H14: chegou 17:50, loja fecha 18:00, olhou às 21:00 = 10 minutos, não 190."""
     inicio = max(_utc(desde), abertura_do_dia(loja, agora, chave_horario))
-    return max(0, int((_utc(agora) - inicio).total_seconds() // 60))
+    fim = min(_utc(agora), fechamento_do_dia(loja, agora, chave_horario))
+    return max(0, int((fim - inicio).total_seconds() // 60))
 
 
 def proxima_abertura_da_loja(loja, dt: datetime):
@@ -211,3 +228,23 @@ def horario_da_semana(loja) -> list[dict]:
                       "abre": h[0] if h else None, "fecha": h[1] if h else None,
                       "fechado": h is None})
     return saida
+
+# ------------------------------------------------------------ H14: horário marcado
+def conferir_horario_marcado(loja, dia, hora: time, duracao_min: int = 0):
+    """H14: None se 'hora' (no fuso da loja) cabe no expediente daquele dia,
+    contando a duração (a visita precisa TERMINAR até o fechamento).
+    Senão, devolve o motivo pronto, em português, com o horário certo do dia."""
+    d = _dia(dia)
+    quando = f"{DIAS_COMPLETOS[d.weekday()]}, {d:%d/%m}"
+    faixa_dia = _faixa_do_dia(loja, d.weekday())
+    if faixa_dia is None:
+        return f"{quando}: a loja fica fechada"
+    abre, fecha = faixa_dia
+    horario = f"a loja abre das {abre:%H:%M} às {fecha:%H:%M}"
+    if hora < abre or hora >= fecha:
+        return f"{quando}: {horario}"
+    ultimo = (datetime.combine(d, fecha) - timedelta(minutes=duracao_min)).time()
+    if hora > ultimo:
+        return (f"{quando}: {horario}; como leva {duracao_min} minutos, "
+                f"o último horário para começar é {ultimo:%H:%M}")
+    return None
