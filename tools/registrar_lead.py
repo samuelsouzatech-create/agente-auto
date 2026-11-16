@@ -1,6 +1,32 @@
 from typing import Annotated
 from langchain_core.tools import tool, InjectedToolArg
 from banco import conectar
+import re
+
+
+_DIA_FALADO = re.compile(r"\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b")
+
+
+def prazo_com_data(prazo, loja_id):
+    """H15: 'quer visitar amanhã às 10h' vira 'quer visitar amanhã às 10h (terça-feira, 17/11)'.
+    Usa o mesmo entender_dia do agendar_visita. Na dúvida, fica como veio."""
+    texto = (prazo or "").strip()
+    if not texto or "(" in texto:
+        return prazo
+    try:
+        from app import relogio
+        from app.lojas import carregar_loja
+        from tools.agendar_visita import _normal, entender_dia
+        if not _DIA_FALADO.search(_normal(texto)):
+            return prazo
+        loja = carregar_loja(loja_id)
+        agora = relogio.hora_local(loja, relogio.agora_utc())
+        dia, duvida = entender_dia(texto, agora)
+    except Exception:
+        return prazo
+    if dia is None or duvida:
+        return prazo
+    return f"{texto} ({relogio.DIAS_COMPLETOS[dia.weekday()]}, {dia:%d/%m})"
 
 
 @tool
@@ -23,6 +49,7 @@ def registrar_lead(nome: str, interesse: str, forma_pagamento: str = "",
     if not lead_id:
         return "Não registrei o lead: falta o identificador da conversa."
 
+    prazo = prazo_com_data(prazo, loja_id)
     conexao = conectar()
     try:
         existente = conexao.execute(

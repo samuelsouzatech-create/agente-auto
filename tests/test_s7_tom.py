@@ -95,7 +95,7 @@ def test_registrar_lead_grava_prazo():
         linha = con.execute("SELECT prazo FROM leads WHERE loja_id = 1 AND lead_id = 's7-visita'").fetchone()
     finally:
         con.close()
-    assert linha["prazo"] == "quer visitar sábado"
+    assert linha["prazo"].startswith("quer visitar sábado")  # H15: pode ganhar a data
 
 
 def _conversa(falas, mensagens):

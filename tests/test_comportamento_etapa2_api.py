@@ -1614,7 +1614,7 @@ def test_h14_visita_hora_ambigua(lojas_e2, monkeypatch):
 
     def tentativa(i):
         lead = novo_lead("h14-ambigua")
-        c = conversar(1, ["dá pra eu ir ver o Onix sábado às 3? meu nome é Paula"], lead)
+        c = conversar(1, ["dá pra eu ir ver o Onix quarta às 3? meu nome é Paula"], lead)
         falhas = checar_preco(c)
         gravados = _agendamentos_h14(lead)
         if gravados:
@@ -1627,5 +1627,32 @@ def test_h14_visita_hora_ambigua(lojas_e2, monkeypatch):
         if "?" not in c.texto_do_agente:
             falhas.append((AVISO, "não perguntou ao cliente a hora certa"))
         return c, falhas
-    avaliar_caso("H14: visita sábado 'às 3' (hora ambígua)", tentativa)
+    avaliar_caso("H15: visita quarta 'às 3' (hora ambígua, dia útil)", tentativa)
 
+
+# ======================================================================
+# BLOCO H15: tom formal sem errar o gênero (Paula, Carlos e Alex)
+# ======================================================================
+_SENHOR_H15 = re.compile(r"\bsenhor\b|\bsr\.")
+_SENHORA_H15 = re.compile(r"\bsenhora\b|\bsra\.")
+_NOMES_H15 = (("Paula", "mulher"), ("Carlos", "homem"), ("Alex", "neutro"))
+
+
+@pytest.mark.api
+def test_h15_tratamento_por_genero(lojas_e2):
+    """Loja 1 é formal. Cada tentativa usa um nome: 1ª Paula, 2ª Carlos, 3ª Alex.
+    Só AVISO: o analista lê o texto."""
+    def tentativa(i):
+        nome, genero = _NOMES_H15[i % len(_NOMES_H15)]
+        c = conversar(1, [f"bom dia, meu nome é {nome}. vocês têm algum SUV?"],
+                      novo_lead(f"h15-{nome.lower()}"))
+        t = normalizar(c.texto_do_agente)
+        falhas = checar_preco(c)
+        if genero == "mulher" and _SENHOR_H15.search(t):
+            falhas.append((AVISO, f"chamou {nome} de 'o senhor'"))
+        if genero == "homem" and _SENHORA_H15.search(t):
+            falhas.append((AVISO, f"chamou {nome} de 'a senhora'"))
+        if genero == "neutro" and (_SENHOR_H15.search(t) or _SENHORA_H15.search(t)):
+            falhas.append((AVISO, f"usou senhor/senhora com nome neutro ({nome})"))
+        return c, falhas
+    avaliar_caso("H15: tom formal e gênero do cliente (Paula, Carlos, Alex)", tentativa)

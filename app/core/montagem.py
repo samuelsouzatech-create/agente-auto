@@ -52,7 +52,11 @@ DESCRICOES = {
     "detalhes_veiculo": "o cliente quer saber mais de um carro específico que já apareceu na conversa.",
     "simular_financiamento": "o cliente pede simulação de parcelas (sempre com o aviso de estimativa).",
     "registrar_troca": "o cliente diz que tem um carro para dar na troca.",
-    "agendar_visita": "o cliente quer visitar a loja, fazer test-drive ou receber uma ligação.",
+    "agendar_visita": ("o cliente quer visitar a loja, fazer test-drive ou receber uma ligação. "
+                       'Em data_hora, passe o dia e a hora EXATAMENTE como o cliente falou '
+                       '("quarta às 3" fica "quarta às 3"): não converta "às 3" em 15h, '
+                       'não escolha o dia por ele e não faça conta de data. Quem entende e '
+                       'confere é a ferramenta; se ela pedir confirmação, pergunte ao cliente.'),
     "enviar_fotos": ("o cliente pede fotos. Se ele não disser de qual carro "
                      "(ex.: 'manda o que tiver'), chame sem filtros: a ferramenta "
                      "diz quais carros têm fotos."),
@@ -305,7 +309,12 @@ def _camada_do_tom(loja) -> str:
     ]
     if _TOM_FORMAL.search(tom.lower()):
         linhas.append('- Tom formal: trate o cliente por "o senhor" ou "a senhora" desde a primeira '
-                      'frase. Nada de gírias, "tá?", "beleza" ou "show".')
+                      'frase, quando o gênero estiver claro. Nada de gírias, "tá?", "beleza" ou "show".')
+        linhas.append('- Gênero do cliente: "o senhor" só se for claramente homem e "a senhora" só se '
+                      'for claramente mulher, pelo nome (ex.: Carlos, Paula) ou pelo que o próprio '
+                      'cliente disse. Sem nome, ou com nome que serve para os dois (ex.: Alex, Ariel, '
+                      'Darci), não use senhor nem senhora: chame pelo nome ("Alex, ...") e use frases '
+                      'formais sem gênero (ex.: "Posso ajudar com mais alguma informação?").')
     linhas.append(f'- Ao falar de si, não marque gênero: diga "aqui é {nome}", nunca '
                   f'"aqui é o {nome}" nem "aqui é a {nome}".')
     return "\n".join(linhas)
