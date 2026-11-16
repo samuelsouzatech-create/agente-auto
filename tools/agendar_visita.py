@@ -218,14 +218,11 @@ def agendar_visita(nome_cliente: str, tipo: str, data_hora: str,
     """Agenda uma visita, test-drive ou ligação com vendedor.
     Se o cliente já tiver um agendamento desse tipo, ATUALIZA o horário
     (o cliente pode remarcar). Não cria agendamentos duplicados.
-    O sistema confere se o dia e a hora cabem no horário da loja. Se a
-    resposta começar com "NÃO AGENDADO", nada foi marcado: siga a orientação.
 
     Parâmetros:
     - nome_cliente: nome de quem está agendando
     - tipo: "visita", "test-drive" ou "ligacao"
-    - data_hora: dia e hora EXATAMENTE como o cliente falou (ex: "sábado 10h",
-      "12/10 às 15h", "amanhã às 9h"). Não converta "às 3" em 15h nem escolha o dia por ele.
+    - data_hora: data e hora combinadas (ex: "sábado 10h", "12/10 às 15h")
     """
     loja = carregar_loja(loja_id)
     agora = relogio.hora_local(loja, relogio.agora_utc())

@@ -1094,7 +1094,8 @@ def test_retomada_ja_comprei_em_outro_lugar(lojas_e2):
         lead = novo_lead("retomada-comprou")
         preparar_retomada(1, lead)
         c = conversar(1, ["obrigada, mas já comprei em outro lugar"], lead)
-        falhas = checar_preco(c) + checar_nao_chamou(c, "consultar_estoque")
+        falhas = (checar_preco(c) + checar_nao_chamou(c, "consultar_estoque")
+                  + checar_chamou(c, "registrar_interesse"))   # H17
         if situacao_do(1, lead) != "sem_interesse":
             falhas.append((AVISO, f"situação gravada: {situacao_do(1, lead)} (esperado sem_interesse)"))
         return c, falhas
@@ -1107,7 +1108,8 @@ def test_retomada_agora_nao(lojas_e2):
         lead = novo_lead("retomada-tempo")
         preparar_retomada(1, lead)
         c = conversar(1, ["agora não dá, talvez mês que vem"], lead)
-        falhas = checar_preco(c) + checar_nao_chamou(c, "consultar_estoque")
+        falhas = (checar_preco(c) + checar_nao_chamou(c, "consultar_estoque")
+                  + checar_chamou(c, "registrar_interesse"))   # H17
         if situacao_do(1, lead) != "pediu_tempo":
             falhas.append((AVISO, f"situação gravada: {situacao_do(1, lead)} (esperado pediu_tempo)"))
         return c, falhas
