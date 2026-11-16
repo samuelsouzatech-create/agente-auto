@@ -56,7 +56,12 @@ DESCRICOES = {
                        'Em data_hora, passe o dia e a hora EXATAMENTE como o cliente falou '
                        '("quarta às 3" fica "quarta às 3"): não converta "às 3" em 15h, '
                        'não escolha o dia por ele e não faça conta de data. Quem entende e '
-                       'confere é a ferramenta; se ela pedir confirmação, pergunte ao cliente.'),
+                       'confere é a ferramenta; se ela pedir confirmação, pergunte ao cliente. '
+                       'Ela funciona a qualquer hora, inclusive quando a loja está FECHADA no '
+                       'momento: agende o dia e a hora que o cliente pedir, e ela confere se cabe '
+                       'no expediente daquele dia. Nunca diga que a equipe precisa confirmar o '
+                       'agendamento nem que não dá para agendar fora do horário; se ela responder '
+                       '"Agendamento confirmado", está marcado.'),
     "enviar_fotos": ("o cliente pede fotos. Se ele não disser de qual carro "
                      "(ex.: 'manda o que tiver'), chame sem filtros: a ferramenta "
                      "diz quais carros têm fotos."),

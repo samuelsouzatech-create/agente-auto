@@ -691,7 +691,7 @@ def avaliar_caso(nome: str, tentativa_fn):
         antes = (RODADA.tokens_entrada, RODADA.tokens_saida)
         try:
             conversas, falhas = tentativa_fn(i)
-            tentativa = Tentativa(falhas=list(falhas) + avisos_s5(conversas) + avisos_s7(conversas) + avisos_visita(conversas), resposta=_texto_das(conversas), linhas=linhas_da_tentativa(conversas))
+            tentativa = Tentativa(falhas=list(falhas) + avisos_s5(conversas) + avisos_s7(conversas) + avisos_visita(conversas) + avisos_genero_h16(conversas), resposta=_texto_das(conversas), linhas=linhas_da_tentativa(conversas))
         except Exception as erro:
             tentativa = Tentativa(erro=f"{type(erro).__name__}: {erro}"[:300])
         tentativa.custo_usd = custo_usd(RODADA.tokens_entrada - antes[0],
@@ -1549,11 +1549,13 @@ def _agendamentos_h14(lead):
                               (lead,))]
 
 
-def _caso_visita_recusada(fala, esperado_re, rotulo):
+def _caso_visita_recusada(fala, esperado_re, rotulo, deve_chamar=None):
     def tentativa(i):
         lead = novo_lead("h14-visita")
         c = conversar(1, [fala], lead)
         falhas = checar_preco(c)
+        if deve_chamar:   # H16: a ferramenta funciona a qualquer hora
+            falhas += checar_chamou(c, deve_chamar)
         gravados = _agendamentos_h14(lead)
         if gravados:
             falhas.append((PROMESSA, f"gravou visita fora do expediente: {gravados}"))
@@ -1578,7 +1580,7 @@ def test_h14_visita_sabado_15h(lojas_e2, monkeypatch):
     _fixar_relogio_da_ferramenta(monkeypatch)
     avaliar_caso("H14: visita no sábado às 15h", _caso_visita_recusada(
         "posso passar aí sábado às 15h pra ver o Onix? meu nome é Paula",
-        hora_re(13), "sábado até 13:00"))
+        hora_re(13), "sábado até 13:00", deve_chamar="agendar_visita"))
 
 
 @pytest.mark.api
@@ -1656,3 +1658,47 @@ def test_h15_tratamento_por_genero(lojas_e2):
             falhas.append((AVISO, f"usou senhor/senhora com nome neutro ({nome})"))
         return c, falhas
     avaliar_caso("H15: tom formal e gênero do cliente (Paula, Carlos, Alex)", tentativa)
+
+
+
+# ======================================================================
+# Bloco H16: tratamento x gênero em TODOS os casos com nome conhecido.
+# Só medida (AVISO), para a comparação com o Haiku. Não é conserto.
+# ======================================================================
+NOMES_FEMININOS_H16 = {"paula", "carla", "ana", "maria", "juliana", "fernanda", "patricia",
+                       "mariana", "beatriz", "camila", "larissa"}
+NOMES_MASCULINOS_H16 = {"carlos", "joao", "pedro", "lucas", "marcos", "rafael", "ricardo",
+                        "roberto", "fernando", "bruno"}
+NOMES_NEUTROS_H16 = {"alex", "ariel", "darci", "sam", "cris", "dani", "jordan", "robin"}
+GENERO_H16 = "tratamento sem bater com o gênero (medida H16)"
+
+
+def nome_do_cliente_h16(falas):
+    """(nome, 'f' | 'm' | '?') do primeiro nome conhecido que o cliente disse."""
+    texto = normalizar(" ".join(falas or []))
+    texto = re.sub(r"\bsao\s+\w+", " ", texto)      # São Paulo, São Carlos: lugar, não nome
+    for palavra in re.findall(r"[a-z]+", texto):
+        if palavra in NOMES_FEMININOS_H16:
+            return palavra, "f"
+        if palavra in NOMES_MASCULINOS_H16:
+            return palavra, "m"
+        if palavra in NOMES_NEUTROS_H16:
+            return palavra, "?"
+    return None, None
+
+
+def avisos_genero_h16(conversas) -> list:
+    saida = []
+    for c in _lista_de_conversas(conversas):
+        nome, genero = nome_do_cliente_h16(c.falas)
+        if not nome:
+            continue
+        for frase in frases(c.texto_do_agente):
+            errado = (re.search(r"\bsenhorita\b", frase)
+                      or (genero == "f" and re.search(r"\bsenhor\b", frase))
+                      or (genero == "m" and re.search(r"\bsenhora\b", frase))
+                      or (genero == "?" and re.search(r"\bsenhora?\b", frase)))
+            if errado:
+                saida.append((AVISO, f'{GENERO_H16}: {nome.capitalize()} -> "{frase[:120]}"'))
+                break
+    return saida

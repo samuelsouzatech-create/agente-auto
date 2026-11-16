@@ -180,3 +180,28 @@ DETECTORES.append((AVISO_DE_CHEGADA, True, _r(
     r"\b" + _CHEGAR + r"[^.!?]{0,40}\b" + _AVISO_EU + r"\b",
     r"\b(?:anot\w*|registr\w*)\b[^.!?]{0,40}\binteresse\b[^.!?]{0,30}\b" + _CHEGAR,
 )))
+
+
+# ======================================================================
+# Bloco H16: o agendamento funciona a qualquer hora; o Léo não pode dizer
+# que a equipe precisa confirmar. E oferta de contato "para a equipe
+# verificar". Só AVISO, nunca reprovam.
+# ======================================================================
+AGENDA_SEM_CONFIRMAR = "disse que a equipe precisa confirmar o agendamento"
+
+DETECTORES.append((AGENDA_SEM_CONFIRMAR, False, _r(
+    r"\bnao\s+(?:consegue|conseguem|consigo|conseguimos|da\s+para|da\s+pra|e\s+possivel|posso|podemos"
+    r"|pode|podem|vai\s+conseguir|vao\s+conseguir)\s+(?:\w+\s+){0,2}confirmar\b[^.!?]{0,40}"
+    r"\b(?:agendamento|agenda|visita|horario|test-?drive)\b",
+    r"\b(?:equipe|pessoal|vendedor\w*|alguem|gerente|consultor\w*|atendente\w*)\b[^.!?]{0,40}?"
+    r"\b(?:precisa|precisam|vai|vao|ira|irao|tem\s+que|tera\s+que)\s+(?:\w+\s+)?confirmar\b[^.!?]{0,30}"
+    r"\b(?:agendamento|agenda|visita|horario|test-?drive|dia)\b",
+    r"\b(?:sujeit[oa]|depende|dependendo)\s+(?:a|de|da|do)\s+confirmacao\b",
+    r"\baguard\w*\s+(?:a\s+)?confirmacao\b",
+    r"\b(?:agendamento|visita|horario)\b[^.!?]{0,30}\b(?:pre-?\s?agendad\w*|a\s+confirmar)\b",
+)))
+
+PADROES_CONTATO["contato"].append(re.compile(
+    r"\b(?:registr\w*|anot\w*|cadastr\w*)\b[^.!?]{0,40}\b(?:para|pra)\b[^.!?]{0,30}\b" + _EQUIPE
+    + r"\b[^.!?]{0,30}\b(?:verific\w*|verifiqu\w*|analis\w*|avali\w*|confer\w*|confir\w*|cuid\w*"
+    r"|possa|possam|fal\w*|entr\w+\s+em\s+contato|retorn\w*|lig\w*|cham\w*|convers\w*|procur\w*)\b"))
