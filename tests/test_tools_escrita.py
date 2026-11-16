@@ -11,6 +11,18 @@ import banco
 from banco import criar_tabelas
 from tools import registrar_lead, registrar_troca, agendar_visita, acionar_handoff
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+# H14: a ferramenta agora confere o dia de verdade. "segunda" dita NA segunda
+# vira pergunta ao cliente (e "sábado" dito NO sábado também). Para o teste
+# não depender do dia em que roda, usamos um dia útil que NÃO é hoje.
+_HOJE = datetime.now(ZoneInfo("America/Recife")).weekday()
+DIA_DA_VISITA = next(
+    nome for numero, nome in ((2, "quarta"), (3, "quinta"), (4, "sexta"))
+    if numero != _HOJE
+)
+
 
 @pytest.fixture
 def banco_temporario(monkeypatch):
@@ -123,7 +135,7 @@ def test_registrar_troca_grava_com_lead_id(banco_temporario):
 def test_agendar_visita_grava(banco_temporario):
     agendar_visita.invoke({
         "nome_cliente": "João", "tipo": "visita",
-        "data_hora": "sábado 10h", "loja_id": 1, "lead_id": "conversa-1"
+        "data_hora": DIA_DA_VISITA + " 10h", "loja_id": 1, "lead_id": "conversa-1"
     })
     assert contar_linhas(banco_temporario, "agendamentos") == 1
     # Confere que os dados foram realmente gravados, não só a linha criada
@@ -149,11 +161,11 @@ def test_agendar_visita_remarcar_nao_duplica(banco_temporario):
     # Mesmo lead, mesmo tipo, horário diferente = remarcação, NÃO duplicação.
     agendar_visita.invoke({
         "nome_cliente": "Marina", "tipo": "visita",
-        "data_hora": "sábado 10h", "loja_id": 1, "lead_id": "conversa-rem"
+        "data_hora": DIA_DA_VISITA + " 10h", "loja_id": 1, "lead_id": "conversa-rem"
     })
     agendar_visita.invoke({
         "nome_cliente": "Marina", "tipo": "visita",
-        "data_hora": "sábado 11h", "loja_id": 1, "lead_id": "conversa-rem"
+        "data_hora": DIA_DA_VISITA + " 11h", "loja_id": 1, "lead_id": "conversa-rem"
     })
     # Deve existir UMA linha só...
     assert contar_linhas(banco_temporario, "agendamentos") == 1
@@ -164,18 +176,19 @@ def test_agendar_visita_remarcar_nao_duplica(banco_temporario):
     cursor.execute("SELECT * FROM agendamentos WHERE lead_id = ?", ("conversa-rem",))
     linha = cursor.fetchone()
     conexao.close()
-    assert linha["data_hora"] == "sábado 11h"
+    # H14b: o banco guarda a data já resolvida (ex.: "quarta, 18/11, às 11:00").
+    assert "11:00" in linha["data_hora"]
 
 
 def test_agendar_visita_tipos_diferentes_sao_separados(banco_temporario):
     # Mesmo lead, mas tipos diferentes = agendamentos separados (visita + ligação).
     agendar_visita.invoke({
         "nome_cliente": "Marina", "tipo": "visita",
-        "data_hora": "sábado 10h", "loja_id": 1, "lead_id": "conversa-tipos"
+        "data_hora": DIA_DA_VISITA + " 10h", "loja_id": 1, "lead_id": "conversa-tipos"
     })
     agendar_visita.invoke({
         "nome_cliente": "Marina", "tipo": "ligacao",
-        "data_hora": "segunda 14h", "loja_id": 1, "lead_id": "conversa-tipos"
+        "data_hora": DIA_DA_VISITA + " 14h", "loja_id": 1, "lead_id": "conversa-tipos"
     })
     assert contar_linhas(banco_temporario, "agendamentos") == 2
 

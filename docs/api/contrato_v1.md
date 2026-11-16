@@ -218,3 +218,12 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
 - `GET /auth/eu` e `POST /auth/login`: o objeto `loja` ganha dois campos **opcionais**: `horario` (os 7 dias, de 0 = segunda a 6 = domingo, cada um com `dia`, `dia_texto`, `abre`, `fecha` e `fechado`) e `horario_texto` (texto pronto para mostrar). Vêm do cadastro da loja. Não existe `aberta_agora`: muda a cada minuto e o front não precisa dele hoje. `/saude` não muda.
 - Lacuna conhecida: a espera de um cliente que atravessa a noite conta a partir da abertura do dia em que é vista (imprecisão de poucos minutos). Fica assim por decisão do analista.
 - Pendência (fora do H13): `agendar_visita` ainda aceita visita fora do expediente (ex.: domingo com a loja fechada). Bloco próprio, depois da demo e antes da primeira loja real.
+
+## Lacuna registrada no H14 (15/11/2026)
+
+- Duração da visita: regra fixa no código (`tools/agendar_visita.py`, `DURACAO_MIN`):
+  visita e test-drive 30 minutos, ligação 0. Não há campo editável nem campo na API.
+  Se uma loja pedir outra duração, vira bloco pequeno (campo em Configuração e no contrato).
+- O agendamento passa a guardar a data já resolvida (ex.: "sábado, 14/11, às 10:00"),
+  e não mais o texto do cliente ("amanhã às 10h"). Sem migração: a coluna é texto livre.
+

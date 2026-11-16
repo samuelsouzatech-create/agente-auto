@@ -903,8 +903,8 @@ def test_comprador_pergunta_horario_sem_handoff(lojas_e2):
         falhas = checar_nao_chamou(c, "acionar_handoff") + checar_preco(c)
         # H13: o horário vem só do cadastro (loja 1: sábado das 08:00 às 13:00).
         texto = normalizar(c.texto_do_agente)
-        if not (re.search(hora_re(8), texto) and re.search(hora_re(13), texto)):
-            falhas.append((AVISO, "não informou o horário de sábado do cadastro (08:00 às 13:00)"))
+        if not (re.search(hora_re(8), texto) or re.search(hora_re(13), texto)):
+            falhas.append((AVISO, "não informou a hora de sábado que importa agora (08:00 ou 13:00)"))
         return c, falhas
     avaliar_caso("comprador: horário da loja (sem handoff)", tentativa)
 
@@ -1530,3 +1530,102 @@ def test_h13_pede_vendedor_com_loja_fechada(lojas_e2):
                   + checar_status_h13(c, so_fechada=True))
         return c, falhas
     avaliar_caso("horário: pede vendedor (loja aberta ou fechada)", tentativa)
+
+
+# ======================================================================
+# BLOCO H14: visita fora do expediente (relógio fixo também na ferramenta)
+# ======================================================================
+_DISSE_MARCADA = re.compile(r"\b(agendad|marcad|confirmad)\w*")
+
+
+def _fixar_relogio_da_ferramenta(monkeypatch):
+    """agendar_visita lê relogio.agora_utc(): usa a mesma hora fixa do cenário."""
+    from app import relogio
+    monkeypatch.setattr(relogio, "agora_utc", agora_do_teste)
+
+
+def _agendamentos_h14(lead):
+    return [r["data_hora"] for r in ler("SELECT data_hora FROM agendamentos WHERE loja_id = 1 AND lead_id = ?",
+                              (lead,))]
+
+
+def _caso_visita_recusada(fala, esperado_re, rotulo):
+    def tentativa(i):
+        lead = novo_lead("h14-visita")
+        c = conversar(1, [fala], lead)
+        falhas = checar_preco(c)
+        gravados = _agendamentos_h14(lead)
+        if gravados:
+            falhas.append((PROMESSA, f"gravou visita fora do expediente: {gravados}"))
+        falhas += checar_frases(frases_com(c.texto_do_agente, [_DISSE_MARCADA]),
+                                AVISO, "disse que a visita ficou marcada")
+        if not re.search(esperado_re, normalizar(c.texto_do_agente)):
+            falhas.append((AVISO, f"não informou o horário certo do dia ({rotulo})"))
+        return c, falhas
+    return tentativa
+
+
+@pytest.mark.api
+def test_h14_visita_domingo(lojas_e2, monkeypatch):
+    _fixar_relogio_da_ferramenta(monkeypatch)
+    avaliar_caso("H14: visita no domingo", _caso_visita_recusada(
+        "quero ver o Onix pessoalmente no domingo às 10h, meu nome é Paula",
+        r"fechad|nao funciona|nao abre|nao atend|nao (realiza|faz|tem) atendimento", "domingo fechado"))
+
+
+@pytest.mark.api
+def test_h14_visita_sabado_15h(lojas_e2, monkeypatch):
+    _fixar_relogio_da_ferramenta(monkeypatch)
+    avaliar_caso("H14: visita no sábado às 15h", _caso_visita_recusada(
+        "posso passar aí sábado às 15h pra ver o Onix? meu nome é Paula",
+        hora_re(13), "sábado até 13:00"))
+
+
+@pytest.mark.api
+def test_h14_visita_amanha_grava_data(lojas_e2, monkeypatch):
+    _fixar_relogio_da_ferramenta(monkeypatch)
+    # H14c: "amanhã" sai do relógio da rodada, não de uma data fixa.
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+    agora = agora_do_teste()
+    if agora.tzinfo is None:
+        agora = agora.replace(tzinfo=timezone.utc)
+    amanha = agora.astimezone(ZoneInfo("America/Recife")) + timedelta(days=1)
+    if amanha.weekday() == 6:
+        pytest.skip("amanhã é domingo (loja fechada): este caso roda nos outros dias")
+    dia_amanha = amanha.strftime("%d/%m")
+
+    def tentativa(i):
+        lead = novo_lead("h14-amanha")
+        c = conversar(1, ["posso ir amanhã às 10h ver o Onix? meu nome é Paula"], lead)
+        falhas = checar_preco(c)
+        gravados = _agendamentos_h14(lead)
+        if not gravados:
+            falhas.append((AVISO, "não agendou a visita dentro do expediente"))
+        elif not any(dia_amanha in g and "10:00" in g for g in gravados):
+            falhas.append((PROMESSA, f"gravou a visita no dia errado: {gravados}"))
+        return c, falhas
+    avaliar_caso("H14: visita amanhã às 10h (grava a data resolvida)", tentativa)
+
+
+@pytest.mark.api
+def test_h14_visita_hora_ambigua(lojas_e2, monkeypatch):
+    _fixar_relogio_da_ferramenta(monkeypatch)
+
+    def tentativa(i):
+        lead = novo_lead("h14-ambigua")
+        c = conversar(1, ["dá pra eu ir ver o Onix sábado às 3? meu nome é Paula"], lead)
+        falhas = checar_preco(c)
+        gravados = _agendamentos_h14(lead)
+        if gravados:
+            falhas.append((PROMESSA, f'agendou sem confirmar a hora ("às 3"): {gravados}'))
+        for m in c.mensagens:
+            for ch in (getattr(m, "tool_calls", None) or []):
+                arg = normalizar(str((ch.get("args") or {}).get("data_hora", "")))
+                if ch.get("name") == "agendar_visita" and re.search(r"\b15(h|:|\b)|tarde", arg):
+                    falhas.append((AVISO, "o Léo decidiu sozinho que 'às 3' é 15h"))
+        if "?" not in c.texto_do_agente:
+            falhas.append((AVISO, "não perguntou ao cliente a hora certa"))
+        return c, falhas
+    avaliar_caso("H14: visita sábado 'às 3' (hora ambígua)", tentativa)
+
