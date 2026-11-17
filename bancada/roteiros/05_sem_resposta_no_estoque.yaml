@@ -1,0 +1,10 @@
+nome: sem_resposta_no_estoque
+falas:
+  - o Civic 2019 tem laudo cautelar?
+  - ele já foi de leilão?
+  - e o IPVA desse ano tá pago?
+deve:
+  handoff: sim
+  contem: ["confirm|verific"]
+nao_pode: [preco_inventado]
+pendente: L2

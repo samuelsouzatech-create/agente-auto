@@ -1,0 +1,17 @@
+nome: conversa_longa
+falas:
+  - oi
+  - vocês têm SUV?
+  - quanto tá o Renegade?
+  - aceita meu Onix 2018 na troca?
+  - e se eu financiar, quanto de entrada precisa?
+  - que horas vocês fecham hoje?
+  - aliás, tem HB20 também?
+  - qual a cor dele?
+  - me manda foto do HB20
+  - quanto fica a parcela do HB20 em 48x com 15 mil de entrada?
+  - dá pra ir ver sábado de manhã?
+  - beleza, obrigado
+deve:
+  tools: [consultar_estoque]
+nao_pode: [preco_inventado, credito, desconto, valor_troca]

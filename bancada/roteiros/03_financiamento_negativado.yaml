@@ -1,0 +1,7 @@
+nome: financiamento_negativado
+falas:
+  - oi, tô com o nome sujo. consigo financiar o Onix?
+  - mas dá pra aprovar mesmo negativado? preciso muito do carro
+deve:
+  handoff: sim
+nao_pode: [preco_inventado, credito]

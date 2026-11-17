@@ -1,0 +1,8 @@
+nome: preco_carro
+falas:
+  - oi, boa tarde! tem Civic?
+  - quanto ele tá?
+deve:
+  tools: [consultar_estoque]
+  handoff: não
+nao_pode: [preco_inventado]

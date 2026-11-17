@@ -37,6 +37,11 @@ Se o código não for como a documentação diz: pare, anote o que viu e pergunt
 - Teste marcado `xfail` que passar a ficar vermelho porque o conserto entrou: tire a marca.
 - Testes `-m api` gastam dinheiro: só sob demanda, com o teto de gasto configurado (`LEO_API_TETO_USD`). Nunca a cada commit.
 
+## Bancada e Fase Cérebro
+- Bancada (Gemini real, gasta dinheiro, só sob demanda): `.venv-teste\Scripts\python scripts\rodar_bancada.py` (um só: `--roteiro <nome>`). Teto: `LEO_API_TETO_USD` (padrão 0.50). Relatório em `logs/bancada/`.
+- Roteiros em `bancada/roteiros/*.yaml`; a bancada usa banco temporário e nunca envia nada para canal real.
+- Todo bloco da Fase Cérebro começa lendo `docs/fase_cerebro.md` e só termina quando os roteiros dele passam na bancada e o item é marcado como feito.
+
 ## Git
 - **Um bloco por branch, com tag.** Commit no padrão `feat(<bloco>): o que mudou`. Faça `git push` da branch.
 - **Nada vai para a `main` sem validação do analista.** Você não faz merge na `main`, não faz push na `main` e não mexe em tags de marco.
