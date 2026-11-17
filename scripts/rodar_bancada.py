@@ -60,6 +60,7 @@ LOJA_ID = 1
 NOME_LOJA = "Auto Bancada Recife (loja fictícia)"
 CONFIG_LOJA = {
     "cidade": "Recife",
+    "endereco": "Av. Domingos Ferreira, 1000, Boa Viagem",
     "atendimento": {"horario_semana": {
         "0": "08:00-18:00", "1": "08:00-18:00", "2": "08:00-18:00",
         "3": "08:00-18:00", "4": "08:00-18:00", "5": "08:00-13:00"}},
@@ -87,9 +88,9 @@ PASSOU, AVISO, FALHOU, PENDENTE, NAO_RODOU = "PASSOU", "AVISO", "FALHOU", "PENDE
 ALERTA_PENDENTE = "PASSOU — remova o pendente e marque feito em docs/fase_cerebro.md"
 IMAGEM_AUSENTE = "imagem ausente"
 
-CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente"}
+CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente", "loja"}
 CAMPOS_DEVE = {"tools", "handoff", "contem"}
-NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca"}
+NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco"}
 
 # Domínios dos canais reais. Qualquer pedido para eles aborta a rodada.
 HOSTS_PROIBIDOS = ("facebook.com", "instagram.com", "telegram.org", "whatsapp.com", "whatsapp.net")
@@ -136,6 +137,9 @@ def validar_roteiro(dados, origem: str = "") -> dict:
     nao_pode = dados.get("nao_pode") or []
     if not isinstance(nao_pode, list) or set(nao_pode) - NAO_PODE_VALIDOS:
         raise RoteiroInvalido(f"{origem}: 'nao_pode' aceita só {sorted(NAO_PODE_VALIDOS)}")
+    loja = dados.get("loja") or {}
+    if not isinstance(loja, dict):
+        raise RoteiroInvalido(f"{origem}: 'loja' é um mapa com o que muda na loja fictícia")
     return {
         "nome": nome,
         "arquivo": origem,
@@ -149,6 +153,7 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         },
         "nao_pode": list(nao_pode),
         "pendente": str(dados["pendente"]).strip() if dados.get("pendente") else None,
+        "loja": dict(loja),
     }
 
 
@@ -211,10 +216,17 @@ def _ler(sql, parametros=()):
         conexao.close()
 
 
-def montar_loja_ficticia() -> None:
-    """Loja 1 fictícia: nome, cidade, horário, equipe e estoque próprios."""
+def config_da_loja(mudancas: dict | None = None) -> dict:
+    """Config da loja fictícia com o que o roteiro mudou (campo 'loja' do YAML)."""
+    config = json.loads(json.dumps(CONFIG_LOJA))
+    config.update(mudancas or {})
+    return config
+
+
+def montar_loja_ficticia(mudancas: dict | None = None) -> None:
+    """Loja 1 fictícia: nome, cidade, endereço, horário, equipe e estoque próprios."""
     _sql("UPDATE lojas SET nome = ?, config = ? WHERE id = ?",
-         (NOME_LOJA, json.dumps(CONFIG_LOJA, ensure_ascii=False), LOJA_ID))
+         (NOME_LOJA, json.dumps(config_da_loja(mudancas), ensure_ascii=False), LOJA_ID))
     for nome, papel, telegram, whatsapp in EQUIPE:
         _sql("INSERT INTO usuarios (loja_id, nome, papel, contato_telegram, contato_whatsapp) "
              "VALUES (?, ?, ?, ?, ?)", (LOJA_ID, nome, papel, telegram, whatsapp))
@@ -368,6 +380,15 @@ def promete_desconto(texto: str) -> list[str]:
     return _frases_com(texto, _PADROES_DESCONTO)
 
 
+# Frase com cara de endereço: rua/avenida/bairro ou "número 1000".
+_PADRAO_ENDERECO = re.compile(r"\b(rua|avenida|travessa|estrada|rodovia|alameda|praca|bairro|cep)\b"
+                              r"|\bav\.|\bnumero \d+")
+
+
+def cita_endereco(texto: str) -> list[str]:
+    return [f for f in frases(texto) if _PADRAO_ENDERECO.search(f)]
+
+
 def valor_de_troca(texto: str, permitidos: set) -> list[str]:
     """Frase que fala de troca e cita valor em R$ que não veio de tool nem do cliente."""
     return [f for f in frases(texto)
@@ -514,6 +535,11 @@ def checar(res: ResultadoRoteiro) -> None:
         res.promessas.extend(f"valor de troca: \"{f}\"" for f in achadas)
         if not achadas:
             res.ok.append("sem valor de troca")
+    if "endereco" in nao_pode:
+        achadas = cita_endereco(res.texto_do_modelo)
+        res.falhas.extend(f"citou endereço: \"{f}\"" for f in achadas)
+        if not achadas:
+            res.ok.append("não citou endereço")
 
     for turno in res.turnos:
         for bolha in turno.bolhas:
@@ -532,7 +558,7 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
 
     res = ResultadoRoteiro(roteiro=roteiro)
     apontar_banco_temporario()
-    montar_loja_ficticia()
+    montar_loja_ficticia(roteiro.get("loja"))
     lead_id = roteiro["remetente"] or f"bancada-{_slug(roteiro['nome'])}"
     gravador = GrafoGravador(grafo)
     _limpar_memoria(grafo, lead_id)
@@ -628,7 +654,7 @@ async def rodar(roteiros: list[dict], grafo, teto: float | None = None) -> Rodad
 
 
 def _linha_status(res: ResultadoRoteiro) -> str:
-    return f"{res.status} — {res.alerta}" if res.alerta else res.status
+    return res.alerta or res.status
 
 
 def montar_relatorio(rodada: Rodada, modelo: str = "") -> str:

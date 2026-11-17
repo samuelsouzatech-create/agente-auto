@@ -7,4 +7,3 @@ deve:
   handoff: sim
   contem: ["confirm|verific"]
 nao_pode: [preco_inventado]
-pendente: L2

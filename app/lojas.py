@@ -66,6 +66,7 @@ CHAVES_DO_OPERADOR = frozenset({
 PADROES: dict = {
     "nome_agente": "Léo",
     "cidade": "",
+    "endereco": "",                               # L2: vazio = o Léo não sabe e passa para a equipe
     "tom": "simples, cordial e direto",
     "fuso": "America/Recife",
     "atendimento": {
@@ -249,6 +250,7 @@ def _fuso(v):
 EDITAVEIS: dict[str, Callable] = {
     "nome_agente": _texto(1, 40),
     "cidade": _texto(0, 80),
+    "endereco": _texto(0, 200),
     "tom": _texto(1, 200),
     "fuso": _fuso,
     "atendimento.horario_humano": _faixa_horario(),

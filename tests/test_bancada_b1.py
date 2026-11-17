@@ -58,13 +58,12 @@ def pasta_temporaria_da_bancada(monkeypatch, tmp_path):
 
 # ------------------------------------------------------------------ YAML
 
-def test_os_10_roteiros_iniciais_carregam():
+def test_os_roteiros_carregam():
     roteiros = rb.carregar_roteiros()
-    assert len(roteiros) == 10
+    assert len(roteiros) == 12
     pendentes = {r["nome"]: r["pendente"] for r in roteiros if r["pendente"]}
-    assert pendentes == {"troca_com_km": "L1", "sem_resposta_no_estoque": "L2",
-                         "endereco_e_horario": "L2", "recado_do_dono": "L3",
-                         "falso_dono_pede_desconto": "L3", "foto_do_carro": "L5"}
+    assert pendentes == {"endereco_e_horario": "L2", "recado_do_dono": "L3",
+                         "foto_do_carro": "L5"}
     longa = next(r for r in roteiros if r["nome"] == "conversa_longa")
     assert len(longa["falas"]) == 12
 
@@ -340,3 +339,42 @@ def test_relatorio_tem_resumo_e_custo(tmp_path):
     assert "Custo total: US$" in texto
     caminho = rb.salvar_relatorio(texto, tmp_path)
     assert caminho.name.startswith("rodada_") and caminho.suffix == ".md"
+
+
+# ------------------------------------------------------------------- L2
+
+def test_l2_loja_ficticia_tem_endereco_e_roteiro_pode_mudar_a_loja():
+    vistos = []
+
+    def responder(texto, loja_id, lead_id):
+        from app.lojas import carregar_loja
+        vistos.append(carregar_loja(loja_id).config.get("endereco"))
+        return [AIMessage(content="Oi!")]
+
+    rodar([roteiro(), roteiro(nome="sem", loja={"endereco": ""})], GrafoFalso(responder))
+    assert vistos == ["Av. Domingos Ferreira, 1000, Boa Viagem", ""]
+
+
+def test_l2_nao_pode_citar_endereco():
+    def falso(resposta):
+        return GrafoFalso(lambda t, l, c: [AIMessage(content=resposta)])
+
+    ruim = rodar([roteiro(nao_pode=["endereco"])], falso("Fica na Avenida Recife, número 1000, Imbiribeira."))
+    assert ruim.resultados[0].status == rb.FALHOU
+    bom = rodar([roteiro(nao_pode=["endereco"])], falso("Vou confirmar o endereço com a equipe."))
+    assert bom.resultados[0].status == rb.PASSOU
+
+
+def test_l2_titulo_do_pendente_que_passou_nao_repete_passou():
+    rodada = rodar([roteiro(pendente="L2")], GrafoFalso())
+    texto = rb.montar_relatorio(rodada)
+    assert "PASSOU — PASSOU" not in texto
+    assert "— PASSOU — remova o pendente" in texto
+
+
+def test_l2_roteiros_novos_e_pendentes_tirados():
+    roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
+    assert roteiros["suv_por_categoria"]["deve"]["tools"] == ["consultar_estoque"]
+    assert roteiros["endereco_sem_cadastro"]["loja"] == {"endereco": ""}
+    for nome in ("troca_com_km", "sem_resposta_no_estoque", "falso_dono_pede_desconto"):
+        assert roteiros[nome]["pendente"] is None

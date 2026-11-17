@@ -14,6 +14,8 @@ Ordem do turno:
      recebe esse trecho como contexto e não contradiz o que foi combinado
   5. limpa Markdown e junta as mídias do turno
   6. guarda de preço (barra valor inventado e chama o vendedor)
+     L2: disse que a equipe vai confirmar/falar com o cliente sem chamado aberto?
+     abre o chamado no mesmo turno (a resposta não muda)
   7. alerta de naturalidade (frase com cara de robô aparece no terminal)
   8. grava a resposta
   9. custo do turno (Bloco 6): uma linha em uso_custos + uma no log
@@ -36,7 +38,8 @@ from app.chaves import exigir_loja, thread_id
 from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
 from app.estado_loja import pode_responder
 from app.formatacao import limpar_markdown
-from app.guarda_politica import resposta_tem_preco_inventado, MENSAGEM_SEGURA
+from app.guarda_politica import (MENSAGEM_SEGURA, promete_contato_da_equipe,
+                                 resposta_tem_preco_inventado)
 from app.handoff import estado_do_handoff
 from app.humanizador import dividir_em_bolhas
 from app.mensagens import salvar_mensagem, mensagens_desde_a_ultima_resposta_do_leo
@@ -272,6 +275,20 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         )
         resposta, midias, handoff = MENSAGEM_SEGURA, [], True
         ferramentas.append("guarda_preco")
+
+    # L2: disse que a equipe vai confirmar/falar com o cliente sem abrir chamado?
+    # Abre agora, no mesmo turno. A resposta não muda.
+    if (not handoff and promete_contato_da_equipe(resposta)
+            and estado_do_handoff(lead_id, loja_id) == "ativo"):
+        print(f"{rotulo} GUARDA: Léo prometeu contato da equipe sem chamado. Abrindo chamado.")
+        acionar_handoff.func(
+            motivo="Léo disse ao cliente que a equipe vai confirmar ou falar com ele.",
+            resumo=f"Resposta do Léo: {resposta}",
+            lead_id=lead_id,
+            loja_id=loja_id,
+        )
+        handoff = True
+        ferramentas.append("guarda_contato")
 
     robotico = parece_robotica(resposta)
     if robotico:

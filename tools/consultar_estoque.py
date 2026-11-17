@@ -1,12 +1,13 @@
 from typing import Annotated
 from langchain_core.tools import tool, InjectedToolArg
+from app.categorias import categoria_do_modelo, categoria_pedida
 from banco import conectar
 from tools.utils import formatar_brl
 
 
 @tool
 def consultar_estoque(marca: str = "", modelo: str = "", cor: str = "",
-                      cambio: str = "", preco_max: float = 0,
+                      cambio: str = "", preco_max: float = 0, categoria: str = "",
                       *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Consulta os carros DISPONÍVEIS no estoque da loja.
     Use esta ferramenta sempre que o cliente perguntar sobre carros,
@@ -18,7 +19,16 @@ def consultar_estoque(marca: str = "", modelo: str = "", cor: str = "",
     - cor: ex. "Branco", "Preto"
     - cambio: "Automático" ou "Manual"
     - preco_max: preço máximo que o cliente quer pagar (ex. 80000)
+    - categoria: "SUV", "sedã", "hatch" ou "picape"
     """
+    # L2: "SUV" no campo modelo também é pedido de categoria.
+    if not categoria and categoria_pedida(modelo):
+        categoria, modelo = modelo, ""
+    pedida = categoria_pedida(categoria) if categoria else None
+    if categoria and not pedida:
+        return (f"Não sei filtrar pela categoria \"{categoria}\". Use SUV, sedã, hatch "
+                "ou picape, ou consulte sem a categoria.")
+
     sql = "SELECT * FROM estoque WHERE loja_id = ? AND status = 'disponivel'"
     parametros = [loja_id]
 
@@ -43,6 +53,16 @@ def consultar_estoque(marca: str = "", modelo: str = "", cor: str = "",
         carros = conexao.execute(sql, parametros).fetchall()
     finally:
         conexao.close()
+
+    if pedida:
+        sem_categoria = sum(1 for c in carros if categoria_do_modelo(c["modelo"]) is None)
+        carros = [c for c in carros if categoria_do_modelo(c["modelo"]) == pedida]
+        if not carros:
+            texto = f"Nenhum carro da categoria {pedida} encontrado no estoque."
+            if sem_categoria:
+                texto += (f" Há {sem_categoria} carro(s) que não sei classificar: consulte "
+                          "sem a categoria antes de dizer ao cliente que não tem.")
+            return texto
 
     if not carros:
         return "Nenhum carro disponível encontrado com esses critérios."

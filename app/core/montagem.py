@@ -48,7 +48,7 @@ TODAS_AS_FERRAMENTAS = [
 ]
 
 DESCRICOES = {
-    "consultar_estoque": "o cliente pergunta sobre carros, modelos, preços ou disponibilidade.",
+    "consultar_estoque": "o cliente pergunta sobre carros, modelos, categorias (SUV, sedã, hatch, picape), preços ou disponibilidade.",
     "detalhes_veiculo": "o cliente quer saber mais de um carro específico que já apareceu na conversa.",
     "simular_financiamento": "o cliente pede simulação de parcelas (sempre com o aviso de estimativa).",
     "registrar_troca": "o cliente diz que tem um carro para dar na troca.",
@@ -209,6 +209,13 @@ def _camada_da_loja(loja, agora=None) -> str:
         + (f", em {cidade}." if cidade else "."),
         f"- Tom de voz: {tom}.",
     ]
+    # L2: o endereço vem só do cadastro. Sem cadastro, o Léo não sabe e passa para a equipe.
+    endereco = str(valor_config(cfg, "endereco", "") or "").strip()
+    if endereco:
+        linhas.append(f"- Endereço da loja: {endereco}. Use só este endereço (vem do cadastro).")
+    else:
+        linhas.append("- Endereço da loja: não cadastrado. Se perguntarem, diga que vai confirmar "
+                      "com a equipe e chame acionar_handoff. Nunca invente endereço.")
     vista = _loja_para_relogio(loja)
     horario = descrever_horarios(vista)
     if horario:

@@ -65,6 +65,8 @@ class Campo:
 CAMPOS: tuple[Campo, ...] = (
     Campo("nome_agente", "Nome do agente", "texto", "Identidade"),
     Campo("cidade", "Cidade", "texto", "Identidade"),
+    Campo("endereco", "Endereço da loja", "texto", "Identidade",
+          "Rua, número e bairro. O assistente só informa o endereço escrito aqui."),
     Campo("tom", "Tom de voz", "texto_longo", "Identidade",
           "Como o agente fala, ex.: 'simples, cordial e direto'."),
     Campo("fuso", "Fuso horário", "texto", "Identidade",

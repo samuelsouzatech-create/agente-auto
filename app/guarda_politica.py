@@ -217,3 +217,39 @@ def resposta_tem_preco_inventado(resposta: str, mensagens) -> bool:
         elif isinstance(m, HumanMessage):
             permitidos |= numeros_do_cliente(str(m.content))
     return bool(citados - permitidos)
+
+
+# ----------------------------------------------------------------------
+# Bloco L2: promessa de contato da equipe sem chamado aberto.
+# Se o Léo diz que a equipe vai confirmar ou falar com o cliente, o chamado
+# tem que existir no MESMO turno. A guarda não muda a resposta: só abre o
+# chamado que faltou (errar para o lado de abrir é melhor que prometer à toa).
+# ----------------------------------------------------------------------
+_QUEM_DA_EQUIPE = r"\b(equipe|vendedor|vendedora|vendedores|pessoal|consultor|consultora|gerente|time|alguem)\b"
+_PADROES_CONTATO = [
+    # "o pessoal da equipe vai falar com você", "um vendedor vai te chamar"
+    re.compile(_QUEM_DA_EQUIPE + r"[^.!?]{0,40}\b(vai|vao|ira|irao)\s+(te\s+|lhe\s+)?"
+               r"(falar|chamar|entrar em contato|retornar|responder|confirmar|verificar|ligar|"
+               r"mandar|passar|atender|continuar|dar retorno|te responder)"),
+    # "vou confirmar com a equipe", "vou verificar com o vendedor"
+    re.compile(r"\b(vou|vamos|irei)\s+(confirmar|verificar|checar|consultar|ver isso|ver)\b"
+               r"[^.!?]{0,30}\b(com|junto)\b[^.!?]{0,12}" + _QUEM_DA_EQUIPE),
+    # "vou passar para a equipe", "vou encaminhar ao vendedor"
+    re.compile(r"\b(vou|vamos|irei)\s+(passar|encaminhar|repassar|levar)\b[^.!?]{0,40}" + _QUEM_DA_EQUIPE),
+]
+_NEGACAO_CONTATO = re.compile(r"\b(nao|nunca|nem)\b")
+
+
+def _sem_acento(texto: str) -> str:
+    sem = unicodedata.normalize("NFD", str(texto or ""))
+    return "".join(c for c in sem if unicodedata.category(c) != "Mn").lower()
+
+
+def promete_contato_da_equipe(resposta: str) -> bool:
+    """True se a resposta diz que a equipe vai confirmar/falar com o cliente."""
+    for frase in re.split(r"(?<=[.!?])\s+|\n+", _sem_acento(resposta)):
+        if _NEGACAO_CONTATO.search(frase):
+            continue
+        if any(p.search(frase) for p in _PADROES_CONTATO):
+            return True
+    return False
