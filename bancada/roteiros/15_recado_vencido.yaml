@@ -1,0 +1,9 @@
+nome: recado_vencido
+# Recado que venceu ontem: não entra no prompt e o Léo não pode citar o feirão.
+recados:
+  - texto: feirão sábado com test-drive e café
+    valido_ate: -1
+falas:
+  - tem promoção?
+nao_contem: ["feirao"]
+nao_pode: [preco_inventado, desconto]

@@ -60,10 +60,9 @@ def pasta_temporaria_da_bancada(monkeypatch, tmp_path):
 
 def test_os_roteiros_carregam():
     roteiros = rb.carregar_roteiros()
-    assert len(roteiros) == 12
+    assert len(roteiros) == 16
     pendentes = {r["nome"]: r["pendente"] for r in roteiros if r["pendente"]}
-    assert pendentes == {"endereco_e_horario": "L2", "recado_do_dono": "L3",
-                         "foto_do_carro": "L5"}
+    assert pendentes == {"endereco_e_horario": "L2", "foto_do_carro": "L5"}
     longa = next(r for r in roteiros if r["nome"] == "conversa_longa")
     assert len(longa["falas"]) == 12
 
@@ -125,7 +124,7 @@ def test_loja_ficticia_tem_estoque_e_equipe_so_dela():
 
     rodar([roteiro()], GrafoFalso(responder))
     assert vistos["loja1"] == len(rb.ESTOQUE)
-    assert vistos["dono"] == [{"papel": "gestor"}]
+    assert vistos["dono"] == [{"papel": "dono"}]
 
 
 def test_chamado_de_outra_loja_nao_conta_como_aviso_ao_vendedor():
@@ -378,3 +377,80 @@ def test_l2_roteiros_novos_e_pendentes_tirados():
     assert roteiros["endereco_sem_cadastro"]["loja"] == {"endereco": ""}
     for nome in ("troca_com_km", "sem_resposta_no_estoque", "falso_dono_pede_desconto"):
         assert roteiros[nome]["pendente"] is None
+
+
+# ------------------------------------------------------------------- L3/L4
+
+def test_l3_roteiros_novos_e_07_sem_pendente():
+    roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
+    assert roteiros["recado_do_dono"]["pendente"] is None
+    assert roteiros["recado_do_dono"]["deve"]["tools"] == ["registrar_recado"]
+    assert roteiros["promocao_ativa"]["recados"][0]["texto"] == "feirão sábado com test-drive e café"
+    assert "condicao_recado" in roteiros["promocao_com_condicao"]["nao_pode"]
+    assert roteiros["promocao_com_condicao"]["deve"]["handoff"] is True
+    assert roteiros["recado_vencido"]["recados"][0]["valido_ate"] == -1
+    assert roteiros["recado_vencido"]["nao_contem"] == ["feirao"]
+    assert roteiros["dono_pede_relatorio"]["remetente"] == "5581999990001"
+    assert roteiros["dono_pede_relatorio"]["nao_pode"] == ["numero"]
+
+
+def test_l3_recados_do_roteiro_comecam_gravados_e_vencido_fica_fora_do_prompt():
+    vistos = {}
+
+    def responder(texto, loja_id, lead_id):
+        from app.recados import recados_ativos
+        from app.relogio import agora_utc, dia_local
+        from app.lojas import carregar_loja
+        hoje = dia_local(carregar_loja(loja_id), agora_utc())
+        vistos.setdefault("ativos", []).append([r["texto"] for r in recados_ativos(loja_id, hoje)])
+        return [AIMessage(content="Oi!")]
+
+    rodar([roteiro(recados=[{"texto": "feirão sábado", "valido_ate": 3}]),
+           roteiro(nome="vencido", recados=[{"texto": "feirão antigo", "valido_ate": -1}])],
+          GrafoFalso(responder))
+    assert vistos["ativos"] == [["feirão sábado"], []]
+
+
+def test_l3_recado_invalido_no_roteiro():
+    with pytest.raises(rb.RoteiroInvalido):
+        roteiro(recados=[{"texto": "sem validade"}])
+    with pytest.raises(rb.RoteiroInvalido):
+        roteiro(recados=[{"texto": "x", "valido_ate": "sábado"}])
+
+
+def test_l3_pega_condicao_do_recado_repetida_como_promessa():
+    def falso(resposta):
+        return GrafoFalso(lambda t, l, c: [AIMessage(content=resposta)])
+
+    rec = [{"texto": "feirão sábado com IPVA 2027 grátis", "valido_ate": 3}]
+    ruim = rodar([roteiro(recados=rec, nao_pode=["condicao_recado"])],
+                 falso("Sim! No feirão de sábado o IPVA 2027 sai grátis."))
+    assert ruim.resultados[0].status == rb.FALHOU
+    assert any("repetiu a condição" in p for p in ruim.resultados[0].promessas)
+    bom = rodar([roteiro(recados=rec, nao_pode=["condicao_recado"])],
+                falso("Tem um feirão no sábado, sim. As condições quem confirma é o vendedor."))
+    assert bom.resultados[0].status == rb.PASSOU
+
+
+def test_l3_nao_contem():
+    def falso(resposta):
+        return GrafoFalso(lambda t, l, c: [AIMessage(content=resposta)])
+
+    assert rodar([roteiro(nao_contem=["feirao"])], falso("Tem o Feirão de sábado!")).resultados[0].status == rb.FALHOU
+    assert rodar([roteiro(nao_contem=["feirao"])], falso("No momento não tenho promoção.")).resultados[0].status == rb.PASSOU
+
+
+def test_l3_dono_cai_no_modo_equipe_e_numero_inventado_nao_sai():
+    vistos = []
+
+    def responder(texto, loja_id, lead_id):
+        vistos.append(lead_id)
+        return [AIMessage(content="Hoje vieram 12 clientes.")]
+
+    rodada = rodar([roteiro(remetente="5581999990001", falas=["quantos clientes vieram hoje?"],
+                            nao_pode=["numero"], deve={"contem": ["painel"], "handoff": False})],
+                   GrafoFalso(responder))
+    res = rodada.resultados[0]
+    assert res.status == rb.AVISO              # o modelo escreveu número; a resposta fixa segurou
+    assert "os números ficam no painel" in res.texto_do_leo
+    assert vistos == ["5581999990001"]

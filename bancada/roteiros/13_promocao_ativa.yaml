@@ -1,0 +1,10 @@
+nome: promocao_ativa
+# Recado do dono sem condição comercial: o Léo pode contar.
+recados:
+  - texto: feirão sábado com test-drive e café
+    valido_ate: 7
+falas:
+  - tem alguma promoção?
+deve:
+  contem: ["feirao"]
+nao_pode: [preco_inventado, desconto]

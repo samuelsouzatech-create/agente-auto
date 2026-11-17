@@ -7,23 +7,26 @@ item é marcado como **feito** aqui.
 | Item | Bloco | Roteiros ligados | Status |
 |---|---|---|---|
 | Furos conhecidos: preço só com "R$", km liberando preço, pedidos de parada, troca com km=0, furos 3 e 15 do remarketing | L1 | `troca_com_km` | feito (furos consertados nos blocos S1–S3; `troca_com_km` passou em 17/11) |
-| Léo saber da loja: endereço, horário, "vou confirmar com o vendedor" no que não souber | L2 | `sem_resposta_no_estoque`, `endereco_e_horario`, `suv_por_categoria`, `endereco_sem_cadastro` | pendente (código entregue no bloco L2; falta passar em 3 rodadas da bancada) |
-| Léo reconhecer a equipe pelo número cadastrado | L3 | `recado_do_dono` | pendente |
-| Recados do dono ou gestor com validade (condição comercial nunca vira promessa: o Léo anuncia a campanha e passa ao vendedor) | L4 | `recado_do_dono` | pendente |
+| Léo saber da loja: endereço, horário, "vou confirmar com o vendedor" no que não souber | L2 | `sem_resposta_no_estoque`, `endereco_e_horario`, `suv_por_categoria`, `endereco_sem_cadastro` | feito (05, 06, 11 e 12 passaram em 3 rodadas no dia 17/11) |
+| L2b — guarda de chamado não reconhecia "vou chamar / vou pedir para / vou passar para" (roteiros 04 e 05 em 17/11); prompt proíbe dizer que a equipe acompanha a conversa | L2b | `troca_com_km`, `sem_resposta_no_estoque` | pendente (código entregue no commit fix(L2b); falta passar em 3 rodadas da bancada) |
+| Léo reconhecer a equipe pelo número cadastrado (dono e gestor: modo equipe; vendedor: resposta fixa; número desconhecido continua cliente) | L3 | `recado_do_dono`, `dono_pede_relatorio`, `falso_dono_pede_desconto` | pendente (código entregue no bloco L3; falta passar em 3 rodadas da bancada) |
+| Recados do dono ou gestor com validade (condição comercial nunca vira promessa: o Léo anuncia a campanha e passa ao vendedor) | L4 | `recado_do_dono`, `promocao_ativa`, `promocao_com_condicao`, `recado_vencido` | pendente (código entregue no bloco L3; falta passar em 3 rodadas da bancada) |
 | Entender foto do cliente (nunca dar valor de troca pela foto; não processar documento pessoal) | L5 | `foto_do_carro` | pendente |
 | Remarketing em sequência (toque 1→2→3) | — | — | pendente |
 | Resposta do cliente ao pós-venda | — | — | pendente |
 | Conversas de referência (crescer os roteiros até 30–40) | — | todos | pendente |
 | Modo sombra (fase do piloto, depois da demo) | — | — | pendente |
-| N1 — o Léo diz ao dono "recado anotado, vou avisar os clientes" sem gravar nada | L3/L4 | `recado_do_dono` | pendente |
+| N1 — o Léo diz ao dono "recado anotado, vou avisar os clientes" sem gravar nada | L3/L4 | `recado_do_dono` | pendente (o L3 grava com registrar_recado e a resposta sai da ferramenta; vira feito junto com o L3) |
 | N2 — conversa longa perde o fio: a troca do Onix nunca foi registrada e a visita de "sábado de manhã" ficou sem horário | a definir | `conversa_longa` | pendente |
 | N3 — tom repetitivo: "Gostaria de...?" no fim de quase toda fala e "o pessoal da equipe vai falar com você por aqui" repetido | a definir | `conversa_longa` | pendente |
-| N4 — bancada: loja fictícia sem fotos (não testa envio de fotos); não há checagem de endereço inventado, contradição nem ação prometida sem tool | a definir | — | pendente (o L2 criou só a checagem `nao_pode: endereco`, usada no `endereco_sem_cadastro`) |
+| N4 — bancada: loja fictícia sem fotos (não testa envio de fotos); não há checagem de endereço inventado, contradição nem ação prometida sem tool | a definir | — | pendente (o L2 criou só a checagem `nao_pode: endereco`; o L3 criou `condicao_recado`, `numero` e `nao_contem`) |
+| N5 — "qual o mais barato?" logo depois de falar de SUV respondeu o carro mais barato da loja, sem dizer que o Renegade era o único SUV | a definir | `suv_por_categoria` | pendente |
 
 Roteiros sem bloco pendente (devem passar desde já): `preco_carro`, `desconto`,
 `financiamento_negativado`, `troca_com_km`, `sem_resposta_no_estoque`,
 `falso_dono_pede_desconto` (proteção: número desconhecido dizendo ser o dono),
-`conversa_longa`, `suv_por_categoria`, `endereco_sem_cadastro`.
+`conversa_longa`, `suv_por_categoria`, `endereco_sem_cadastro`, `promocao_ativa`,
+`promocao_com_condicao`, `recado_vencido`, `dono_pede_relatorio`, `recado_do_dono`.
 
 ## Regras
 

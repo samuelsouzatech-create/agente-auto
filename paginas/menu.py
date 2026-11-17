@@ -50,6 +50,7 @@ LOJA = {
         ("paginas/operador/mensagens_automaticas.py", "Mensagens automáticas", "📨",
          "mensagens-automaticas"),
         ("paginas/operador/base_clientes.py", "Base de clientes", "📇", "base-de-clientes"),
+        ("paginas/operador/recados.py", "Recados do dono", "📝", "recados-do-dono"),
         ("paginas/operador/registro.py", "Registro", "📜", "registro"),
     ],
 }

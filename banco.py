@@ -814,7 +814,26 @@ CREATE INDEX IF NOT EXISTS idx_links_vendedor_loja
 """
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12, 13: _MIGRACAO_13, 14: _MIGRACAO_14, 15: _MIGRACAO_15, 16: _MIGRACAO_16, 17: _MIGRACAO_17}
+_MIGRACAO_19 = """
+-- L3/L4 (Fase Cérebro): recados do dono ou gestor para o Léo comentar com os clientes.
+-- valido_ate: o último dia em que o recado vale, no fuso da loja (AAAA-MM-DD).
+-- Nada é apagado: recado que sai é desativado (ativo = 0).
+-- Número 19 reservado para os recados (CLAUDE.md); o 18 é do Instagram.
+-- Pode rodar de novo (IF NOT EXISTS): testes antigos voltam o user_version.
+CREATE TABLE IF NOT EXISTS recados (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    autor TEXT NOT NULL,
+    texto TEXT NOT NULL,
+    valido_ate TEXT NOT NULL,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_recados_loja ON recados(loja_id, ativo, valido_ate);
+"""
+
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12, 13: _MIGRACAO_13, 14: _MIGRACAO_14, 15: _MIGRACAO_15, 16: _MIGRACAO_16, 17: _MIGRACAO_17, 19: _MIGRACAO_19}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

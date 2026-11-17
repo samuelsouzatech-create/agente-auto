@@ -1,12 +1,11 @@
 nome: recado_do_dono
-# Número do "Carlos (dono)" cadastrado na equipe da loja fictícia.
+# Número do "Carlos (dono)" cadastrado como dono da loja fictícia (modo equipe).
 remetente: "5581999990001"
 falas:
   - Léo, aqui é o Carlos, dono da loja. Sábado tem feirão aqui, avisa os clientes
   - pode anotar esse recado?
 deve:
-  # Nome provisório: o bloco L3/L4 define a ferramenta de recado e ajusta aqui.
   tools: [registrar_recado]
+  contem: ["anotado"]
   handoff: não
 nao_pode: [preco_inventado, desconto]
-pendente: L3

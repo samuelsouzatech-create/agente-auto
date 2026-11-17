@@ -6,7 +6,11 @@ Camadas do prompt (item 1.3 da Arquitetura 4.0):
   3. segmentos/<segmento>/prompt.md - persona e objetivo do ramo.
   4. Guia das ferramentas LIGADAS nesta loja + avisos dos módulos desligados.
   5. (Bloco 7A) Momento desta conversa: primeiro contato / vendedor a caminho.
-  6. Data e hora no fuso da loja.
+  6. (L3/L4) Recados ativos do dono ou gestor.
+  7. Data e hora no fuso da loja.
+
+L3/L4: quem escreve é dono ou gestor cadastrado? Prompt e ferramenta são outros
+(montar_prompt_equipe + FERRAMENTAS_EQUIPE): o Léo só anota recados.
 
 Etapa 2, Bloco 1: as ferramentas do ramo vêm da pasta do segmento
 (segmentos/<segmento>/ferramentas.py), via app/segmentos.py.
@@ -28,6 +32,8 @@ from tools import (
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff,
     buscar_conhecimento, registrar_interesse,
 )
+from tools.registrar_recado import registrar_recado
+from app.recados import camada_dos_recados
 
 RAIZ = Path(__file__).resolve().parents[2]
 PASTA_PROMPTS = RAIZ / "prompts"
@@ -46,6 +52,10 @@ TODAS_AS_FERRAMENTAS = [
     registrar_troca, agendar_visita, registrar_lead, acionar_handoff,
     buscar_conhecimento, registrar_interesse,
 ]
+
+# L3/L4: no modo equipe só existe esta ferramenta (nunca aparece para cliente).
+FERRAMENTAS_EQUIPE = [registrar_recado]
+ROTULOS_EQUIPE = {"dono": "dono", "gestor": "gerente"}
 
 DESCRICOES = {
     "consultar_estoque": "o cliente pergunta sobre carros, modelos, categorias (SUV, sedã, hatch, picape), preços ou disponibilidade.",
@@ -334,7 +344,7 @@ def _camada_do_tom(loja) -> str:
 
 def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
                   primeiro_contato: bool = False, retomada: dict | None = None,
-                  compras: list | None = None) -> str:
+                  compras: list | None = None, recados: list | None = None) -> str:
     base = _ler_arquivo(str(PASTA_PROMPTS / "base.md"))
     segmento = _ler_arquivo(str(pasta_do_segmento(segmento_da_loja(loja)) / "prompt.md"))
     data = (f"DATA E HORA ATUAL: {agora.strftime('%d/%m/%Y %H:%M')} "
@@ -347,8 +357,18 @@ def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
         _camada_do_momento(loja, em_espera, primeiro_contato),
         _camada_do_cliente_da_casa(compras),
         _camada_da_retomada(retomada, agora),
+        camada_dos_recados(recados or []),
         _camada_do_tom(loja),
         data,
     ]
     return "\n\n".join(c for c in camadas if c)
 
+
+
+def montar_prompt_equipe(loja, membro: dict, agora) -> str:
+    """L3/L4: prompt do modo equipe (dono ou gestor cadastrado escrevendo)."""
+    modelo = _ler_arquivo(str(PASTA_PROMPTS / "equipe.md"))
+    hoje = f"{agora.strftime('%d/%m/%Y')} ({DIAS_SEMANA[agora.weekday()]})"
+    return modelo.format(nome=membro.get("nome") or "alguém da equipe",
+                         papel=ROTULOS_EQUIPE.get(membro.get("papel"), membro.get("papel")),
+                         loja=loja.nome, agente=loja.get("nome_agente") or "Léo", hoje=hoje)

@@ -314,3 +314,9 @@ ROTULOS.update({
     "gerar_link_senha": "Gerou link de senha",
     "criar_senha_por_link": "Criou a senha pelo link",
 })
+
+
+# L3/L4: recados do dono.
+ROTULOS.update({
+    "desativar_recado": "Desativou recado",
+})

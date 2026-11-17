@@ -533,3 +533,22 @@ CENARIOS.update({
         lambda s: _links_senha.criar_senha(s["token"], "Moto-Verde-2027"),
         "SELECT COUNT(*) FROM links_senha WHERE usado_em IS NOT NULL"),
 })
+
+
+# ------------------------------------------------------------ L3/L4: recados do dono
+from datetime import date as _date
+
+from app import recados as _recados
+
+
+def _prep_recado():
+    return {"id": _recados.registrar_recado(1, "Carlos", "feirão sábado", "",
+                                            hoje=_date(2026, 11, 17))["id"]}
+
+
+CENARIOS.update({
+    "desativar_recado": (
+        _prep_recado,
+        lambda s: _recados.desativar_recado(1, s["id"]),
+        "SELECT COUNT(*) FROM recados WHERE ativo = 0"),
+})

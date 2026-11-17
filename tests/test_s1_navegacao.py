@@ -46,7 +46,7 @@ def test_dois_niveis_com_as_8_telas():
     assert [i[1] for i in GERAL["Geral"]] == ["Visão geral", "Custos e preços"]
     assert [i[1] for i in LOJA["Loja"]] == [
         "Resumo", "Ver como a loja", "Configuração", "Mensagens automáticas",
-        "Base de clientes", "Registro"]
+        "Base de clientes", "Recados do dono", "Registro"]   # L3/L4: + Recados do dono
 
 
 def test_telas_novas_ficam_na_pasta_do_operador():
