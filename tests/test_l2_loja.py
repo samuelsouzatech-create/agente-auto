@@ -169,6 +169,41 @@ def test_nao_detecta_o_que_nao_e_promessa(texto):
     assert not promete_contato_da_equipe(texto)
 
 
+# L2b: frases da bancada de 17/11 que a guarda deixou passar.
+@pytest.mark.parametrize("texto", [
+    "Entendi! Vou chamar alguém da equipe para te atender por aqui. Pode ser?",              # roteiro 04
+    "Boa pergunta! vou chamar o pessoal da equipe para confirmar esse detalhe para você, pode ser?",  # 05
+    "Vou pedir para um vendedor confirmar o laudo.",
+    "Vou pedir pra equipe olhar isso.",
+    "Vou passar para o pessoal confirmar.",
+    "Vou passar para um vendedor.",
+])
+def test_l2b_detecta_vou_chamar_pedir_passar(texto):
+    assert promete_contato_da_equipe(texto)
+
+
+def test_l2b_pergunta_oferecendo_nao_e_promessa():
+    assert not promete_contato_da_equipe("Quer que eu chame um vendedor?")
+    assert not promete_contato_da_equipe("Posso chamar alguém da equipe para você?")
+
+
+def test_l2b_vendedor_mostra_na_visita_nao_e_promessa():
+    assert not promete_contato_da_equipe("O vendedor te mostra o carro na visita.")
+
+
+def test_l2b_prompt_proibe_dizer_que_a_equipe_acompanha_a_conversa():
+    from app.core.montagem import PASTA_PROMPTS
+    base = (PASTA_PROMPTS / "base.md").read_text(encoding="utf-8")
+    assert "Nunca diga que a equipe está acompanhando, lendo ou vendo a conversa" in base
+
+
+def test_l2b_frase_da_bancada_abre_chamado_no_turno(duas_lojas):
+    r = _turno(LOJA_A, "lead-l2b-04", "Vou chamar alguém da equipe para te atender por aqui. Pode ser?")
+    assert r.handoff_aberto and len(_chamados(LOJA_A, "lead-l2b-04")) == 1
+    r = _turno(LOJA_A, "lead-l2b-of", "Quer que eu chame um vendedor?")
+    assert not r.handoff_aberto and _chamados(LOJA_A, "lead-l2b-of") == []
+
+
 class GrafoFalso:
     def __init__(self, resposta):
         self.resposta = resposta
