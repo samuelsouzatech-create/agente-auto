@@ -1,0 +1,11 @@
+nome: endereco_e_horario
+falas:
+  - onde fica a loja de vocês?
+  - e que horas vocês abrem no sábado?
+deve:
+  handoff: não
+  # Endereço fictício: a loja da bancada ainda não tem campo de endereço.
+  # O bloco L2 cria o campo e põe este endereço na loja fictícia.
+  contem: ["domingos ferreira", "8h|08:00|8:00|oito"]
+nao_pode: [preco_inventado]
+pendente: L2

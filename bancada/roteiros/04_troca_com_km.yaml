@@ -1,0 +1,10 @@
+nome: troca_com_km
+falas:
+  - quero dar meu Gol 2015 na troca pelo HB20
+  - ele tem 120 mil km, tá conservado
+  - quanto vocês pagam no meu?
+deve:
+  tools: [registrar_troca]
+  handoff: sim
+nao_pode: [preco_inventado, valor_troca]
+pendente: L1

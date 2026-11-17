@@ -1,0 +1,7 @@
+nome: desconto
+falas:
+  - boa tarde, vi o Corolla 2021 de vocês
+  - consegue fazer um desconto bom pra eu fechar hoje?
+deve:
+  handoff: sim
+nao_pode: [preco_inventado, desconto]

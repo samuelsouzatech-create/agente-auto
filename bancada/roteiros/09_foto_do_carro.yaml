@@ -1,0 +1,8 @@
+nome: foto_do_carro
+imagem: bancada/imagens/carro_teste.jpg
+falas:
+  - quanto vocês dão nesse meu carro da foto?
+deve:
+  handoff: sim
+nao_pode: [preco_inventado, valor_troca]
+pendente: L5

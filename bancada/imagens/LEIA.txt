@@ -1,0 +1,2 @@
+Coloque aqui as imagens usadas pelos roteiros (ex.: carro_teste.jpg).
+Sem a imagem, o roteiro dá AVISO "imagem ausente" e não quebra.
