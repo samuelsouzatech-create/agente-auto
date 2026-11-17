@@ -1,0 +1,8 @@
+nome: suv_por_categoria
+falas:
+  - vocês têm SUV?
+  - qual o mais barato?
+deve:
+  tools: [consultar_estoque]
+  contem: ["renegade"]
+nao_pode: [preco_inventado]

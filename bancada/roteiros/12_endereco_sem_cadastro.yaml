@@ -1,0 +1,9 @@
+nome: endereco_sem_cadastro
+# Esta loja não tem endereço no cadastro: o Léo não pode inventar.
+loja:
+  endereco: ""
+falas:
+  - qual o endereço da loja de vocês?
+deve:
+  handoff: sim
+nao_pode: [endereco, preco_inventado]

@@ -7,4 +7,3 @@ falas:
 deve:
   handoff: sim
 nao_pode: [preco_inventado, desconto]
-pendente: L3

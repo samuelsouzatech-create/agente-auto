@@ -7,4 +7,3 @@ deve:
   tools: [registrar_troca]
   handoff: sim
 nao_pode: [preco_inventado, valor_troca]
-pendente: L1
