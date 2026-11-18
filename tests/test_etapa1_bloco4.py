@@ -412,5 +412,5 @@ def test_telegram_le_texto_audio_e_foto():
     assert (t.tipo, t.texto, t.lead_id, t.id_externo) == ("texto", "oi", "777", "999:777:5")
     [a] = canal.ler_webhook(update(voice=SimpleNamespace(file_id="F1", mime_type="audio/ogg")))
     assert (a.tipo, a.id_midia) == ("audio", "F1")
-    [f] = canal.ler_webhook(update(photo=[object()]))
-    assert (f.tipo, f.tipo_original) == ("nao_suportado", "image")
+    [f] = canal.ler_webhook(update(photo=[SimpleNamespace(file_id="P1")]))   # L5b: foto é lida
+    assert (f.tipo, f.tipo_original, f.id_midia) == ("imagem", "image", "P1")

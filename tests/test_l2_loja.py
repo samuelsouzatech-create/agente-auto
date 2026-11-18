@@ -215,7 +215,8 @@ class GrafoFalso:
 
 def _turno(loja_id, lead, resposta):
     from app.core.turno import executar_turno
-    return asyncio.run(executar_turno(loja_id, "simulador", lead, "o carro tem laudo?",
+    # L5b: pergunta neutra ("laudo" agora abre chamado sozinho, pelo assunto).
+    return asyncio.run(executar_turno(loja_id, "simulador", lead, "o carro tem ar-condicionado?",
                                       grafo=GrafoFalso(resposta)))
 
 

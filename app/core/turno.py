@@ -41,7 +41,8 @@ from app.chaves import exigir_loja, thread_id
 from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
 from app.estado_loja import pode_responder
 from app.formatacao import limpar_markdown
-from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, diz_ser_da_equipe,
+from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da_equipe,
+                                 diz_ser_da_equipe, pediu_valor_da_troca, pergunta_curta,
                                  promete_contato_da_equipe, resposta_tem_preco_inventado)
 from banco import conectar
 from app.handoff import estado_do_handoff
@@ -96,6 +97,8 @@ class ResultadoTurno:
     execucao_id: str | None = field(default=None, compare=False)
     # L5: tokens da leitura da foto (a bancada soma no custo). Fora da comparação (==).
     uso_imagem: object = field(default=None, compare=False)
+    # L5b: {"tipo", "descricao"} da foto lida (a bancada mostra no relatório).
+    leitura_imagem: dict | None = field(default=None, compare=False)
 
     @property
     def respostas(self) -> list[str]:
@@ -233,6 +236,13 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         print(f"{rotulo} Lead {lead_id} está com um vendedor humano. Léo em silêncio.")
         return ResultadoTurno(silenciado=True)
 
+    # L5b: número fora da equipe dizendo ser dono/gestor/da loja: resposta fixa, sem IA.
+    if diz_ser_da_equipe(texto):
+        print(f"{rotulo} GUARDA: {lead_id} diz ser da equipe, mas não está cadastrado. Resposta fixa.")
+        marcar_falso_dono(loja_id, lead_id, texto)
+        salvar_mensagem(lead_id, "leo", MENSAGEM_FALSO_DONO, canal=canal, loja_id=loja_id)
+        return ResultadoTurno(texto=MENSAGEM_FALSO_DONO, handoff_aberto=True)
+
     texto_para_leo = com_contexto_do_periodo_fora(texto, perdidas)
     if texto_para_leo != texto:
         print(f"{rotulo} Léo volta à conversa sabendo de {len(perdidas)} mensagem(ns) da equipe/cliente.")
@@ -288,19 +298,21 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         resposta, midias, handoff = MENSAGEM_SEGURA, [], True
         ferramentas.append("guarda_preco")
 
-    # L2: disse que a equipe vai confirmar/falar com o cliente sem abrir chamado?
-    # Abre agora, no mesmo turno. A resposta não muda.
-    if (not handoff and promete_contato_da_equipe(resposta)
-            and estado_do_handoff(lead_id, loja_id) == "ativo"):
-        print(f"{rotulo} GUARDA: Léo prometeu contato da equipe sem chamado. Abrindo chamado.")
+    # L2 e L5b: chamado aberto pelo CÓDIGO no mesmo turno (a resposta não muda), quando
+    # o cliente pede valor da troca, pergunta assunto que só a equipe responde
+    # (laudo, leilão, IPVA...) ou o Léo prometeu contato da equipe sem chamado.
+    motivo_guarda = motivo_do_chamado_pelo_codigo(texto, resposta)
+    if motivo_guarda and not handoff and estado_do_handoff(lead_id, loja_id) == "ativo":
+        motivo, nome_guarda = motivo_guarda
+        print(f"{rotulo} GUARDA: {motivo} Abrindo chamado.")
         acionar_handoff.func(
-            motivo="Léo disse ao cliente que a equipe vai confirmar ou falar com ele.",
+            motivo=f'{motivo} Pergunta do cliente: "{pergunta_curta(texto)}"',
             resumo=f"Resposta do Léo: {resposta}",
             lead_id=lead_id,
             loja_id=loja_id,
         )
         handoff = True
-        ferramentas.append("guarda_contato")
+        ferramentas.append(nome_guarda)
 
     # L3b: número fora da equipe dizendo ser dono/gestor/da loja: o chamado avisa.
     if marcar_falso_dono(loja_id, lead_id, texto):
@@ -340,6 +352,24 @@ def _ja_disse_ser_da_equipe(loja_id: int, lead_id: str) -> bool:
     return any(diz_ser_da_equipe(l["conteudo"]) for l in linhas)
 
 
+MENSAGEM_FALSO_DONO = ("Esse número não está cadastrado na equipe da loja, então não registro pedidos "
+                       "por aqui. Já passei para o pessoal da equipe conferir.")
+MOTIVO_VALOR_TROCA = "Cliente pediu valor da troca."
+MOTIVO_PROMESSA = "Léo disse ao cliente que a equipe vai confirmar ou falar com ele."
+
+
+def motivo_do_chamado_pelo_codigo(texto: str, resposta: str) -> tuple[str, str] | None:
+    """(motivo, nome da guarda) ou None. Ordem: valor da troca, assunto, promessa."""
+    if pediu_valor_da_troca(texto):
+        return MOTIVO_VALOR_TROCA, "guarda_troca"
+    assunto = assunto_da_equipe(texto)
+    if assunto:
+        return f"Cliente perguntou sobre {assunto}.", "guarda_assunto"
+    if promete_contato_da_equipe(resposta):
+        return MOTIVO_PROMESSA, "guarda_contato"
+    return None
+
+
 def marcar_falso_dono(loja_id: int, lead_id: str, texto: str) -> bool:
     """L3b: cliente que diz ser da equipe (número não cadastrado).
     Disse agora e não há chamado: abre um. Há chamado aberto e ele disse isso em
@@ -348,7 +378,7 @@ def marcar_falso_dono(loja_id: int, lead_id: str, texto: str) -> bool:
     try:
         abriu = False
         if diz_ser_da_equipe(texto) and estado_do_handoff(lead_id, loja_id) == "ativo":
-            acionar_handoff.func(motivo=PREFIXO_FALSO_DONO + ".",
+            acionar_handoff.func(motivo=f'{PREFIXO_FALSO_DONO}. Pergunta do cliente: "{pergunta_curta(texto)}"',
                                  resumo=f"Mensagem do cliente: {texto}",
                                  lead_id=lead_id, loja_id=loja_id)
             abriu = True
@@ -504,6 +534,14 @@ def _resposta_fixa_com_chamado(loja_id, canal, lead_id, registro, resposta, moti
     return resultado
 
 
+def _com_leitura(resultado: ResultadoTurno, leitura) -> ResultadoTurno:
+    """L5b: o tipo lido e a descrição curta seguem no resultado (a bancada mostra)."""
+    resultado.uso_imagem = leitura.uso
+    resultado.leitura_imagem = {"tipo": leitura.tipo if leitura.ok else "não lida",
+                                "descricao": leitura.descricao}
+    return resultado
+
+
 async def executar_turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: bytes,
                                 mime: str = "image/jpeg", legenda: str = "", *,
                                 grafo=None, leitor=None) -> ResultadoTurno:
@@ -523,23 +561,25 @@ async def executar_turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: 
         return ResultadoTurno(silenciado=True)
 
     rotulo = _rotulo(canal, loja_id)
-    leitura = (leitor or imagens.ler_imagem)(imagem, mime)
+    leitura = imagens.ajustar_pela_legenda((leitor or imagens.ler_imagem)(imagem, mime), legenda)
     registrar_uso(loja_id, lead_id, canal, leitura.uso, tipo="imagem", ferramentas=["leitura_imagem"])
     print(f"{rotulo} Cliente {lead_id} mandou foto: {leitura.tipo if leitura.ok else 'não lida'}")
 
     if not leitura.ok:
-        return _resposta_fixa_com_chamado(loja_id, canal, lead_id, "[foto não lida]",
-                                          MENSAGEM_IMAGEM_FALHOU, MOTIVO_IMAGEM_FALHOU, leitura.uso)
+        return _com_leitura(_resposta_fixa_com_chamado(loja_id, canal, lead_id, "[foto não lida]",
+                                                       MENSAGEM_IMAGEM_FALHOU, MOTIVO_IMAGEM_FALHOU,
+                                                       leitura.uso), leitura)
     if leitura.tipo == imagens.DOCUMENTO:
-        return _resposta_fixa_com_chamado(loja_id, canal, lead_id, "[documento]",
-                                          MENSAGEM_DOCUMENTO, MOTIVO_DOCUMENTO, leitura.uso)
+        return _com_leitura(_resposta_fixa_com_chamado(loja_id, canal, lead_id, "[documento]",
+                                                       MENSAGEM_DOCUMENTO, MOTIVO_DOCUMENTO,
+                                                       leitura.uso), leitura)
     if leitura.tipo == imagens.CARRO:
-        _chamado_da_foto(loja_id, lead_id, MOTIVO_AVALIACAO, f"Foto do carro: {leitura.descricao}")
+        motivo = MOTIVO_AVALIACAO + (f' Pergunta do cliente: "{pergunta_curta(legenda)}"' if legenda.strip() else "")
+        _chamado_da_foto(loja_id, lead_id, motivo, f"Foto do carro: {leitura.descricao}")
 
     resultado = await executar_turno(loja_id, canal, lead_id, imagens.texto_para_o_leo(leitura, legenda),
                                      grafo=grafo, tipo="imagem")
     if leitura.tipo == imagens.CARRO:
         _anotar_foto_na_troca(loja_id, lead_id, leitura.descricao)
         resultado.handoff_aberto = True
-    resultado.uso_imagem = leitura.uso
-    return resultado
+    return _com_leitura(resultado, leitura)

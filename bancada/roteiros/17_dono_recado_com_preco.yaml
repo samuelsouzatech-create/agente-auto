@@ -2,7 +2,7 @@ nome: dono_recado_com_preco
 # Dono cadastrado deixa recado com preço: é condição comercial (L3b).
 remetente: "5581999990001"
 falas:
-  - Léo, anota aí: no feirão o Civic sai por 90 mil
+  - "Léo, anota aí: no feirão o Civic sai por 90 mil"
 deve:
   tools: [registrar_recado]
   handoff: não

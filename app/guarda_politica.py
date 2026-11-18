@@ -243,6 +243,9 @@ _PADROES_CONTATO = [
     # ("vou verificar essa informação específica sobre o laudo com o pessoal da equipe")
     re.compile(r"\b(vou|vamos|irei)\s+(te\s+)?(verificar|confirmar|checar|ver|chamar|passar)\b"
                r"[^.!?]*" + _QUEM_DA_EQUIPE),
+    # L5b: "o pessoal da equipe pode te passar / vai confirmar / vão informar"
+    re.compile(_QUEM_DA_EQUIPE + r"[^.!?]{0,40}\b(pode|podem|vai|vao)\s+(te\s+|lhe\s+)?"
+               r"(passar|confirmar|informar)\b"),
 ]
 _NEGACAO_CONTATO = re.compile(r"\b(nao|nunca|nem)\b")
 # L2b: oferta em pergunta ("quer que eu chame um vendedor?") não é promessa.
@@ -278,3 +281,40 @@ _FALSO_DONO = [
 def diz_ser_da_equipe(texto: str) -> bool:
     frase = _sem_acento(texto)
     return any(p.search(frase) for p in _FALSO_DONO)
+
+
+# L5b: assunto do CLIENTE que só a equipe responde -> chamado na mesma fala (código).
+_ASSUNTOS_DA_EQUIPE = [
+    ("laudo", r"\blaudos?\b"), ("cautelar", r"\bcautelar\b"), ("leilão", r"\bleiloes?\b|\bleilao\b"),
+    ("sinistro", r"\bsinistr\w*"), ("IPVA", r"\bipva\b"), ("multa", r"\bmultas?\b"),
+    ("documentação do carro", r"\bdocumentacao\b|\bdocumentos?\s+do\s+(carro|veiculo)\b"),
+    ("procedência", r"\bprocedencia\b"), ("dono anterior", r"\bdonos?\s+anterior(es)?\b"),
+    ("revisão", r"\brevis(ao|oes|ado|ada|adas|ados)\b"),
+]
+_ASSUNTOS_COMPILADOS = [(nome, re.compile(p)) for nome, p in _ASSUNTOS_DA_EQUIPE]
+
+
+def assunto_da_equipe(texto: str) -> str | None:
+    """Nome do primeiro assunto que só a equipe responde, ou None."""
+    frase = _sem_acento(texto)
+    return next((nome for nome, p in _ASSUNTOS_COMPILADOS if p.search(frase)), None)
+
+
+# L5b: cliente pedindo valor do carro DELE ("quanto vocês pagam no meu", "quanto vale o meu").
+_VALOR_DA_TROCA = [
+    re.compile(r"\bquanto\s+(voces\s+|vcs\s+|vc\s+|voce\s+|a loja\s+)?"
+               r"(pagam|paga|dao|da|avaliam|avalia|oferecem|oferece)\s+(no|na|pelo|pela|pro|pra|por)\s+"
+               r"(meu|minha|o meu|a minha)\b"),
+    re.compile(r"\bquanto\s+(vale|valeria|sai)\s+(o\s+|a\s+)?(meu|minha)\b"),
+]
+
+
+def pediu_valor_da_troca(texto: str) -> bool:
+    frase = _sem_acento(texto)
+    return any(p.search(frase) for p in _VALOR_DA_TROCA)
+
+
+def pergunta_curta(texto: str, limite: int = 120) -> str:
+    """L5b: a pergunta do cliente que vai no motivo do chamado (máx. 120 letras)."""
+    texto = " ".join(str(texto or "").split())
+    return texto if len(texto) <= limite else texto[:limite - 1].rstrip() + "…"

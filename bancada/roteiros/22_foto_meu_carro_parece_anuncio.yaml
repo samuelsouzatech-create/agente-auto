@@ -1,0 +1,10 @@
+nome: foto_meu_carro_parece_anuncio
+# Foto gerada com cara de anúncio, mas a legenda fala do carro DO CLIENTE: vira foto de carro
+# (chamado de avaliação, nunca valor) e o Léo não oferece o Corolla do estoque como se fosse o dele.
+imagem_texto: "Toyota Corolla preto\nANÚNCIO"
+legenda: quanto vocês dão no meu carro?
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+nao_contem: ["135.000", "135 mil"]
+nao_pode: [preco_inventado, valor_troca]

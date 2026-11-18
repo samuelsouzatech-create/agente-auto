@@ -134,8 +134,14 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         raise RoteiroInvalido(f"{origem}: falta 'nome'")
     tem_imagem = bool(dados.get("imagem") or dados.get("imagem_texto"))
     falas = [] if falas is None and tem_imagem else falas
-    if not isinstance(falas, list) or (not falas and not tem_imagem) or not all(str(f).strip() for f in falas):
+    if not isinstance(falas, list) or (not falas and not tem_imagem):
         raise RoteiroInvalido(f"{origem}: 'falas' precisa ser uma lista de falas (só a foto: pode ficar sem)")
+    for i, fala in enumerate(falas, 1):
+        # L5b: fala com ": " sem aspas vira mapa no YAML ({'Léo, anota aí': '...'}) e o Léo
+        # receberia texto errado. Só texto é aceito.
+        if not isinstance(fala, str) or not fala.strip():
+            raise RoteiroInvalido(f"{origem}: a fala {i} não é texto (veio {type(fala).__name__}: {fala!r}). "
+                                  "Ponha a fala entre aspas no YAML.")
     if dados.get("imagem") and dados.get("imagem_texto"):
         raise RoteiroInvalido(f"{origem}: use 'imagem' (arquivo) ou 'imagem_texto' (gerada), não os dois")
     deve = dados.get("deve") or {}
@@ -508,6 +514,7 @@ class Turno:
     barrado: str | None = None      # resposta original que a guarda de preço barrou
     erro: str | None = None
     silenciado: bool = False
+    foto_lida: dict | None = None   # L5b: {"tipo", "descricao"} da foto deste turno
 
 
 @dataclass
@@ -768,6 +775,7 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
         gravador.ultimo = None
         desde, antes = len(canal.enviadas), len(handoffs_abertos(lead_id))
         resultado = await chamar()
+        turno.foto_lida = getattr(resultado, "leitura_imagem", None)
         uso = getattr(resultado, "uso_imagem", None)
         if uso is not None:                      # L5: a leitura da foto entra no custo
             res.tokens_imagem_entrada += uso.tokens_entrada
@@ -881,6 +889,9 @@ def montar_relatorio(rodada: Rodada, modelo: str = "") -> str:
             linhas.append(f"**Cliente:** {turno.fala}  ")
             if turno.silenciado:
                 linhas.append("_(Léo em silêncio)_  ")
+            if turno.foto_lida:
+                linhas.append(f"🖼️ foto lida como **{turno.foto_lida['tipo']}**: "
+                              f"{turno.foto_lida['descricao'] or '(sem descrição)'}  ")
             for bolha in turno.bolhas:
                 linhas.append(f"**Léo:** {bolha}  ")
             for foto in turno.fotos:

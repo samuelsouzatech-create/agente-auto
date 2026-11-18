@@ -5,8 +5,9 @@ from __future__ import annotations
 from app.channels.base import Canal, MensagemEntrada
 
 # Ordem importa: animation vem antes de document (o GIF também tem document).
+# L5b: "photo" saiu daqui: foto agora é lida (tipo "imagem").
 _NAO_SUPORTADOS = (
-    ("animation", "animation"), ("photo", "image"), ("sticker", "sticker"),
+    ("animation", "animation"), ("sticker", "sticker"),
     ("video", "video"), ("video_note", "video"), ("document", "document"),
     ("location", "location"), ("contact", "contacts"),
 )
@@ -44,6 +45,12 @@ class CanalTelegram(Canal):
             return [MensagemEntrada(tipo="audio", id_midia=audio.file_id,
                                     mime=getattr(audio, "mime_type", None) or "audio/ogg",
                                     tipo_original="audio", **comum)]
+
+        fotos = getattr(msg, "photo", None)
+        if fotos:          # L5b: várias resoluções da mesma foto; a última é a maior
+            return [MensagemEntrada(tipo="imagem", id_midia=fotos[-1].file_id, mime="image/jpeg",
+                                    texto=(getattr(msg, "caption", None) or "").strip(),
+                                    tipo_original="image", **comum)]
 
         for atributo, tipo_original in _NAO_SUPORTADOS:
             if getattr(msg, atributo, None):

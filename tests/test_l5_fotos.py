@@ -103,10 +103,11 @@ def _nada_da_foto_no_banco():
 def test_foto_de_carro_vai_ao_leo_com_chamado_de_avaliacao(duas_lojas):
     grafo = GrafoFalso()
     r = _foto(LOJA_A, leitor(CARRO, "Gol prata, risco na porta"), "quanto vocês dão nele?", grafo)
-    assert grafo.entradas[0] == ("[Foto do cliente: carro. O que aparece: Gol prata, risco na porta]\n"
-                                 "quanto vocês dão nele?")
+    assert grafo.entradas[0] == ("[Foto do cliente: carro DELE (não é do estoque). O que aparece: "
+                                 "Gol prata, risco na porta]\nquanto vocês dão nele?")
     assert r.handoff_aberto and r.uso_imagem == Uso(300, 40)
-    assert _motivos(LOJA_A) == ["Avaliação: cliente mandou foto do carro."]
+    assert _motivos(LOJA_A) == ['Avaliação: cliente mandou foto do carro. '
+                                'Pergunta do cliente: "quanto vocês dão nele?"']
     assert _motivos(LOJA_B) == []
     assert _mensagens()[0]["tipo"] == "imagem"
     _nada_da_foto_no_banco()

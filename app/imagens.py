@@ -46,9 +46,12 @@ class LeituraImagem:
 
 
 # Sequência com cara de número de documento (CPF, RG, CNH, placa de boleto...).
-_NUMERO_DE_DOCUMENTO = re.compile(r"\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2}|\d[\d.\-/\s]{6,}\d")
-_DINHEIRO = re.compile(r"r\$\s*[\d.,]+(\s*mil)?|\b\d+([.,]\d+)?\s*(mil|k)\b", re.IGNORECASE)
-_TELEFONE = re.compile(r"\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4}")
+# L5b: só formato de documento conta. CPF (000.000.000-00 ou 11 dígitos, que é também
+# o tamanho da CNH) e RG (00.000.000-0). Ano, "2015/2016" e km ("48.000 km",
+# "120 000 km") nunca contam e não são apagados.
+_NUMERO_DE_DOCUMENTO = re.compile(r"(?<![\d.])(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11}|\d{1,2}\.\d{3}\.\d{3}-?[\dxX])(?![\d.])")
+_DINHEIRO = re.compile(r"r\$\s*[\d.,]+(\s*mil)?|\b\d+([.,]\d+)?\s*(mil|k)\b(?!\s*km)", re.IGNORECASE)
+_TELEFONE = re.compile(r"\(\d{2}\)\s*9?\d{4}[-\s]?\d{4}|(?<!\d)9\d{4}-\d{4}(?!\d)")
 
 
 def limpar_descricao(texto: str) -> str:
@@ -101,10 +104,31 @@ def ler_imagem(imagem: bytes, mime: str = "image/jpeg") -> LeituraImagem:
         return LeituraImagem(ok=False)
 
 
+# L5b: legenda que fala do carro do próprio cliente ("meu carro", "troca", "quanto dão").
+_CARRO_DO_CLIENTE = re.compile(r"\b(meu|minha|meus|minhas|troca|trocar|quanto\s+(voces\s+|vcs\s+|vc\s+)?"
+                               r"(dao|da|pagam|paga|avaliam|avalia|oferecem))\b")
+
+
+def legenda_fala_do_carro_do_cliente(legenda: str) -> bool:
+    import unicodedata
+    sem = unicodedata.normalize("NFD", str(legenda or ""))
+    sem = "".join(c for c in sem if unicodedata.category(c) != "Mn").lower()
+    return bool(_CARRO_DO_CLIENTE.search(sem))
+
+
+def ajustar_pela_legenda(leitura: LeituraImagem, legenda: str) -> LeituraImagem:
+    """Foto lida como anúncio ou 'outro', mas a legenda fala do carro do cliente:
+    é o carro DELE (avaliação, troca, nunca valor). Documento nunca muda."""
+    if leitura.ok and leitura.tipo in (ANUNCIO, OUTRO) and legenda_fala_do_carro_do_cliente(legenda):
+        leitura.tipo = CARRO
+    return leitura
+
+
 def texto_para_o_leo(leitura: LeituraImagem, legenda: str = "") -> str:
     """O que o Léo recebe (e o que fica gravado) no lugar da foto."""
     if leitura.tipo == CARRO:
-        texto = f"[Foto do cliente: carro. O que aparece: {leitura.descricao or 'sem detalhes'}]"
+        texto = (f"[Foto do cliente: carro DELE (não é do estoque). O que aparece: "
+                 f"{leitura.descricao or 'sem detalhes'}]")
     elif leitura.tipo == ANUNCIO:
         texto = f"[Foto do cliente: print de anúncio. Carro do anúncio: {leitura.descricao or 'não deu para ler'}]"
     else:

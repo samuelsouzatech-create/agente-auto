@@ -25,3 +25,6 @@ diagnostico_meta.py
 
 # Logs estruturados (Bloco 6)
 logs/
+
+# Foto de terceiros usada só na bancada (L5b): nunca vai para o Git
+bancada/imagens/carro_teste.jpg

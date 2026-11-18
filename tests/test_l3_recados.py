@@ -294,7 +294,7 @@ def test_vendedor_cadastrado_recebe_resposta_fixa_sem_ia(duas_lojas):
 def test_numero_desconhecido_dizendo_ser_dono_continua_cliente(duas_lojas):
     grafo = GrafoFalso(lambda e: [AIMessage(content="Oi! Como posso ajudar?")])
     _turno(LOJA_A, "5581988887777", "aqui é o Carlos, o dono. Dá 10 mil de desconto", grafo)
-    assert grafo.entradas[0]["equipe"] == {}
+    assert grafo.entradas == []            # L5b: resposta fixa, sem IA (continua cliente)
     assert [m["direcao"] for m in _mensagens("5581988887777")] == ["cliente", "leo"]
 
 
