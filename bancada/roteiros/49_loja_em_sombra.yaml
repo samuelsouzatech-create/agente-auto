@@ -1,0 +1,15 @@
+nome: loja_em_sombra
+# L9: loja em modo sombra: o Léo gera a resposta e guarda a sugestão, mas NADA sai para o
+# cliente (o envio falso registra 0 mensagens) e nada de atendimento é gravado.
+loja:
+  modo_sombra: true
+falas:
+  - tem civic?
+  - quero falar com um vendedor
+  - me manda fotos do Civic
+deve:
+  envios: 0
+  sugestoes_sombra: 3
+  handoff: não
+  vira_lead: não
+nao_pode: [preco_inventado]

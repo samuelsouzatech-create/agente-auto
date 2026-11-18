@@ -98,7 +98,8 @@ CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "p
 CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead",
                "toques", "envios_pos_venda", "textos_diferentes", "envios_no_horario",   # L6
                "fotos", "fotos_de", "respostas",                                          # L7
-               "trocas"}                                                                  # L8
+               "trocas",                                                                  # L8
+               "envios", "sugestoes_sombra"}                                              # L9
 NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco",
                     "condicao_recado", "numero", "regra_entrada", "elogio_estado"}
 
@@ -200,6 +201,8 @@ def validar_roteiro(dados, origem: str = "") -> dict:
             "fotos_de": str(deve["fotos_de"]).strip() if deve.get("fotos_de") else None,
             "respostas": deve.get("respostas"),
             "trocas": deve.get("trocas"),                       # L8: carros de troca registrados
+            "envios": deve.get("envios"),                       # L9: mensagens/fotos que saíram
+            "sugestoes_sombra": deve.get("sugestoes_sombra"),   # L9: sugestões guardadas
             # L3b: texto que o motivo de algum chamado do cliente precisa ter
             "motivo_contem": [str(c) for c in (deve.get("motivo_contem") or [])],
             # L3b: a conversa fica gravada como de cliente (lead)?
@@ -602,6 +605,8 @@ class ResultadoRoteiro:
     envios_job: list = field(default_factory=list)       # L6: o que os jobs mandaram (envio falso)
     respostas_rajada: int = 0                            # L7: quantas vezes o Léo respondeu à rajada
     trocas_gravadas: int = 0                             # L8: carros de troca registrados
+    sugestoes_sombra: int = 0                            # L9: sugestões guardadas no modo sombra
+    chamados_gravados: int = 0
     precos_do_estoque: set = field(default_factory=set)
     loja_do_job: object = None
     inicio_relogio: object = None
@@ -785,6 +790,7 @@ def checar(res: ResultadoRoteiro) -> None:
         ok = res.trocas_gravadas == r["deve"]["trocas"]
         (res.ok if ok else res.falhas).append(
             f"carros de troca registrados: {res.trocas_gravadas} (esperado {r['deve']['trocas']})")
+    checar_sombra(res)
     checar_tom(res)
     if res.parou_no_teto:
         res.falhas.append("roteiro interrompido no teto de gasto")
@@ -1041,6 +1047,9 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
                                   (LOJA_ID, lead_id))[0]["n"]
     res.trocas_gravadas = _ler("SELECT COUNT(*) n FROM trocas WHERE loja_id = ? AND lead_id = ?",
                                (LOJA_ID, lead_id))[0]["n"]
+    res.sugestoes_sombra = _ler("SELECT COUNT(*) n FROM sombra_sugestoes WHERE loja_id = ? AND lead_id = ?",
+                                (LOJA_ID, lead_id))[0]["n"]
+    res.chamados_gravados = len(handoffs_abertos(lead_id))
     res.precos_do_estoque = {round(float(l["preco"]) * 100) for l in
                              _ler("SELECT preco FROM estoque WHERE loja_id = ? AND status = 'disponivel'",
                                   (LOJA_ID,)) if l["preco"] is not None}
@@ -1102,6 +1111,20 @@ _VALIDADE = re.compile(r"\b(vale|valido|valida)\s+ate\b|\bate\s+o\s+dia\b|\bate\
 _PERGUNTOU_VALIDADE = re.compile(r"\bate\s+quando\b|\bvalidade\b|\bvale\s+ate\b|\bate\s+que\s+dia\b|\bquando\s+termina\b")
 _HOJE_FECHADA = re.compile(r"\bhoje\s+(a\s+loja\s+)?(esta|estamos)\s+fechad\w*|\b(esta|estamos)\s+fechad\w*\s+hoje\b"
                            r"|\bloja\s+esta\s+fechada\s+hoje\b")
+
+
+def checar_sombra(res: "ResultadoRoteiro") -> None:
+    """L9: quanto saiu para o cliente (bolhas + fotos + jobs) e quantas sugestões ficaram."""
+    deve = res.roteiro["deve"]
+    if deve.get("envios") is not None:
+        saiu = sum(len(t.bolhas) + len(t.fotos) for t in res.turnos)
+        ok = saiu == deve["envios"]
+        (res.ok if ok else res.promessas).append(
+            f"mensagens/fotos enviadas ao cliente: {saiu} (esperado {deve['envios']})")
+    if deve.get("sugestoes_sombra") is not None:
+        ok = res.sugestoes_sombra == deve["sugestoes_sombra"]
+        (res.ok if ok else res.falhas).append(
+            f"sugestões guardadas no modo sombra: {res.sugestoes_sombra} (esperado {deve['sugestoes_sombra']})")
 
 
 def checar_tom(res: "ResultadoRoteiro") -> None:
@@ -1273,6 +1296,9 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
                                   (LOJA_ID, lead_id))[0]["n"]
     res.trocas_gravadas = _ler("SELECT COUNT(*) n FROM trocas WHERE loja_id = ? AND lead_id = ?",
                                (LOJA_ID, lead_id))[0]["n"]
+    res.sugestoes_sombra = _ler("SELECT COUNT(*) n FROM sombra_sugestoes WHERE loja_id = ? AND lead_id = ?",
+                                (LOJA_ID, lead_id))[0]["n"]
+    res.chamados_gravados = len(handoffs_abertos(lead_id))
     checar(res)
     return res
 

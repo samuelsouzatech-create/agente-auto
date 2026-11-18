@@ -46,6 +46,8 @@ def real_para(loja: Loja, tipo: str, forcado: bool | None = None) -> bool:
     _conferir(tipo)
     if not esta_no_ar(loja.id):
         return False
+    if loja.get("modo_sombra", False):     # L9: loja em sombra nunca manda de verdade
+        return False
     if forcado is not None:
         return bool(forcado)
     return chave_geral_ligada(tipo) and loja_em_real(loja, tipo)

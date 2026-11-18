@@ -30,6 +30,7 @@ from app.handoff import estado_do_handoff
 from app.lojas import carregar_loja
 from app.mensagens import ja_respondeu
 from app.recados import recados_ativos
+from app.sombra import FERRAMENTAS_QUE_GRAVAM, RESPOSTA_DA_FERRAMENTA as RESPOSTA_DA_FERRAMENTA_SOMBRA
 from app.relogio import dia_local
 from app.retomada import retomada_recente
 from app.core.montagem import (
@@ -71,6 +72,7 @@ class EstadoConversa(TypedDict):
     loja_id: int
     canal: str
     equipe: dict      # L3/L4: vazio = cliente; preenchido = dono ou gestor (modo equipe)
+    sombra: bool      # L9: loja em modo sombra (ferramenta que grava não executa)
 
 
 def _loja_do_estado(estado):
@@ -172,6 +174,11 @@ def no_ferramentas(estado: EstadoConversa):
                     tool_call_id=chamada["id"],
                     name=nome,
                 ))
+                continue
+
+            if estado.get("sombra") and nome in FERRAMENTAS_QUE_GRAVAM:      # L9
+                saidas.append(ToolMessage(content=RESPOSTA_DA_FERRAMENTA_SOMBRA,
+                                          tool_call_id=chamada["id"], name=nome))
                 continue
 
             chamada_ajustada = dict(chamada)

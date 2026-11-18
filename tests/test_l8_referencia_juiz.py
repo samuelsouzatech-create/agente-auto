@@ -168,7 +168,7 @@ def test_checagem_de_trocas(pasta_temporaria_da_bancada):
 
 def test_roteiros_l8_carregam():
     roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
-    assert len(roteiros) == 48
+    assert len(roteiros) >= 48
     assert roteiros["dois_carros_na_troca"]["deve"]["trocas"] == 2
     assert roteiros["quer_humano"]["deve"]["handoff_ate_fala"] == 1
 

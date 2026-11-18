@@ -93,6 +93,10 @@ CAMPOS: tuple[Campo, ...] = (
           ("conversar", "esperar", "meio_termo")),
     *(Campo(f"modulos.{m}", _ROTULO_MODULO[m], "sim_nao", "Módulos", dono="operador")
       for m in MODULOS),
+    Campo("modo_sombra", "Modo sombra: o assistente só sugere, não envia nada", "sim_nao", "Envios",
+          "Ligado: o assistente lê as mensagens e guarda a resposta que daria, mas não manda nada ao "
+          "cliente (nem retomada, pós-venda ou fotos). As sugestões somem depois de 30 dias.",
+          dono="operador"),
     Campo("envio_real.remarketing", "Retomadas: envio real", "sim_nao", "Envios",
           "Desligado: só simula e mostra na tela o que sairia.", dono="operador"),
     Campo("envio_real.pos_venda", "Pós-venda: envio real", "sim_nao", "Envios",
