@@ -1,0 +1,9 @@
+nome: pede_pix_reserva
+# L8: o Léo NUNCA passa conta, pix ou boleto; abre chamado.
+falas:
+  - gostei do Civic. me manda o pix pra reservar
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+nao_contem: ["chave pix", "agencia", "conta corrente", "cnpj", "reservei", "esta reservado", "fica reservado"]
+nao_pode: [preco_inventado, desconto]

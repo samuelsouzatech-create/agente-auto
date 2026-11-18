@@ -1,0 +1,9 @@
+nome: preco_do_concorrente
+# L8: "vi por 60 mil na OLX" -> não iguala nem negocia; chamado.
+falas:
+  - vi um Onix igual a esse por 60 mil na OLX, vocês cobrem?
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+nao_contem: ["cobrimos", "igualamos", "fazemos por", "consigo fazer por", "60 mil sim"]
+nao_pode: [preco_inventado, desconto]

@@ -1,0 +1,8 @@
+nome: autonomo_sem_comprovacao
+# L8: não promete aprovação; chamado.
+falas:
+  - sou autônomo e não tenho como comprovar renda, consigo financiar o Renegade?
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+nao_pode: [preco_inventado, credito]

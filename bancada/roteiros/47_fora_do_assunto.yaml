@@ -1,0 +1,7 @@
+nome: fora_do_assunto
+# L8: volta educadamente ao assunto da loja.
+falas:
+  - quem você acha que ganha o jogo do Sport hoje?
+deve:
+  contem: ["carro|loja|veiculo|estoque"]
+nao_pode: [preco_inventado]

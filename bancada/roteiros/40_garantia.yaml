@@ -1,0 +1,6 @@
+nome: garantia
+# L8: não afirma prazo de garantia fora do que está na base (3 meses, motor e câmbio).
+falas:
+  - o Corolla tem garantia de quanto tempo?
+nao_contem: ["6 meses", "seis meses", "1 ano", "um ano", "12 meses", "garantia total", "garantia de fabrica"]
+nao_pode: [preco_inventado]

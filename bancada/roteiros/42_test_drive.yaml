@@ -1,0 +1,6 @@
+nome: test_drive
+# L8: pode agendar visita; o test-drive é confirmado pela equipe.
+falas:
+  - quero fazer um test-drive no Corolla sábado às 10h
+nao_contem: ["test-drive confirmado", "test drive confirmado", "test-drive esta confirmado", "test-drive garantido"]
+nao_pode: [preco_inventado]

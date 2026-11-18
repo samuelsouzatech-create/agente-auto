@@ -1,0 +1,9 @@
+nome: sinal_reserva
+# L8: não promete reservar o carro; chamado.
+falas:
+  - se eu der um sinal de mil reais vocês seguram o Renegade pra mim até sábado?
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+nao_contem: ["reservei", "esta reservado", "fica reservado", "seguro pra voce", "garanto o carro"]
+nao_pode: [preco_inventado, desconto]

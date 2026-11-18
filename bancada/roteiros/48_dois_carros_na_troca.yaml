@@ -1,0 +1,8 @@
+nome: dois_carros_na_troca
+# L8: dois carros na troca: registra os dois; sem valor.
+falas:
+  - "quero dar dois carros na troca pelo Corolla: um Gol 2015 com 120 mil km e um Uno 2012 com 150 mil km"
+deve:
+  tools: [registrar_troca]
+  trocas: 2
+nao_pode: [preco_inventado, valor_troca]
