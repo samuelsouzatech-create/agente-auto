@@ -833,7 +833,26 @@ CREATE INDEX IF NOT EXISTS idx_recados_loja ON recados(loja_id, ativo, valido_at
 """
 
 
-MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12, 13: _MIGRACAO_13, 14: _MIGRACAO_14, 15: _MIGRACAO_15, 16: _MIGRACAO_16, 17: _MIGRACAO_17, 19: _MIGRACAO_19}
+_MIGRACAO_20 = """
+-- L9 (Fase Cérebro): modo sombra. O Léo gera a resposta mas não envia nada; a sugestão
+-- fica aqui para comparar com o que o vendedor respondeu. Só texto (nada de foto/arquivo).
+-- Aditiva: só cria a tabela. As linhas com mais de 30 dias são apagadas pelo app/sombra.py.
+-- Pode rodar de novo (IF NOT EXISTS).
+CREATE TABLE IF NOT EXISTS sombra_sugestoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loja_id INTEGER NOT NULL,
+    lead_id TEXT NOT NULL,
+    canal TEXT NOT NULL,
+    mensagem_cliente TEXT NOT NULL,
+    sugestao TEXT NOT NULL,
+    ferramentas TEXT NOT NULL DEFAULT '[]',
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sombra_loja ON sombra_sugestoes(loja_id, criado_em);
+"""
+
+
+MIGRACOES = {1: _MIGRACAO_1, 2: _MIGRACAO_2, 3: _MIGRACAO_3, 4: _MIGRACAO_4, 5: _MIGRACAO_5, 6: _MIGRACAO_6, 7: _MIGRACAO_7, 8: _MIGRACAO_8, 9: _MIGRACAO_9, 10: _MIGRACAO_10, 11: _MIGRACAO_11, 12: _migracao_12, 13: _MIGRACAO_13, 14: _MIGRACAO_14, 15: _MIGRACAO_15, 16: _MIGRACAO_16, 17: _MIGRACAO_17, 19: _MIGRACAO_19, 20: _MIGRACAO_20}
 VERSAO_SCHEMA = max(MIGRACOES)
 
 

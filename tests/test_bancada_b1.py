@@ -60,7 +60,7 @@ def pasta_temporaria_da_bancada(monkeypatch, tmp_path):
 
 def test_os_roteiros_carregam():
     roteiros = rb.carregar_roteiros()
-    assert len(roteiros) == 48
+    assert len(roteiros) == 49
     pendentes = {r["nome"]: r["pendente"] for r in roteiros if r["pendente"]}
     assert pendentes == {}
     longa = next(r for r in roteiros if r["nome"] == "conversa_longa")
@@ -79,7 +79,7 @@ def test_le_yaml_com_todos_os_campos(tmp_path):
                         "handoff_ate_fala": None, "motivo_contem": [], "vira_lead": None,
                         "toques": None, "envios_pos_venda": None, "textos_diferentes": None,
                         "envios_no_horario": None, "fotos": None, "fotos_de": None, "respostas": None,
-                        "trocas": None}
+                        "trocas": None, "envios": None, "sugestoes_sombra": None}
     assert r["pendente"] == "L1"
     assert rb.carregar_roteiros(tmp_path, so="x")[0]["nome"] == "x"
 
@@ -606,7 +606,7 @@ def test_l5b_fala_que_nao_e_texto_e_recusada_com_erro_claro(tmp_path):
 def test_l5b_roteiro_17_tem_a_fala_inteira():
     roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
     assert roteiros["dono_recado_com_preco"]["falas"] == ["Léo, anota aí: no feirão o Civic sai por 90 mil"]
-    assert len(roteiros) == 48
+    assert len(roteiros) == 49
     novo = roteiros["foto_meu_carro_parece_anuncio"]
     assert "Toyota Corolla preto" in novo["imagem_texto"] and novo["legenda"] == "quanto vocês dão no meu carro?"
     assert novo["deve"]["handoff_ate_fala"] == 1 and "135.000" in novo["nao_contem"]
@@ -628,7 +628,7 @@ def test_l5b_foto_do_carro_esta_fora_do_git():
 
 def test_l5c_roteiros():
     roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
-    assert len(roteiros) == 48
+    assert len(roteiros) == 49
     assert "registrar_troca" in roteiros["conversa_longa"]["deve"]["tools"]
     assert "elogio_estado" in roteiros["foto_do_carro"]["nao_pode"]
     assert "regra_entrada" in roteiros["entrada_minima"]["nao_pode"]

@@ -47,6 +47,7 @@ from app import config  # noqa: F401  (carrega o .env)
 from app.aviso_limite import avisar_limite
 from app.chaves import exigir_loja
 from app.pausa import pausado
+from app.sombra import em_sombra
 from app.modo_envio import real_para
 from app.custos import Uso, registrar_uso, uso_das_mensagens
 from app.filtro_remarketing import (acao_inventada, fato_inventado, preco_fora,
@@ -531,6 +532,8 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
         try:
             loja = carregar_loja(loja_id)
             if not loja.ativo or not modulo_ativo(loja, "remarketing") or pausado(loja_id):
+                continue
+            if em_sombra(loja_id):          # L9: loja em sombra não manda nada
                 continue
             fila = elegiveis(loja_id, agora)
             real = real_para(loja, "remarketing", envio_real)

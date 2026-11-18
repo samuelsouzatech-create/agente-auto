@@ -56,6 +56,8 @@ from app.mensagens import salvar_mensagem, mensagens_desde_a_ultima_resposta_do_
 from app.memoria_banco import com_historico_do_banco, historico_se_esqueceu
 from app.naturalidade import parece_robotica
 from app.pedido_parada import registrar_se_pediu_parada
+from app import sombra
+from app.sombra import em_sombra
 from app.recados import (MENSAGEM_SO_DONO, MENSAGEM_SO_RECADOS, membro_da_equipe,
                          pode_deixar_recado)
 from app.redis_debounce import acumular_e_esperar
@@ -224,6 +226,8 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     membro = _quem_da_equipe(loja_id, canal, lead_id)
     if membro:
         return await _turno_da_equipe(loja_id, canal, lead_id, texto, membro, grafo, inicio)
+    if em_sombra(loja_id):          # L9: gera a resposta, NÃO envia nem grava atendimento
+        return await _turno_sombra(loja_id, canal, lead_id, texto, grafo, inicio)
     rotulo = _rotulo(canal, loja_id)
     print(f"\n{rotulo} Cliente {lead_id} disse: {texto}")
 
@@ -267,6 +271,7 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
                 "loja_id": loja_id,
                 "canal": canal,
                 "equipe": {},
+                "sombra": False,
             },
             {"configurable": {"thread_id": thread_id(loja_id, canal, lead_id)}},
         )
@@ -519,6 +524,41 @@ def marcar_falso_dono(loja_id: int, lead_id: str, texto: str) -> bool:
         return False
 
 
+async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, grafo,
+                        inicio: float) -> ResultadoTurno:
+    """L9: o Léo gera a resposta, mas nada sai e nada de atendimento é gravado
+    (sem mensagem na conversa, sem chamado, troca, visita ou lead). Só a sugestão fica.
+    As guardas que só mexem no TEXTO valem, para a sugestão ser o que ele mandaria."""
+    rotulo = _rotulo(canal, loja_id)
+    print(f"\n{rotulo} [SOMBRA] Cliente {lead_id} disse: {texto}")
+    try:
+        resultado = await asyncio.to_thread(
+            grafo.invoke,
+            {"messages": [HumanMessage(content=texto)], "lead_id": lead_id, "loja_id": loja_id,
+             "canal": canal, "equipe": {}, "sombra": True},
+            {"configurable": {"thread_id": thread_id(loja_id, canal, lead_id)}},
+        )
+    except Exception:
+        traceback.print_exc()
+        sombra.gravar(loja_id, lead_id, canal, texto, "(erro ao gerar a sugestão)", [])
+        return ResultadoTurno(silenciado=True)
+    do_turno = mensagens_do_turno(resultado)
+    # As que o Léo PEDIU (em sombra, as que gravam nem rodam).
+    ferramentas = sorted({c["name"] for m in do_turno for c in (getattr(m, "tool_calls", None) or [])}
+                         | set(ferramentas_usadas(do_turno)))
+    sugestao = limpar_markdown(extrair_texto(resultado["messages"][-1].content))
+    if resposta_tem_preco_inventado(sugestao, resultado["messages"]):
+        sugestao = MENSAGEM_SEGURA
+    sugestao = trocar_frases_proibidas(sugestao)[0]
+    sugestao = corrigir_regra_de_entrada(sugestao)[0]
+    sugestao = trocar_frases_de_risco(sugestao)[0]
+    sombra.gravar(loja_id, lead_id, canal, texto, sugestao, ferramentas)
+    registrar_uso(loja_id, lead_id, canal, uso_das_mensagens(do_turno), tipo="sombra",
+                  ferramentas=ferramentas, latencia_ms=_ms_desde(inicio))
+    print(f"{rotulo} [SOMBRA] Sugestão guardada (nada enviado): {sugestao}")
+    return ResultadoTurno(silenciado=True)
+
+
 def _quem_da_equipe(loja_id: int, canal: str, lead_id: str) -> dict | None:
     """Pessoa da equipe desta loja? Erro ao ler = trata como cliente (atende normal)."""
     try:
@@ -545,7 +585,7 @@ async def _turno_da_equipe(loja_id: int, canal: str, lead_id: str, texto: str,
         resultado = await asyncio.to_thread(
             grafo.invoke,
             {"messages": [HumanMessage(content=texto)], "lead_id": lead_id,
-             "loja_id": loja_id, "canal": canal, "equipe": dict(membro)},
+             "loja_id": loja_id, "canal": canal, "equipe": dict(membro), "sombra": False},
             {"configurable": {"thread_id": thread_id(loja_id, canal, lead_id)}},
         )
     except Exception:
@@ -575,6 +615,9 @@ def turno_resposta_fixa(loja_id: int, canal: str, lead_id: str, registro_cliente
                         resposta: str, tipo: str = "texto") -> ResultadoTurno:
     """Turno sem Léo (resposta pronta, sem IA), respeitando o vendedor no comando."""
     if porta_fechada(loja_id, canal, lead_id):          # P7
+        return ResultadoTurno(silenciado=True)
+    if em_sombra(loja_id):                              # L9: só guarda a sugestão
+        sombra.gravar(loja_id, lead_id, canal, registro_cliente, resposta, [])
         return ResultadoTurno(silenciado=True)
     salvar_mensagem(lead_id, "cliente", registro_cliente, canal=canal, tipo=tipo, loja_id=loja_id)
     if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
@@ -693,6 +736,10 @@ async def executar_turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: 
     if membro:
         return ResultadoTurno(texto=MENSAGEM_EQUIPE_SO_TEXTO if pode_deixar_recado(membro)
                               else MENSAGEM_SO_DONO)
+    if em_sombra(loja_id):          # L9: não lê a foto (custo) nem guarda o arquivo
+        sombra.gravar(loja_id, lead_id, canal, f"[foto] {legenda}".strip(),
+                      "(foto não lida no modo sombra)", [])
+        return ResultadoTurno(silenciado=True)
     if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
         salvar_mensagem(lead_id, "cliente", "[foto]", canal=canal, tipo="imagem", loja_id=loja_id)
         return ResultadoTurno(silenciado=True)

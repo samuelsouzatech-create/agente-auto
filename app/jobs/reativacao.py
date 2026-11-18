@@ -31,6 +31,7 @@ from app.elegibilidade import no_horario_de_envio, vagas_no_mes
 from app.jobs.remarketing import EnviadorReal, _ler_agora
 from app.lojas import Loja, carregar_loja, modulo_ativo
 from app.pausa import pausado
+from app.sombra import em_sombra
 from app.modo_envio import real_para
 from app.relogio import agora_utc, para_banco
 from app.templates import (
@@ -178,6 +179,8 @@ def rodar_reativacao(agora: datetime | None = None, *, envio_real: bool | None =
         try:
             loja = carregar_loja(loja_id)
             if not loja.ativo or not modulo_ativo(loja, "remarketing") or pausado(loja_id):
+                continue
+            if em_sombra(loja_id):          # L9: loja em sombra não manda nada
                 continue
             if not no_horario_de_envio(loja, agora):
                 continue

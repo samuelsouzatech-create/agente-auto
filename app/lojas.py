@@ -58,6 +58,7 @@ CHAVES_DO_OPERADOR = frozenset({
     "custos.teto_diario_llm",
     "remarketing.limite_mensal", "remarketing.carencia_dias",
     "instagram.limite_private_replies_h",
+    "modo_sombra",                                   # L9: só o operador liga/desliga
 })
 
 # ---------------------------------------------------------------------
@@ -68,6 +69,7 @@ PADROES: dict = {
     "cidade": "",
     "endereco": "",                               # L2: vazio = o Léo não sabe e passa para a equipe
     "aceita_troca": "nao_informado",              # L5c: sim | nao | nao_informado (passa para a equipe)
+    "modo_sombra": False,                         # L9: True = gera a resposta, NÃO envia nada (só sugestão)
     "tom": "simples, cordial e direto",
     "fuso": "America/Recife",
     "atendimento": {
@@ -253,6 +255,7 @@ EDITAVEIS: dict[str, Callable] = {
     "cidade": _texto(0, 80),
     "endereco": _texto(0, 200),
     "aceita_troca": _opcao("sim", "nao", "nao_informado"),
+    "modo_sombra": _bool,
     "tom": _texto(1, 200),
     "fuso": _fuso,
     "atendimento.horario_humano": _faixa_horario(),

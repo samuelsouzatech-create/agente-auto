@@ -37,6 +37,7 @@ from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
 from app import base_pos_venda, bloqueios, regua, vendas
 from app.pausa import pausado
+from app.sombra import em_sombra
 from app.modo_envio import real_para
 from app.custos import Uso, registrar_uso
 from app.elegibilidade import no_horario_de_envio, proxima_abertura
@@ -325,6 +326,8 @@ def rodar_pos_venda(agora: datetime | None = None, *, envio_real: bool | None = 
         try:
             loja = carregar_loja(loja_id)
             if not loja.ativo or not modulo_ativo(loja, "pos_venda") or pausado(loja_id):
+                continue
+            if em_sombra(loja_id):          # L9: loja em sombra não manda nada
                 continue
             real = real_para(loja, "pos_venda", envio_real)
             fila = regua.vencidas(loja_id, agora, max_por_loja + bloqueios.total_ativos(loja_id))
