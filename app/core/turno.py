@@ -47,7 +47,7 @@ from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da
                                  pediu_valor_da_troca, pergunta_curta, pergunta_se_aceita_troca,
                                  promete_contato_da_equipe, resposta_tem_preco_inventado,
                                  tirar_elogio_da_descricao, tirar_elogio_do_estado,
-                                 tirar_promessa_de_foto,
+                                 tirar_promessa_de_foto, pedido_da_equipe, trocar_frases_de_risco,
                                  trocar_frases_proibidas)
 from banco import conectar
 from app.handoff import estado_do_handoff
@@ -313,6 +313,10 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     if trocou:
         print(f"{rotulo} GUARDA: regra de entrada trocada por 'depende da análise'.")
         ferramentas.append("guarda_entrada")
+    resposta, riscos = trocar_frases_de_risco(resposta)      # L8: pix, reserva, entrega, preço...
+    if riscos:
+        print(f"{rotulo} GUARDA: frase de risco trocada ({', '.join(riscos)}).")
+        ferramentas.append("guarda_risco")
     if not midias:                       # L7: disse que mandou foto, mas nenhuma saiu
         resposta, trocou = tirar_promessa_de_foto(resposta)
         if trocou:
@@ -478,6 +482,9 @@ def motivo_do_chamado_pelo_codigo(texto: str, resposta: str,
     assunto = assunto_da_equipe(texto)
     if assunto:
         return f"Cliente perguntou sobre {assunto}.", "guarda_assunto"
+    pedido = pedido_da_equipe(texto)                          # L8
+    if pedido:
+        return pedido, "guarda_pedido"
     if promete_contato_da_equipe(resposta):
         return MOTIVO_PROMESSA, "guarda_contato"
     return None

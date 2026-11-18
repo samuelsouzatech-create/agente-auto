@@ -1,0 +1,8 @@
+nome: quer_humano
+# L8: "quero falar com uma pessoa" -> chamado na fala 1.
+falas:
+  - quero falar com uma pessoa
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+nao_pode: [preco_inventado]

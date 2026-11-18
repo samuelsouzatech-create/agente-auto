@@ -97,7 +97,8 @@ CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "p
                   "rajada"}                                                 # L7: mensagens seguidas
 CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead",
                "toques", "envios_pos_venda", "textos_diferentes", "envios_no_horario",   # L6
-               "fotos", "fotos_de", "respostas"}                                          # L7
+               "fotos", "fotos_de", "respostas",                                          # L7
+               "trocas"}                                                                  # L8
 NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco",
                     "condicao_recado", "numero", "regra_entrada", "elogio_estado"}
 
@@ -198,6 +199,7 @@ def validar_roteiro(dados, origem: str = "") -> dict:
             "fotos": deve.get("fotos"),
             "fotos_de": str(deve["fotos_de"]).strip() if deve.get("fotos_de") else None,
             "respostas": deve.get("respostas"),
+            "trocas": deve.get("trocas"),                       # L8: carros de troca registrados
             # L3b: texto que o motivo de algum chamado do cliente precisa ter
             "motivo_contem": [str(c) for c in (deve.get("motivo_contem") or [])],
             # L3b: a conversa fica gravada como de cliente (lead)?
@@ -599,6 +601,7 @@ class ResultadoRoteiro:
     tokens_imagem_entrada: int = 0                       # L5: leitura da foto (já somada no custo)
     envios_job: list = field(default_factory=list)       # L6: o que os jobs mandaram (envio falso)
     respostas_rajada: int = 0                            # L7: quantas vezes o Léo respondeu à rajada
+    trocas_gravadas: int = 0                             # L8: carros de troca registrados
     precos_do_estoque: set = field(default_factory=set)
     loja_do_job: object = None
     inicio_relogio: object = None
@@ -778,6 +781,11 @@ def checar(res: ResultadoRoteiro) -> None:
     if r.get("passos"):
         checar_job(res)
     checar_fotos_e_rajada(res)
+    if r["deve"].get("trocas") is not None:
+        ok = res.trocas_gravadas == r["deve"]["trocas"]
+        (res.ok if ok else res.falhas).append(
+            f"carros de troca registrados: {res.trocas_gravadas} (esperado {r['deve']['trocas']})")
+    checar_tom(res)
     if res.parou_no_teto:
         res.falhas.append("roteiro interrompido no teto de gasto")
     res.status, res.alerta = decidir(res.promessas, res.falhas, res.avisos, r["pendente"])
@@ -1031,6 +1039,8 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
     res.motivos_finais = [h["motivo"] or "" for h in handoffs_abertos(lead_id)]
     res.mensagens_gravadas = _ler("SELECT COUNT(*) n FROM mensagens WHERE loja_id = ? AND lead_id = ?",
                                   (LOJA_ID, lead_id))[0]["n"]
+    res.trocas_gravadas = _ler("SELECT COUNT(*) n FROM trocas WHERE loja_id = ? AND lead_id = ?",
+                               (LOJA_ID, lead_id))[0]["n"]
     res.precos_do_estoque = {round(float(l["preco"]) * 100) for l in
                              _ler("SELECT preco FROM estoque WHERE loja_id = ? AND status = 'disponivel'",
                                   (LOJA_ID,)) if l["preco"] is not None}
@@ -1084,6 +1094,34 @@ async def processar_rajada(mensagens: list[str], lead_id: str, executar) -> list
             m.redis_cliente = original
         rd.DEBOUNCE_SEGUNDOS = debounce_original
     return [r for r in resultados if r]
+
+
+# L8: checagens de TOM. Só AVISO (nunca reprovam): servem para achar padrão ruim.
+_COMO_MENCIONEI = re.compile(r"\bcomo\s+(eu\s+)?(mencionei|comentei|disse|falei|expliquei)\b")
+_VALIDADE = re.compile(r"\b(vale|valido|valida)\s+ate\b|\bate\s+o\s+dia\b|\bate\s+\d{1,2}/\d{1,2}\b")
+_PERGUNTOU_VALIDADE = re.compile(r"\bate\s+quando\b|\bvalidade\b|\bvale\s+ate\b|\bate\s+que\s+dia\b|\bquando\s+termina\b")
+_HOJE_FECHADA = re.compile(r"\bhoje\s+(a\s+loja\s+)?(esta|estamos)\s+fechad\w*|\b(esta|estamos)\s+fechad\w*\s+hoje\b"
+                           r"|\bloja\s+esta\s+fechada\s+hoje\b")
+
+
+def checar_tom(res: "ResultadoRoteiro") -> None:
+    turnos_do_leo = [t for t in res.turnos if t.bolhas and not t.do_job]
+    for i, turno in enumerate(turnos_do_leo):
+        texto = normalizar(" ".join(turno.bolhas))
+        if i == 0 and _COMO_MENCIONEI.search(texto):
+            res.avisos.append("tom: \"como mencionei\" na primeira resposta (não tinha dito antes)")
+        if _HOJE_FECHADA.search(texto):
+            res.avisos.append("tom: \"hoje a loja está fechada\" (o certo é \"agora\")")
+    if res.roteiro.get("recados"):
+        falas = normalizar(" ".join(t.fala for t in res.turnos if not t.do_job))
+        if _VALIDADE.search(normalizar(res.texto_do_leo)) and not _PERGUNTOU_VALIDADE.search(falas):
+            res.avisos.append("tom: disse a validade do recado sem o cliente perguntar")
+    vistas: dict[str, int] = {}
+    for i, turno in enumerate(turnos_do_leo):
+        for frase in {f for f in frases(" ".join(turno.bolhas)) if f.endswith("?") and len(f) > 15}:
+            vistas[frase] = vistas.get(frase, 0) + 1
+    repetidas = [f for f, n in vistas.items() if n >= 2]
+    res.avisos.extend(f"tom: pergunta repetida em {vistas[f]} respostas: \"{f}\"" for f in repetidas)
 
 
 def checar_fotos_e_rajada(res: "ResultadoRoteiro") -> None:
@@ -1233,6 +1271,8 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
     res.motivos_finais = [h["motivo"] or "" for h in handoffs_abertos(lead_id)]
     res.mensagens_gravadas = _ler("SELECT COUNT(*) n FROM mensagens WHERE loja_id = ? AND lead_id = ?",
                                   (LOJA_ID, lead_id))[0]["n"]
+    res.trocas_gravadas = _ler("SELECT COUNT(*) n FROM trocas WHERE loja_id = ? AND lead_id = ?",
+                               (LOJA_ID, lead_id))[0]["n"]
     checar(res)
     return res
 

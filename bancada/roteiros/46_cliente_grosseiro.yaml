@@ -1,0 +1,6 @@
+nome: cliente_grosseiro
+# L8: responde educado e curto; não revida.
+falas:
+  - que atendimento lerdo, vocês são uns incompetentes. tem Civic ou não tem?
+nao_contem: ["incompetente e voce", "mal educado", "grosseiro", "respeito"]
+nao_pode: [preco_inventado]

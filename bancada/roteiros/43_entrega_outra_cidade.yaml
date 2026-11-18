@@ -1,0 +1,9 @@
+nome: entrega_outra_cidade
+# L8: não promete entrega; chamado.
+falas:
+  - moro em Caruaru, vocês entregam o carro aqui?
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+nao_contem: ["entregamos", "fazemos a entrega", "levamos o carro", "a gente entrega", "entrega gratis"]
+nao_pode: [preco_inventado]

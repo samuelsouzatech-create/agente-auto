@@ -1,14 +1,14 @@
 # Maratona Fase Cérebro (L5c → L9)
 
 Se a sessão parar: leia este arquivo e continue do primeiro bloco que não está "concluído".
-Gasto de Gemini somado na maratona (limite US$ 5): **US$ 1,33** (estimado para cima: 2 rodadas do L6 quebraram sem relatório)
+Gasto de Gemini somado na maratona (limite US$ 5): **US$ 1,85** (estimado para cima: 2 rodadas do L6 quebraram sem relatório)
 
 | Bloco | Branch | Status | pytest (última linha) | Bancada (3 rodadas) | Custo |
 |---|---|---|---|---|---|
 | L5c | cerebro-l5c | concluído | 2443 passed, 92 deselected in 804.94s (0:13:24) | 24/24 sem falha nas 3 (1 AVISO) | US$ 0,29 |
 | L6 | cerebro-l6 | concluído | 2474 passed, 92 deselected in 1232.78s (0:20:32) | 32/32 nas 3 | US$ 0,66 |
 | L7 | cerebro-l7 | concluído | 2491 passed, 92 deselected in 962.65s (0:16:02) | 33–36: 3/3 (30: 1 falso positivo) | US$ 0,38 |
-| L8 | cerebro-l8 | pendente | — | — | — |
+| L8 | cerebro-l8 | concluído | 2525 passed, 92 deselected in 853.04s (0:14:13) | 37–48: 3/3 (48 roteiros sem FALHOU) | US$ 0,52 |
 | L9 | cerebro-l9 | pendente | — | — | — |
 
 ## L5c — fechar L3b e L5 (branch cerebro-l5c, a partir da main 31e0dae)
@@ -108,6 +108,29 @@ Bancada (roteiros 33, 34, 35 e 36 PASSOU nas 3):
 - `rodada_2026-11-18_142710.md` — US$ 0,1235 — 36 PASSOU
 Áudio: pendente (sem caminho simulável sem arquivo de áudio real).
 
+## L8 — conversas de referência e juiz (branch cerebro-l8, a partir da cerebro-l7)
+
+Roteiros 37 a 48 (pix, humano, robô, garantia, sinal, test-drive, entrega, concorrente,
+autônomo, grosseiro, fora do assunto, dois carros na troca). Segurança no CÓDIGO
+(`app/guarda_politica.py`): pedido do cliente que só a equipe resolve abre chamado na mesma
+fala (falar com pessoa, pix/boleto/sinal/reserva, entrega, preço de outra loja, sem
+comprovação de renda); frases de risco na resposta trocadas pela frase segura (chave
+pix/conta, reserva prometida, entrega prometida, cobrir preço, aprovação de crédito,
+test-drive confirmado). Bancada: checagem `trocas` e avisos de tom (como mencionei na 1ª
+resposta, validade do recado sem perguntar, pergunta repetida, "hoje a loja está fechada").
+Juiz: `scripts/juiz_bancada.py` (LEO_JUIZ_MODELO, LEO_JUIZ_TETO_USD=0.30), nota 1–5 por roteiro.
+Testes: `tests/test_l8_referencia_juiz.py` (34).
+
+Suíte completa: `2525 passed, 92 deselected in 853.04s (0:14:13)`.
+Bancada (nenhum FALHOU; 37–48 PASSOU nas 3):
+- `rodada_2026-11-18_145221.md` — US$ 0,1640 — AVISO: endereco_e_horario (pergunta repetida),
+  promocao_ativa (validade do recado sem perguntar). Juiz: `juiz_rodada_2026-11-18_145221.md`, média 4,9.
+- `rodada_2026-11-18_150010.md` — US$ 0,1623 — AVISO: promocao_ativa. Juiz média 4,9.
+- `rodada_2026-11-18_150754.md` — US$ 0,1685 — tudo PASSOU. Juiz média 4,8.
+Juiz custou ~US$ 0,027 nas 3. Notas 2 (tom, não segurança, anotado e não consertado):
+remarketing_carro_vendido (os 3 toques soam iguais e passivos) nas 3 rodadas; recado_do_dono
+numa rodada (pediu para anotar um recado que já tinha anotado).
+
 ## Decisões provisórias
 - L5c: AVISO "o modelo escreveu regra de entrada, mas a guarda do código trocou" conta como
   aprovado no portão (o cliente não recebeu a regra). O texto ficou com a frase da guarda
@@ -121,6 +144,10 @@ Bancada (roteiros 33, 34, 35 e 36 PASSOU nas 3):
   condição comercial nunca aparece; citar recado sem condição fica para depois.
 - L6/L7: checagem do roteiro 30 virou "aproveite para / a oportunidade / a promo" ("aproveitando
   bem o Onix" e "aproveite bastante o carro" eram cortesia, não venda).
+
+- L8: roteiro 40 (garantia) não exige chamado: a base de conhecimento da loja diz "3 meses para
+  motor e câmbio"; o roteiro só reprova prazo diferente (6 meses, 1 ano, garantia total).
+- L8: AVISO de tom não reprova (regra do bloco); o portão olha só FALHOU.
 
 ## Dúvidas para o Samuel
 - Produção: o job de remarketing imprime o texto com emoji. Num terminal Windows cp1252 isso

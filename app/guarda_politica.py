@@ -447,6 +447,82 @@ def tirar_promessa_de_foto(resposta: str) -> tuple[str, bool]:
     return (" ".join(saida) if trocou else resposta), trocou
 
 
+# ======================================================================
+# L8: pedidos do cliente que só a equipe resolve (chamado pelo CÓDIGO) e frases de risco
+# ======================================================================
+PEDIDOS_DA_EQUIPE = [
+    ("Cliente pediu para falar com uma pessoa.",
+     r"\b(falar|conversar|atendid\w*)\s+(com|por)\s+(uma?\s+|o\s+|a\s+)?(pessoa|humano|atendente|gente"
+     r"|ser\s+humano|vendedor|vendedora|gerente)\b|\bpessoa\s+de\s+verdade\b|\bquero\s+(um\s+)?humano\b"),
+    ("Cliente quer pagar, mandar sinal ou reservar o carro.",
+     r"\bpix\b|\bboleto\b|\bsinal\b|\breserv\w*|\bsegurar\s+o\s+carro\b|\bconta\s+(pra|para)\s+(deposit|transfer)\w*"
+     r"|\bdeposit\w*\b|\btransferir\s+o\s+dinheiro\b"),
+    ("Cliente pediu entrega do carro.",
+     r"\bentreg(a|ar|am|ue|uem|ariam)\b|\blevar\s+o\s+carro\s+(ate|pra|para)\b|\bfrete\b|\boutra\s+cidade\b"),
+    ("Cliente citou preço de outra loja/anúncio.",
+     r"\bolx\b|\bwebmotors\b|\bmercado\s+livre\b|\bicarros\b|\boutra\s+loja\b|\bconcorrent\w*"
+     r"|\b(vi|achei|tem)\b[^.!?]{0,25}\bpor\s+(r\$\s*)?\d"),
+    ("Cliente sem comprovação de renda / restrição pediu financiamento.",
+     r"\bautonom\w*|\bsem\s+comprova\w*|\bnao\s+tenho\s+comprovante|\bnome\s+sujo\b|\bnegativad\w*"
+     r"|\bscore\s+baixo\b|\binformal\b"),
+]
+_PEDIDOS_COMPILADOS = [(motivo, re.compile(p)) for motivo, p in PEDIDOS_DA_EQUIPE]
+
+
+def pedido_da_equipe(texto: str) -> str | None:
+    """Motivo do chamado se o cliente pediu algo que só a equipe resolve, ou None."""
+    frase = _sem_acento(texto)
+    return next((motivo for motivo, p in _PEDIDOS_COMPILADOS if p.search(frase)), None)
+
+
+FRASE_PAGAMENTO = "Pagamento e reserva são combinados só com o pessoal da equipe."
+FRASE_ENTREGA = "Entrega fora da loja é combinada só com o pessoal da equipe."
+FRASE_NEGOCIACAO = "Negociação de preço é com o pessoal da equipe."
+FRASE_CREDITO = "A aprovação depende da análise de crédito, feita por um vendedor."
+FRASE_TEST_DRIVE = "O test-drive é confirmado pelo pessoal da equipe."
+FRASES_DE_RISCO = [
+    ("dados_pagamento", FRASE_PAGAMENTO,
+     re.compile(r"\bchave\s+pix\b|\bpix\b[^.!?]{0,30}\d|\bagencia\b|\bconta\s+(corrente|poupanca)\b"
+                r"|\bboleto\b[^.!?]{0,25}\b(segue|gerad\w*|envi\w*|mando)\b|\bcnpj\b[^.!?]{0,15}\d")),
+    ("reserva", FRASE_PAGAMENTO,
+     re.compile(r"\b(reservei|vou\s+reservar|ja\s+reserv\w*|fica\s+reservad\w*|esta\s+reservad\w*|deixo\s+reservad\w*"
+                r"|reservad[oa]\s+(pra|para)\s+voce|seguro\s+(o\s+carro\s+)?(pra|para)\s+voce|garanto\s+o\s+carro)\b")),
+    ("entrega", FRASE_ENTREGA,
+     re.compile(r"\b(entregamos|fazemos\s+(a\s+)?entrega|levamos\s+o\s+carro|a\s+gente\s+entrega|podemos\s+entregar"
+                r"|entrega\s+(gratis|sem\s+custo|garantida))\b")),
+    ("negociacao", FRASE_NEGOCIACAO,
+     re.compile(r"\b(cobrimos|cobrir\s+(a|o|essa|esse)|igualamos|igualar|consigo\s+fazer\s+por|fazemos\s+por|faco\s+por"
+                r"|baixar\s+(para|pra)|chegar\s+(em|nos|aos)\s+(r\$\s*)?\d|cobre\s+a\s+oferta)\b")),
+    ("credito", FRASE_CREDITO,
+     re.compile(r"\b(aprovacao\s+garantid\w*|credito\s+garantid\w*|consegue\s+aprovar|vai\s+(ser\s+)?aprovad\w*"
+                r"|com\s+certeza\s+(aprova|consegue|sai)|financiamos\s+(sim|tranquilo|sem\s+problema)"
+                r"|aprova\s+(sim|tranquilo|na\s+hora)|sai\s+aprovad\w*)\b")),
+    ("test_drive", FRASE_TEST_DRIVE,
+     re.compile(r"\btest[\s-]?drive\b[^.!?]{0,30}\b(confirmad\w*|garantid\w*)\b")),
+]
+_NEGA = re.compile(r"\b(nao|nunca|nem|sem\s+passar)\b")
+
+
+def trocar_frases_de_risco(resposta: str) -> tuple[str, list[str]]:
+    """L8: frases que prometem o que só a equipe pode (pix/conta, reserva, entrega,
+    cobrir preço, aprovação de crédito, test-drive confirmado) viram a frase segura.
+    Frase com negação ("não passo pix por aqui") fica. Devolve (resposta, nomes trocados)."""
+    saida, trocadas, ja_usadas = [], [], set()
+    for frase in _frases_originais(resposta):
+        f = _sem_acento(frase)
+        achada = None if _NEGA.search(f) else next(
+            ((nome, segura) for nome, segura, p in FRASES_DE_RISCO if p.search(f)), None)
+        if achada is None:
+            saida.append(frase)
+            continue
+        nome, segura = achada
+        trocadas.append(nome)
+        if segura not in ja_usadas:
+            saida.append(segura)
+            ja_usadas.add(segura)
+    return (" ".join(saida) if trocadas else resposta), trocadas
+
+
 def cliente_ameacou(texto: str) -> bool:
     """Cliente irritado ou ameaçando (Procon, advogado, Reclame Aqui...)."""
     return bool(_AMEACA.search(_sem_acento(texto)))
