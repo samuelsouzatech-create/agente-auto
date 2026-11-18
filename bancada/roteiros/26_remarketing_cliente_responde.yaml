@@ -1,0 +1,14 @@
+nome: remarketing_cliente_responde
+# L6: depois do 1º toque o cliente responde: o Léo retoma a conversa e o remarketing para.
+conversa:
+  - cliente: tem civic?
+  - leo: Temos sim, o Honda Civic 2019 branco, automático, por R$ 98.000,00. Quer ver fotos?
+interesse: Civic
+passos:
+  - remarketing_dias: 4
+  - cliente: oi, ainda tenho interesse sim. Ele ainda tá aí?
+  - remarketing_dias: 25
+deve:
+  toques: 1
+  envios_no_horario: sim
+nao_pode: [preco_inventado, desconto]

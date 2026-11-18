@@ -1,0 +1,15 @@
+nome: pos_venda_tudo_otimo
+# L6: cliente comprou; o pós-venda pergunta como está; "tá tudo ótimo": agradecer curto,
+# sem vender, sem pedir indicação, sem chamado.
+conversa:
+  - cliente: fechei o Onix, obrigado!
+  - leo: Que ótimo! Qualquer coisa, é só chamar por aqui.
+venda: {modelo: Onix, pagamento: avista}
+passos:
+  - pos_venda_dias: 8
+  - cliente: tá tudo ótimo com o carro, obrigado!
+deve:
+  handoff: não
+  envios_no_horario: sim
+nao_contem: ["indica", "indicacao", "temos outros", "nosso estoque", "aproveite"]
+nao_pode: [preco_inventado, desconto]

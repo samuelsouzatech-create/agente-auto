@@ -1,0 +1,13 @@
+nome: remarketing_pede_parada
+# L6: depois do 1º toque o cliente pede para parar: nenhum toque a mais.
+conversa:
+  - cliente: tem civic?
+  - leo: Temos sim, o Honda Civic 2019 branco, automático, por R$ 98.000,00. Quer ver fotos?
+interesse: Civic
+passos:
+  - remarketing_dias: 4
+  - cliente: para de me mandar mensagem
+  - remarketing_dias: 25
+deve:
+  toques: 1
+nao_pode: [preco_inventado]

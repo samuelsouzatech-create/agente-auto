@@ -407,3 +407,42 @@ def tirar_elogio_da_descricao(descricao: str) -> str:
 
 def pergunta_se_aceita_troca(texto: str) -> bool:
     return bool(_PERGUNTA_TROCA.search(_sem_acento(texto)))
+
+
+# ======================================================================
+# L6: pós-venda e cliente irritado (chamado pelo CÓDIGO na mesma fala)
+# ======================================================================
+PREFIXO_POS_VENDA = "PÓS-VENDA: "     # o job de pós-venda cancela os passos futuros com este início
+MARCA_URGENTE = "URGENTE"
+
+_AMEACA = re.compile(r"\bprocon\b|\badvogad\w*|\bprocess(ar|o|ando)\b|\breclame\s*aqui\b|\bjustica\b"
+                     r"|\bconsumidor\.gov|\bdenunci\w*|\babsurd\w*|\bpalhacada\b|\bvergonha\b"
+                     r"|\bpessimo\s+atendimento\b|\bnunca\s+mais\s+compro\b")
+_PROBLEMA_DA_COMPRA = re.compile(
+    r"\bbarulh\w*|\bdefeit\w*|\bproblem\w*|\bquebr\w*|\bvazament\w*|\bvazando\b|\bfalh\w*|\bluz\b[^.!?]{0,20}\bacesa\b"
+    r"|\bnao\s+(liga|pega|funciona)\b|\bsuperaquec\w*|\bfumac\w*|\btransferencia\b|\bdocument\w*|\bdut\b|\bcrlv\b"
+    r"|\bpagamento\b|\bboleto\b|\bparcela\w*\s+(atrasad\w*|errad\w*)|\bcobranca\b")
+
+
+def cliente_ameacou(texto: str) -> bool:
+    """Cliente irritado ou ameaçando (Procon, advogado, Reclame Aqui...)."""
+    return bool(_AMEACA.search(_sem_acento(texto)))
+
+
+def relatou_problema_da_compra(texto: str) -> bool:
+    """Problema com o carro comprado ou com a compra (só vale para quem comprou na loja)."""
+    return bool(_PROBLEMA_DA_COMPRA.search(_sem_acento(texto)))
+
+
+def motivo_com_marcas(motivo: str, *, pos_venda: bool, urgente: bool) -> str:
+    """Põe "PÓS-VENDA: " no começo (o job de pós-venda lê isso) e "URGENTE — " logo depois.
+    Não repete marca que já está lá."""
+    motivo = str(motivo or "").strip()
+    sem = _sem_acento(motivo).upper()
+    corpo = motivo
+    tem_pv = sem.startswith(("POS-VENDA", "POS VENDA", "POSVENDA"))
+    if tem_pv:
+        corpo = motivo.split(":", 1)[1].strip() if ":" in motivo else motivo
+    if urgente and MARCA_URGENTE not in sem:
+        corpo = f"{MARCA_URGENTE} — {corpo}"
+    return f"{PREFIXO_POS_VENDA}{corpo}" if (pos_venda or tem_pv) else corpo

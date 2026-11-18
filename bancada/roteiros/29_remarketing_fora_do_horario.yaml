@@ -1,0 +1,15 @@
+nome: remarketing_fora_do_horario
+# L6: a loja só manda das 10h às 11h, de segunda a sexta: nenhum envio fora disso.
+loja:
+  remarketing:
+    horario_envio: "10:00-11:00"
+    dias_envio: [0, 1, 2, 3, 4]
+conversa:
+  - cliente: tem civic?
+  - leo: Temos sim, o Honda Civic 2019 branco, automático, por R$ 98.000,00. Quer ver fotos?
+interesse: Civic
+passos:
+  - remarketing_dias: 30
+deve:
+  envios_no_horario: sim
+nao_pode: [preco_inventado]

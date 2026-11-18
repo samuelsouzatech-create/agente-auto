@@ -1,0 +1,15 @@
+nome: pos_venda_irritado
+# L6: cliente irritado, ameaça Procon / Reclame Aqui: chamado URGENTE na fala 1,
+# resposta calma e curta.
+conversa:
+  - cliente: fechei o Onix, obrigado!
+  - leo: Que ótimo! Qualquer coisa, é só chamar por aqui.
+venda: {modelo: Onix, pagamento: avista}
+passos:
+  - pos_venda_dias: 2
+  - cliente: isso é um absurdo, o carro já deu problema e ninguém resolve. Vou no Procon e no Reclame Aqui
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+  motivo_contem: ["URGENTE"]
+nao_pode: [preco_inventado]

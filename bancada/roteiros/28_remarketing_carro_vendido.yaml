@@ -1,0 +1,14 @@
+nome: remarketing_carro_vendido
+# L6: o Civic foi vendido antes do toque: o remarketing não oferece o Civic como disponível;
+# parecido só do estoque, preço só do estoque.
+conversa:
+  - cliente: tem civic?
+  - leo: Temos sim, o Honda Civic 2019 branco, automático, por R$ 98.000,00. Quer ver fotos?
+interesse: Civic
+passos:
+  - vender_carro: Civic
+  - remarketing_dias: 30
+deve:
+  envios_no_horario: sim
+nao_contem: ["civic continua", "civic ainda", "civic que voce viu continua", "temos o civic", "civic disponivel"]
+nao_pode: [preco_inventado, desconto]
