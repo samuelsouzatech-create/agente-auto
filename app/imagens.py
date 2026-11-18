@@ -43,6 +43,31 @@ class LeituraImagem:
     descricao: str = ""
     tem_pessoa: bool = False
     uso: Uso = field(default_factory=Uso)
+    erro: str = ""          # L5c: tipo do erro quando falhou (nunca dado da imagem)
+    tentativas: int = 1
+
+
+# L5c: erros passageiros ganham 1 nova tentativa automática.
+ERRO_TEMPO, ERRO_429, ERRO_5XX = "tempo_esgotado", "limite_429", "servidor_5xx"
+ERRO_RESPOSTA, ERRO_OUTRO = "resposta_invalida", "outro"
+ERROS_PASSAGEIROS = (ERRO_TEMPO, ERRO_429, ERRO_5XX)
+
+
+def tipo_do_erro(erro: Exception) -> str:
+    """Classifica o erro da chamada de visão. Só o tipo; nada da imagem."""
+    nome = type(erro).__name__.lower()
+    codigo = getattr(erro, "code", None) or getattr(erro, "status_code", None)
+    try:
+        codigo = int(codigo)
+    except (TypeError, ValueError):
+        codigo = None
+    if codigo == 429 or "resourceexhausted" in nome or "toomanyrequests" in nome:
+        return ERRO_429
+    if codigo is not None and 500 <= codigo <= 599:
+        return ERRO_5XX
+    if "timeout" in nome or "deadline" in nome or isinstance(erro, TimeoutError):
+        return ERRO_TEMPO
+    return ERRO_OUTRO
 
 
 # Sequência com cara de número de documento (CPF, RG, CNH, placa de boleto...).
@@ -84,8 +109,21 @@ def interpretar(resposta_ia: str, uso: Uso | None = None) -> LeituraImagem:
                          tem_pessoa=bool(dados.get("tem_pessoa")), uso=uso)
 
 
-def ler_imagem(imagem: bytes, mime: str = "image/jpeg") -> LeituraImagem:
-    """Lê a imagem com a IA. Nunca lança exceção: falhou = LeituraImagem(ok=False)."""
+def ler_imagem(imagem: bytes, mime: str = "image/jpeg", *, chamar=None) -> LeituraImagem:
+    """Lê a imagem com a IA. Nunca lança exceção: falhou = LeituraImagem(ok=False, erro=...).
+    L5c: erro passageiro (tempo esgotado, 429, 5xx) ganha 1 nova tentativa."""
+    chamar = chamar or _ler_uma_vez
+    leitura = LeituraImagem(ok=False, erro=ERRO_OUTRO)
+    for tentativa in (1, 2):
+        leitura = chamar(imagem, mime)
+        leitura.tentativas = tentativa
+        if leitura.ok or leitura.erro not in ERROS_PASSAGEIROS:
+            break
+        print(f"[Imagem] Erro passageiro ({leitura.erro}). Tentando de novo.")
+    return leitura
+
+
+def _ler_uma_vez(imagem: bytes, mime: str) -> LeituraImagem:
     try:
         from google import genai
 
@@ -98,10 +136,13 @@ def ler_imagem(imagem: bytes, mime: str = "image/jpeg") -> LeituraImagem:
             contents=[PROMPT_LEITURA, genai.types.Part.from_bytes(data=imagem, mime_type=mime)],
             config=genai.types.GenerateContentConfig(response_mime_type="application/json"),
         )
-        return interpretar(resposta.text, uso_da_resposta(resposta))
+        leitura = interpretar(resposta.text, uso_da_resposta(resposta))
+        if not leitura.ok:
+            leitura.erro = ERRO_RESPOSTA
+        return leitura
     except Exception as erro:
         print(f"[Imagem] Erro ao ler a imagem na IA: {type(erro).__name__}")
-        return LeituraImagem(ok=False)
+        return LeituraImagem(ok=False, erro=tipo_do_erro(erro))
 
 
 # L5b: legenda que fala do carro do próprio cliente ("meu carro", "troca", "quanto dão").

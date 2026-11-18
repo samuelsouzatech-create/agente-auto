@@ -13,5 +13,5 @@ falas:
   - dá pra ir ver sábado de manhã?
   - beleza, obrigado
 deve:
-  tools: [consultar_estoque]
+  tools: [consultar_estoque, registrar_troca]
 nao_pode: [preco_inventado, credito, desconto, valor_troca]

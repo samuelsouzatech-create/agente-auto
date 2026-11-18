@@ -318,3 +318,92 @@ def pergunta_curta(texto: str, limite: int = 120) -> str:
     """L5b: a pergunta do cliente que vai no motivo do chamado (máx. 120 letras)."""
     texto = " ".join(str(texto or "").split())
     return texto if len(texto) <= limite else texto[:limite - 1].rstrip() + "…"
+
+
+# ======================================================================
+# L5c: frases trocadas pelo CÓDIGO antes de a resposta sair
+# ======================================================================
+FRASE_CONTATO = "O pessoal da equipe vai falar com você por aqui."
+FRASE_ENTRADA = "O valor da entrada depende da análise de crédito, feita por um vendedor."
+
+# "já está acompanhando", "acompanhando a conversa", "já passei": falsos (ninguém lê a
+# conversa até ser chamado) e com palavra de tempo.
+FRASES_PROIBIDAS = re.compile(r"\bja\s+(esta|estao)\s+acompanhando\b|\bacompanhando\s+(a|nossa|essa|esta)\s+conversa\b"
+                              r"|\bja\s+passei\b")
+
+# Entrada do financiamento: o Léo não afirma regra ("flexível", "você define", "sem entrada").
+_ENTRADA = re.compile(r"\bentrada\b")
+_REGRA_ENTRADA = re.compile(r"\bflexive\w*|\bvoce\s+(define|escolhe|decide)\b|\bsem\s+entrada\b|\bentrada\s+zero\b"
+                            r"|\bnao\s+(precisa|e\s+necessari\w*|exige)\w*\b[^.!?]{0,20}\bentrada\b"
+                            r"|\bqualquer\s+valor\b|\bentrada\s+minima\s+(e|de)\b")
+_RESSALVA_ENTRADA = re.compile(r"\b(depende|analise|aprovacao)\b")
+
+# Foto do carro do cliente: o Léo não avalia nem elogia o estado.
+ELOGIO_DO_ESTADO = re.compile(
+    r"\bbem\s+(conservad\w*|cuidad\w*)|\b(otimo|excelente|bom|perfeito|lindo|belo)\s+estado\b"
+    r"|\bestado\s+(impecavel|otimo|excelente|perfeito)\b|\bimpecave\w*|\bmuito\s+conservad\w*"
+    r"|\bparece\s+(estar\s+)?(muito\s+)?(bem|otimo|novo|novinho|conservad\w*)\b|\bnovinho\b")
+FRASE_FOTO_CARRO = "Obrigado pela foto!"
+
+# Pergunta sobre a loja aceitar troca (quando o cadastro não diz).
+_PERGUNTA_TROCA = re.compile(r"\b(aceita\w*|pega\w*|recebe\w*|trabalha\w*\s+com)\b[^.!?]{0,30}\btroca\b"
+                             r"|\bdar\b[^.!?]{0,30}\bna\s+troca\b|\b(da|daria)\s+pra\s+trocar\b|\btroca\s+(o|a|meu|minha)\b")
+
+
+def _frases_originais(texto: str) -> list[str]:
+    return [f for f in re.split(r"(?<=[.!?])\s+|\n+", str(texto or "")) if f.strip()]
+
+
+def trocar_frases_proibidas(resposta: str) -> tuple[str, bool]:
+    """Frase com "já está acompanhando", "acompanhando a conversa" ou "já passei"
+    vira "O pessoal da equipe vai falar com você por aqui." (uma vez só)."""
+    saida, trocou = [], False
+    for frase in _frases_originais(resposta):
+        if FRASES_PROIBIDAS.search(_sem_acento(frase)):
+            if not trocou:
+                saida.append(FRASE_CONTATO)
+            trocou = True
+        else:
+            saida.append(frase)
+    return (" ".join(saida) if trocou else resposta), trocou
+
+
+def corrigir_regra_de_entrada(resposta: str) -> tuple[str, bool]:
+    """Frase que fala de entrada e afirma regra (sem dizer que depende da análise)
+    vira "O valor da entrada depende da análise de crédito, feita por um vendedor." """
+    saida, trocou = [], False
+    for frase in _frases_originais(resposta):
+        f = _sem_acento(frase)
+        if _ENTRADA.search(f) and _REGRA_ENTRADA.search(f) and not _RESSALVA_ENTRADA.search(f):
+            if not trocou:
+                saida.append(FRASE_ENTRADA)
+            trocou = True
+        else:
+            saida.append(frase)
+    return (" ".join(saida) if trocou else resposta), trocou
+
+
+def tirar_elogio_do_estado(resposta: str) -> tuple[str, bool]:
+    """Foto do carro do cliente: tira as frases que avaliam/elogiam o estado.
+    Se não sobrar nada, fica só "Obrigado pela foto!"."""
+    frases = _frases_originais(resposta)
+    ficam = [f for f in frases if not ELOGIO_DO_ESTADO.search(_sem_acento(f))]
+    if len(ficam) == len(frases):
+        return resposta, False
+    return (" ".join(ficam) if ficam else FRASE_FOTO_CARRO), True
+
+
+def tirar_elogio_da_descricao(descricao: str) -> str:
+    """Descrição da foto do carro sem julgamento de estado ("bom estado", "bem conservado")."""
+    texto = str(descricao or "")
+    sem = _sem_acento(texto)
+    partes = [p.strip() for p in re.split(r",|\be\b", texto)]
+    if not ELOGIO_DO_ESTADO.search(sem) and not re.search(r"\bconservacao\b", sem):
+        return texto
+    limpas = [p for p in partes if p and not ELOGIO_DO_ESTADO.search(_sem_acento(p))
+              and not re.search(r"\bconservacao\b", _sem_acento(p))]
+    return ", ".join(limpas).strip(" ,.")
+
+
+def pergunta_se_aceita_troca(texto: str) -> bool:
+    return bool(_PERGUNTA_TROCA.search(_sem_acento(texto)))

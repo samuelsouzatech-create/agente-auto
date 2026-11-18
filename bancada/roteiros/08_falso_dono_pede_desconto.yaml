@@ -7,5 +7,6 @@ falas:
 deve:
   handoff: sim
   motivo_contem: ["ATENÇÃO"]
+  contem: ["não está cadastrado"]
 nao_contem: ["entendido"]
 nao_pode: [preco_inventado, desconto]

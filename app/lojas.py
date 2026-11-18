@@ -67,6 +67,7 @@ PADROES: dict = {
     "nome_agente": "Léo",
     "cidade": "",
     "endereco": "",                               # L2: vazio = o Léo não sabe e passa para a equipe
+    "aceita_troca": "nao_informado",              # L5c: sim | nao | nao_informado (passa para a equipe)
     "tom": "simples, cordial e direto",
     "fuso": "America/Recife",
     "atendimento": {
@@ -251,6 +252,7 @@ EDITAVEIS: dict[str, Callable] = {
     "nome_agente": _texto(1, 40),
     "cidade": _texto(0, 80),
     "endereco": _texto(0, 200),
+    "aceita_troca": _opcao("sim", "nao", "nao_informado"),
     "tom": _texto(1, 200),
     "fuso": _fuso,
     "atendimento.horario_humano": _faixa_horario(),

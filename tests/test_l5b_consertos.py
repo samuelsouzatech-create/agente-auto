@@ -204,7 +204,8 @@ def test_foto_meu_carro_lida_como_anuncio_vira_avaliacao(duas_lojas):
                                           "quanto vocês dão no meu carro?", grafo=grafo, leitor=ler))
     assert grafo.entradas[0].startswith("[Foto do cliente: carro DELE (não é do estoque). "
                                         "O que aparece: Toyota Corolla preto]")
-    assert r.handoff_aberto and r.leitura_imagem == {"tipo": CARRO, "descricao": "Toyota Corolla preto"}
+    assert r.handoff_aberto
+    assert (r.leitura_imagem["tipo"], r.leitura_imagem["descricao"]) == (CARRO, "Toyota Corolla preto")
     [motivo] = _motivos(LOJA_A, "lead-foto")
     assert motivo.startswith("Avaliação: cliente mandou foto do carro.")
     assert 'Pergunta do cliente: "quanto vocês dão no meu carro?"' in motivo

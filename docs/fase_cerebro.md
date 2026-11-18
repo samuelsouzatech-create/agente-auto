@@ -8,11 +8,11 @@ item é marcado como **feito** aqui.
 |---|---|---|---|
 | Furos conhecidos: preço só com "R$", km liberando preço, pedidos de parada, troca com km=0, furos 3 e 15 do remarketing | L1 | `troca_com_km` | feito (furos consertados nos blocos S1–S3; `troca_com_km` passou em 17/11) |
 | Léo saber da loja: endereço, horário, "vou confirmar com o vendedor" no que não souber | L2 | `sem_resposta_no_estoque`, `endereco_e_horario`, `suv_por_categoria`, `endereco_sem_cadastro` | feito (05, 06, 11 e 12 passaram em 3 rodadas no dia 17/11) |
-| L2b — guarda de chamado não reconhecia "vou chamar / vou pedir para / vou passar para" (roteiros 04 e 05 em 17/11); prompt proíbe dizer que a equipe acompanha a conversa | L2b | `troca_com_km`, `sem_resposta_no_estoque` | pendente (código entregue no commit fix(L2b); falta passar em 3 rodadas da bancada) |
+| L2b — guarda de chamado não reconhecia "vou chamar / vou pedir para / vou passar para" (roteiros 04 e 05 em 17/11); prompt proíbe dizer que a equipe acompanha a conversa | L2b | `troca_com_km`, `sem_resposta_no_estoque` | feito (3/3 em 18/11, bloco L5c: 04 e 05 passaram nas 3 rodadas) |
 | Léo reconhecer a equipe pelo número cadastrado (dono e gestor: modo equipe; vendedor: resposta fixa; número desconhecido continua cliente) | L3 | `recado_do_dono`, `dono_pede_relatorio`, `falso_dono_pede_desconto` | feito (3 rodadas da bancada) |
 | Recados do dono ou gestor com validade (condição comercial nunca vira promessa: o Léo anuncia a campanha e passa ao vendedor) | L4 | `recado_do_dono`, `promocao_ativa`, `promocao_com_condicao`, `recado_vencido` | feito (3 rodadas da bancada) |
-| L3b — guarda com palavras no meio da frase, falso dono marcado no chamado ("ATENÇÃO"), preço em "mil" e grátis/sem juros/garantia como condição comercial, validade do recado só se perguntarem | L3b | `troca_com_km`, `sem_resposta_no_estoque`, `falso_dono_pede_desconto`, `promocao_ativa`, `dono_recado_com_preco`, `cliente_preco_do_feirao`, `vendedor_escreve` | em teste (18/11: 04, 05 e 08 falharam em 1 ou 2 das 3 rodadas; o fix(L5b) passou para o código: resposta fixa ao falso dono e chamado pelo assunto e pelo valor da troca) |
-| Entender foto do cliente (nunca dar valor de troca pela foto; não processar documento pessoal) | L5 | `foto_do_carro`, `print_de_anuncio`, `foto_documento`, `foto_sem_legenda`, `foto_meu_carro_parece_anuncio` | em teste (L5 + L5b: simulador, WhatsApp e Telegram; 19, 20 e 21 passaram nas 3 rodadas de 18/11, o 09 ainda não rodou com foto; falta passar em 3 rodadas da bancada) |
+| L3b — guarda com palavras no meio da frase, falso dono marcado no chamado ("ATENÇÃO"), preço em "mil" e grátis/sem juros/garantia como condição comercial, validade do recado só se perguntarem | L3b | `troca_com_km`, `sem_resposta_no_estoque`, `falso_dono_pede_desconto`, `promocao_ativa`, `dono_recado_com_preco`, `cliente_preco_do_feirao`, `vendedor_escreve` | feito (3/3 em 18/11, bloco L5c) |
+| Entender foto do cliente (nunca dar valor de troca pela foto; não processar documento pessoal) | L5 | `foto_do_carro`, `print_de_anuncio`, `foto_documento`, `foto_sem_legenda`, `foto_meu_carro_parece_anuncio` | feito (3/3 em 18/11, bloco L5c: 09, 19, 20, 21 e 22; foto do 09 só na máquina, fora do git) |
 | Remarketing em sequência (toque 1→2→3) | — | — | pendente |
 | Resposta do cliente ao pós-venda | — | — | pendente |
 | Conversas de referência (crescer os roteiros até 30–40) | — | todos | pendente |
@@ -30,7 +30,7 @@ Roteiros sem bloco pendente (devem passar desde já): `preco_carro`, `desconto`,
 `promocao_com_condicao`, `recado_vencido`, `dono_pede_relatorio`, `recado_do_dono`,
 `endereco_e_horario`, `dono_recado_com_preco`, `cliente_preco_do_feirao`, `vendedor_escreve`,
 `foto_do_carro` (AVISO enquanto faltar `bancada/imagens/carro_teste.jpg`), `print_de_anuncio`,
-`foto_documento`, `foto_sem_legenda`, `foto_meu_carro_parece_anuncio`.
+`foto_documento`, `foto_sem_legenda`, `foto_meu_carro_parece_anuncio`, `entrada_minima`.
 A foto `bancada/imagens/carro_teste.jpg` fica só na máquina de quem roda (está no .gitignore).
 
 ## Regras
