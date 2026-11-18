@@ -22,13 +22,13 @@ from app import config as _config  # noqa: F401  (carrega o .env)
 from app.core.agent import agente_grafo
 from app.core.turno import (
     ResultadoTurno, executar_turno, aguardar_vez, porta_fechada,
-    turno_midia_nao_suportada, turno_audio_falhou,
+    turno_midia_nao_suportada, turno_audio_falhou, executar_turno_imagem,
 )
 from app.channels.base import enviar_humanizado, enviar_resultado
 from app.channels.telegram import CanalTelegram
 from app.api.receber_audio import transcrever_bytes_com_uso
 from app.custos import registrar_uso
-from app.redis_lock import liberar_lock
+from app.redis_lock import adquirir_lock_esperando, liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.dedup import ja_processada
 from app.canais import resolver_loja, id_bot_telegram
@@ -94,6 +94,33 @@ async def _responder_audio(canal: CanalTelegram, entrada) -> None:
     await _responder(canal, chat_id, texto)
 
 
+async def _responder_imagem(canal: CanalTelegram, entrada) -> None:
+    """L5b: foto do cliente. Loja em teste: nem baixa (custo). A imagem não é guardada."""
+    loja_id = _loja_do_bot()
+    chat_id = entrada.lead_id
+    if porta_fechada(loja_id, CANAL, chat_id):
+        return
+    token = await adquirir_lock_esperando(chat_id, loja_id=loja_id)
+    if token is None:
+        return
+    try:
+        imagem = await canal.baixar_midia(entrada)
+        atraso = await calcular_atraso(chat_id, loja_id=loja_id)
+        resultado = await executar_turno_imagem(
+            loja_id, CANAL, chat_id, imagem or b"", entrada.mime or "image/jpeg", entrada.texto,
+            grafo=agente_grafo, leitor=None if imagem else _leitura_falhou)
+    finally:
+        await liberar_lock(chat_id, token, loja_id=loja_id)
+    if not resultado.silenciado and (resultado.texto or resultado.midias):
+        await enviar_resultado(canal, chat_id, resultado, atraso)
+
+
+def _leitura_falhou(imagem, mime):
+    """Foto que não deu para baixar: o turno segue como leitura que falhou."""
+    from app.imagens import LeituraImagem
+    return LeituraImagem(ok=False)
+
+
 async def ao_receber(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     canal = CanalTelegram(context.bot, BOT_ID)
     for entrada in canal.ler_webhook(update):
@@ -103,6 +130,8 @@ async def ao_receber(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await _responder(canal, entrada.lead_id, entrada.texto)
         elif entrada.tipo == "audio":
             await _responder_audio(canal, entrada)
+        elif entrada.tipo == "imagem":
+            await _responder_imagem(canal, entrada)
         else:
             aviso = turno_midia_nao_suportada(_loja_do_bot(), CANAL, entrada.lead_id,
                                               entrada.tipo_original)

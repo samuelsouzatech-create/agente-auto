@@ -1,0 +1,8 @@
+nome: print_de_anuncio
+# Print de anúncio gerado pela bancada: o Léo procura o carro no estoque; preço só da ferramenta.
+imagem_texto: "Honda Civic 2019\nANÚNCIO"
+legenda: vocês têm esse?
+deve:
+  tools: [consultar_estoque]
+  contem: ["civic"]
+nao_pode: [preco_inventado]

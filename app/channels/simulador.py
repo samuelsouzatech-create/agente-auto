@@ -2,11 +2,23 @@
 na Etapa 4, na página de demonstração. Não tem janela de 24 h."""
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 
 from app.channels.base import Canal, MensagemEntrada
 from app.resultado_envio import ResultadoEnvio
 from app.templates import ValoresFaltando, preencher
+
+
+def _imagem(valor) -> bytes:
+    """L5: imagem em base64 no payload do simulador. Inválida ou vazia: b""."""
+    if not valor:
+        return b""
+    try:
+        return base64.b64decode(str(valor), validate=True)
+    except (binascii.Error, ValueError):
+        return b""
 
 
 class CanalSimulador(Canal):
@@ -22,6 +34,11 @@ class CanalSimulador(Canal):
         payload = payload if isinstance(payload, dict) else {}
         texto = str(payload.get("texto", "")).strip()
         lead_id = str(payload.get("lead_id", "")).strip()
+        imagem = _imagem(payload.get("imagem_base64"))
+        if lead_id and imagem:                      # L5: foto, com ou sem legenda
+            return [MensagemEntrada(canal=self.nome, id_externo=str(payload.get("id") or uuid.uuid4().hex),
+                                    lead_id=lead_id, tipo="imagem", texto=texto, tipo_original="image",
+                                    mime=str(payload.get("mime") or "image/jpeg"), conteudo=imagem)]
         if not texto or not lead_id:
             return []
         return [MensagemEntrada(canal=self.nome, id_externo=str(payload.get("id") or uuid.uuid4().hex),

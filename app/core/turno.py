@@ -41,8 +41,10 @@ from app.chaves import exigir_loja, thread_id
 from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
 from app.estado_loja import pode_responder
 from app.formatacao import limpar_markdown
-from app.guarda_politica import (MENSAGEM_SEGURA, promete_contato_da_equipe,
-                                 resposta_tem_preco_inventado)
+from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da_equipe,
+                                 diz_ser_da_equipe, pediu_valor_da_troca, pergunta_curta,
+                                 promete_contato_da_equipe, resposta_tem_preco_inventado)
+from banco import conectar
 from app.handoff import estado_do_handoff
 from app.humanizador import dividir_em_bolhas
 from app.mensagens import salvar_mensagem, mensagens_desde_a_ultima_resposta_do_leo
@@ -93,6 +95,10 @@ class ResultadoTurno:
     # Custo em R$ (None = preço ainda não cadastrado). Fora da comparação (==).
     custo: float | None = field(default=None, compare=False)
     execucao_id: str | None = field(default=None, compare=False)
+    # L5: tokens da leitura da foto (a bancada soma no custo). Fora da comparação (==).
+    uso_imagem: object = field(default=None, compare=False)
+    # L5b: {"tipo", "descricao"} da foto lida (a bancada mostra no relatório).
+    leitura_imagem: dict | None = field(default=None, compare=False)
 
     @property
     def respostas(self) -> list[str]:
@@ -230,6 +236,13 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         print(f"{rotulo} Lead {lead_id} está com um vendedor humano. Léo em silêncio.")
         return ResultadoTurno(silenciado=True)
 
+    # L5b: número fora da equipe dizendo ser dono/gestor/da loja: resposta fixa, sem IA.
+    if diz_ser_da_equipe(texto):
+        print(f"{rotulo} GUARDA: {lead_id} diz ser da equipe, mas não está cadastrado. Resposta fixa.")
+        marcar_falso_dono(loja_id, lead_id, texto)
+        salvar_mensagem(lead_id, "leo", MENSAGEM_FALSO_DONO, canal=canal, loja_id=loja_id)
+        return ResultadoTurno(texto=MENSAGEM_FALSO_DONO, handoff_aberto=True)
+
     texto_para_leo = com_contexto_do_periodo_fora(texto, perdidas)
     if texto_para_leo != texto:
         print(f"{rotulo} Léo volta à conversa sabendo de {len(perdidas)} mensagem(ns) da equipe/cliente.")
@@ -285,19 +298,26 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         resposta, midias, handoff = MENSAGEM_SEGURA, [], True
         ferramentas.append("guarda_preco")
 
-    # L2: disse que a equipe vai confirmar/falar com o cliente sem abrir chamado?
-    # Abre agora, no mesmo turno. A resposta não muda.
-    if (not handoff and promete_contato_da_equipe(resposta)
-            and estado_do_handoff(lead_id, loja_id) == "ativo"):
-        print(f"{rotulo} GUARDA: Léo prometeu contato da equipe sem chamado. Abrindo chamado.")
+    # L2 e L5b: chamado aberto pelo CÓDIGO no mesmo turno (a resposta não muda), quando
+    # o cliente pede valor da troca, pergunta assunto que só a equipe responde
+    # (laudo, leilão, IPVA...) ou o Léo prometeu contato da equipe sem chamado.
+    motivo_guarda = motivo_do_chamado_pelo_codigo(texto, resposta)
+    if motivo_guarda and not handoff and estado_do_handoff(lead_id, loja_id) == "ativo":
+        motivo, nome_guarda = motivo_guarda
+        print(f"{rotulo} GUARDA: {motivo} Abrindo chamado.")
         acionar_handoff.func(
-            motivo="Léo disse ao cliente que a equipe vai confirmar ou falar com ele.",
+            motivo=f'{motivo} Pergunta do cliente: "{pergunta_curta(texto)}"',
             resumo=f"Resposta do Léo: {resposta}",
             lead_id=lead_id,
             loja_id=loja_id,
         )
         handoff = True
-        ferramentas.append("guarda_contato")
+        ferramentas.append(nome_guarda)
+
+    # L3b: número fora da equipe dizendo ser dono/gestor/da loja: o chamado avisa.
+    if marcar_falso_dono(loja_id, lead_id, texto):
+        handoff = True
+        ferramentas.append("guarda_falso_dono")
 
     robotico = parece_robotica(resposta)
     if robotico:
@@ -320,6 +340,63 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     print()
     return ResultadoTurno(texto=resposta, midias=midias, handoff_aberto=handoff,
                           custo=_custo(registro), execucao_id=_id(registro))
+
+
+def _ja_disse_ser_da_equipe(loja_id: int, lead_id: str) -> bool:
+    conexao = conectar()
+    try:
+        linhas = conexao.execute("SELECT conteudo FROM mensagens WHERE loja_id = ? AND lead_id = ? "
+                                 "AND direcao = 'cliente'", (loja_id, lead_id)).fetchall()
+    finally:
+        conexao.close()
+    return any(diz_ser_da_equipe(l["conteudo"]) for l in linhas)
+
+
+MENSAGEM_FALSO_DONO = ("Esse número não está cadastrado na equipe da loja, então não registro pedidos "
+                       "por aqui. Já passei para o pessoal da equipe conferir.")
+MOTIVO_VALOR_TROCA = "Cliente pediu valor da troca."
+MOTIVO_PROMESSA = "Léo disse ao cliente que a equipe vai confirmar ou falar com ele."
+
+
+def motivo_do_chamado_pelo_codigo(texto: str, resposta: str) -> tuple[str, str] | None:
+    """(motivo, nome da guarda) ou None. Ordem: valor da troca, assunto, promessa."""
+    if pediu_valor_da_troca(texto):
+        return MOTIVO_VALOR_TROCA, "guarda_troca"
+    assunto = assunto_da_equipe(texto)
+    if assunto:
+        return f"Cliente perguntou sobre {assunto}.", "guarda_assunto"
+    if promete_contato_da_equipe(resposta):
+        return MOTIVO_PROMESSA, "guarda_contato"
+    return None
+
+
+def marcar_falso_dono(loja_id: int, lead_id: str, texto: str) -> bool:
+    """L3b: cliente que diz ser da equipe (número não cadastrado).
+    Disse agora e não há chamado: abre um. Há chamado aberto e ele disse isso em
+    algum momento da conversa: o motivo passa a começar com o aviso.
+    Devolve True se abriu chamado neste turno. Nunca derruba o turno."""
+    try:
+        abriu = False
+        if diz_ser_da_equipe(texto) and estado_do_handoff(lead_id, loja_id) == "ativo":
+            acionar_handoff.func(motivo=f'{PREFIXO_FALSO_DONO}. Pergunta do cliente: "{pergunta_curta(texto)}"',
+                                 resumo=f"Mensagem do cliente: {texto}",
+                                 lead_id=lead_id, loja_id=loja_id)
+            abriu = True
+        if abriu or _ja_disse_ser_da_equipe(loja_id, lead_id):
+            conexao = conectar()
+            try:
+                conexao.execute(
+                    "UPDATE handoffs SET motivo = ? || ' — ' || COALESCE(motivo, '') "
+                    "WHERE loja_id = ? AND lead_id = ? AND estado = 'aguardando_humano' "
+                    "AND COALESCE(motivo, '') NOT LIKE ? || '%'",
+                    (PREFIXO_FALSO_DONO, loja_id, lead_id, PREFIXO_FALSO_DONO))
+                conexao.commit()
+            finally:
+                conexao.close()
+        return abriu
+    except Exception as erro:
+        print(f"[Turno][loja {loja_id}] Aviso: não consegui marcar o falso dono ({erro!r}).")
+        return False
 
 
 def _quem_da_equipe(loja_id: int, canal: str, lead_id: str) -> dict | None:
@@ -396,3 +473,113 @@ def turno_midia_nao_suportada(loja_id: int, canal: str, lead_id: str,
 def turno_audio_falhou(loja_id: int, canal: str, lead_id: str) -> ResultadoTurno:
     return turno_resposta_fixa(loja_id, canal, lead_id, "[áudio não entendido]",
                                MENSAGEM_AUDIO_FALHOU, tipo="audio")
+
+
+# ======================================================================
+# L5: foto do cliente
+# ======================================================================
+MENSAGEM_DOCUMENTO = ("Recebi, mas por aqui eu não leio nem guardo documentos. Vou passar para o "
+                      "pessoal da equipe, que cuida disso com segurança.")
+MENSAGEM_IMAGEM_FALHOU = ("Não consegui ver a foto por aqui. Pode me contar por texto o que ela "
+                          "mostra? Também passei para o pessoal da equipe dar uma olhada.")
+MENSAGEM_EQUIPE_SO_TEXTO = "Por aqui eu só anoto recados por texto."
+MOTIVO_DOCUMENTO = "Cliente mandou documento (nenhum dado foi lido nem guardado)."
+MOTIVO_IMAGEM_FALHOU = "Cliente mandou uma foto que não consegui ver."
+MOTIVO_AVALIACAO = "Avaliação: cliente mandou foto do carro."
+
+
+def _chamado_da_foto(loja_id: int, lead_id: str, motivo: str, resumo: str) -> None:
+    """Abre o chamado. Se já houver um aberto, acrescenta o motivo (não apaga o anterior)."""
+    estado = estado_do_handoff(lead_id, loja_id)
+    if estado == "ativo":
+        acionar_handoff.func(motivo=motivo, resumo=resumo, lead_id=lead_id, loja_id=loja_id)
+        return
+    conexao = conectar()
+    try:
+        conexao.execute(
+            "UPDATE handoffs SET motivo = COALESCE(motivo, '') || ' · ' || ? "
+            "WHERE loja_id = ? AND lead_id = ? AND estado = 'aguardando_humano' "
+            "AND instr(COALESCE(motivo, ''), ?) = 0", (motivo, loja_id, lead_id, motivo))
+        conexao.commit()
+    finally:
+        conexao.close()
+
+
+def _anotar_foto_na_troca(loja_id: int, lead_id: str, descricao: str) -> None:
+    """Se o cliente já tem troca registrada, a última ganha 'foto recebida: ...'."""
+    if not descricao:
+        return
+    conexao = conectar()
+    try:
+        linha = conexao.execute("SELECT id, estado FROM trocas WHERE loja_id = ? AND lead_id = ? "
+                                "ORDER BY id DESC LIMIT 1", (loja_id, lead_id)).fetchone()
+        if linha is None:
+            return
+        nota = f"foto recebida: {descricao}"
+        estado = (linha["estado"] or "").strip()
+        if nota not in estado:
+            estado = f"{estado} | {nota}" if estado else nota
+            conexao.execute("UPDATE trocas SET estado = ? WHERE id = ?", (estado, linha["id"]))
+            conexao.commit()
+    finally:
+        conexao.close()
+
+
+def _resposta_fixa_com_chamado(loja_id, canal, lead_id, registro, resposta, motivo, uso):
+    resultado = turno_resposta_fixa(loja_id, canal, lead_id, registro, resposta, tipo="imagem")
+    if not resultado.silenciado:
+        _chamado_da_foto(loja_id, lead_id, motivo, "Resposta automática do Léo: " + resposta)
+        resultado.handoff_aberto = True
+    resultado.uso_imagem = uso
+    return resultado
+
+
+def _com_leitura(resultado: ResultadoTurno, leitura) -> ResultadoTurno:
+    """L5b: o tipo lido e a descrição curta seguem no resultado (a bancada mostra)."""
+    resultado.uso_imagem = leitura.uso
+    resultado.leitura_imagem = {"tipo": leitura.tipo if leitura.ok else "não lida",
+                                "descricao": leitura.descricao}
+    return resultado
+
+
+async def executar_turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: bytes,
+                                mime: str = "image/jpeg", legenda: str = "", *,
+                                grafo=None, leitor=None) -> ResultadoTurno:
+    """L5: um turno com a foto do cliente. A imagem é lida (uma chamada de IA) e
+    nunca é guardada: só a descrição curta vira a mensagem do cliente.
+    Documento e falha de leitura: resposta fixa + chamado, sem passar pelo Léo.
+    Carro: chamado de avaliação antes do Léo responder; troca anotada depois."""
+    from app import imagens            # aqui dentro: o SDK de visão só carrega se precisar
+    if porta_fechada(loja_id, canal, lead_id):          # P7: nem lê a foto (custo)
+        return ResultadoTurno(silenciado=True)
+    membro = _quem_da_equipe(loja_id, canal, lead_id)
+    if membro:
+        return ResultadoTurno(texto=MENSAGEM_EQUIPE_SO_TEXTO if pode_deixar_recado(membro)
+                              else MENSAGEM_SO_DONO)
+    if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
+        salvar_mensagem(lead_id, "cliente", "[foto]", canal=canal, tipo="imagem", loja_id=loja_id)
+        return ResultadoTurno(silenciado=True)
+
+    rotulo = _rotulo(canal, loja_id)
+    leitura = imagens.ajustar_pela_legenda((leitor or imagens.ler_imagem)(imagem, mime), legenda)
+    registrar_uso(loja_id, lead_id, canal, leitura.uso, tipo="imagem", ferramentas=["leitura_imagem"])
+    print(f"{rotulo} Cliente {lead_id} mandou foto: {leitura.tipo if leitura.ok else 'não lida'}")
+
+    if not leitura.ok:
+        return _com_leitura(_resposta_fixa_com_chamado(loja_id, canal, lead_id, "[foto não lida]",
+                                                       MENSAGEM_IMAGEM_FALHOU, MOTIVO_IMAGEM_FALHOU,
+                                                       leitura.uso), leitura)
+    if leitura.tipo == imagens.DOCUMENTO:
+        return _com_leitura(_resposta_fixa_com_chamado(loja_id, canal, lead_id, "[documento]",
+                                                       MENSAGEM_DOCUMENTO, MOTIVO_DOCUMENTO,
+                                                       leitura.uso), leitura)
+    if leitura.tipo == imagens.CARRO:
+        motivo = MOTIVO_AVALIACAO + (f' Pergunta do cliente: "{pergunta_curta(legenda)}"' if legenda.strip() else "")
+        _chamado_da_foto(loja_id, lead_id, motivo, f"Foto do carro: {leitura.descricao}")
+
+    resultado = await executar_turno(loja_id, canal, lead_id, imagens.texto_para_o_leo(leitura, legenda),
+                                     grafo=grafo, tipo="imagem")
+    if leitura.tipo == imagens.CARRO:
+        _anotar_foto_na_troca(loja_id, lead_id, leitura.descricao)
+        resultado.handoff_aberto = True
+    return _com_leitura(resultado, leitura)

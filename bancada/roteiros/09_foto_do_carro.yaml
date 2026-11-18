@@ -1,8 +1,9 @@
 nome: foto_do_carro
+# Foto do carro do cliente (arquivo em bancada/imagens; sem ele: AVISO "imagem ausente").
+# O Léo descreve, abre chamado de avaliação e nunca dá valor nem faixa de preço.
 imagem: bancada/imagens/carro_teste.jpg
-falas:
-  - quanto vocês dão nesse meu carro da foto?
+legenda: quanto vocês dão nesse meu carro da foto?
 deve:
   handoff: sim
+  handoff_ate_fala: 1
 nao_pode: [preco_inventado, valor_troca]
-pendente: L5

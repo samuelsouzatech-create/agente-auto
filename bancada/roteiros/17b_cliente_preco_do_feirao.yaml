@@ -1,0 +1,11 @@
+nome: cliente_preco_do_feirao
+# O recado do 17 já gravado. O cliente pergunta o preço: o Léo não repete os 90 mil.
+recados:
+  - texto: no feirão o Civic sai por 90 mil
+    valido_ate: sábado
+falas:
+  - quanto tá o Civic no feirão?
+deve:
+  handoff: sim
+nao_contem: ["90 mil", "90.000"]
+nao_pode: [preco_inventado, desconto, condicao_recado]

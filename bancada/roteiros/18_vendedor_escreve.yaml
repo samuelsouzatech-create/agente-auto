@@ -1,0 +1,9 @@
+nome: vendedor_escreve
+# Vendedor cadastrado na loja fictícia: resposta fixa e não vira lead.
+remetente: "5581999990002"
+falas:
+  - Léo, avisa os clientes que tem feirão no sábado
+deve:
+  handoff: não
+  vira_lead: não
+  contem: ["dono ou do gestor"]

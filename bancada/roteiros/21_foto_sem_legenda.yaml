@@ -1,0 +1,7 @@
+nome: foto_sem_legenda
+# Foto sem legenda: o Léo pergunta com o que pode ajudar.
+imagem_texto: "PAISAGEM DE PRAIA"
+deve:
+  handoff: não
+  contem: ["ajud"]
+nao_pode: [preco_inventado]

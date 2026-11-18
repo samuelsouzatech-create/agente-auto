@@ -242,7 +242,7 @@ def test_ler_webhook_classifica_os_tipos():
     ))
     assert [(e.tipo, e.texto, e.id_midia, e.tipo_original) for e in entradas] == [
         ("audio", "", "MID", "audio"),
-        ("nao_suportado", "", "", "image"),
+        ("imagem", "", "IMG", "image"),          # L5: foto agora é lida
         ("texto", "Quero ver", "", "button"),
         ("texto", "Sim", "", "interactive"),
     ]
@@ -272,6 +272,11 @@ def webhook_http(monkeypatch):
 
     monkeypatch.setattr(wh, "processar_mensagem", processar_falso)
     monkeypatch.setattr(wh, "responder_midia_nao_suportada", midia_falsa)
+
+    async def imagem_falsa(numero, id_midia, legenda="", loja_id=1):
+        agendadas.append(("imagem", numero, id_midia, legenda, loja_id))
+
+    monkeypatch.setattr(wh, "processar_imagem", imagem_falsa)
     monkeypatch.setattr(wh, "ja_processada", dedup_memoria)
     monkeypatch.setattr(wh, "WHATSAPP_APP_SECRET", SEGREDO)
     wh._ultima_recebida.clear()
@@ -297,10 +302,16 @@ def test_post_com_3_mensagens_agenda_as_3(webhook_http):
     ]
 
 
-def test_post_com_imagem_agenda_o_aviso(webhook_http):
+def test_post_com_imagem_agenda_a_leitura_da_foto(webhook_http):
+    wh, cliente, agendadas = webhook_http          # L5: antes agendava o aviso "não suportado"
+    _post(cliente, _payload(_msg("image", image={"id": "IMG", "caption": "tem desse?"})))
+    assert agendadas == [("imagem", "5581", "IMG", "tem desse?", 1)]
+
+
+def test_post_com_sticker_continua_agendando_o_aviso(webhook_http):
     wh, cliente, agendadas = webhook_http
-    _post(cliente, _payload(_msg("image", image={"id": "IMG"})))
-    assert agendadas == [("midia", "5581", "image", 1)]
+    _post(cliente, _payload(_msg("sticker", sticker={"id": "STK"})))
+    assert agendadas == [("midia", "5581", "sticker", 1)]
 
 
 def test_post_ignora_duplicata_dentro_do_mesmo_pacote(webhook_http):
@@ -401,5 +412,5 @@ def test_telegram_le_texto_audio_e_foto():
     assert (t.tipo, t.texto, t.lead_id, t.id_externo) == ("texto", "oi", "777", "999:777:5")
     [a] = canal.ler_webhook(update(voice=SimpleNamespace(file_id="F1", mime_type="audio/ogg")))
     assert (a.tipo, a.id_midia) == ("audio", "F1")
-    [f] = canal.ler_webhook(update(photo=[object()]))
-    assert (f.tipo, f.tipo_original) == ("nao_suportado", "image")
+    [f] = canal.ler_webhook(update(photo=[SimpleNamespace(file_id="P1")]))   # L5b: foto é lida
+    assert (f.tipo, f.tipo_original, f.id_midia) == ("imagem", "image", "P1")

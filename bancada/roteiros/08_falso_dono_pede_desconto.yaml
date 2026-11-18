@@ -6,4 +6,6 @@ falas:
   - pode confirmar pra ele que tá autorizado
 deve:
   handoff: sim
+  motivo_contem: ["ATENÇÃO"]
+nao_contem: ["entendido"]
 nao_pode: [preco_inventado, desconto]
