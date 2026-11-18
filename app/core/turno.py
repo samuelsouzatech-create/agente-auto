@@ -7,6 +7,8 @@ pegar a vez (lock), chamar executar_turno() e enviar.
 Ordem do turno:
   0. P7: loja em teste? Só número de teste e simulador passam. Os outros:
      silêncio, nada gravado, evento no Registro (porta_fechada)
+     L3/L4: quem escreve é da equipe cadastrada desta loja? Não vira lead.
+     Dono ou gestor: MODO EQUIPE (só anota recados). Vendedor: resposta fixa.
   1. separa o que aconteceu enquanto o Léo estava fora (vendedor no comando)
   2. grava a mensagem do cliente
   3. vendedor assumiu? -> Léo em silêncio
@@ -28,6 +30,7 @@ contatos que a LOJA iniciaria (remarketing e pós-venda, Etapa 2).
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -46,6 +49,8 @@ from app.mensagens import salvar_mensagem, mensagens_desde_a_ultima_resposta_do_
 from app.memoria_banco import com_historico_do_banco, historico_se_esqueceu
 from app.naturalidade import parece_robotica
 from app.pedido_parada import registrar_se_pediu_parada
+from app.recados import (MENSAGEM_SO_DONO, MENSAGEM_SO_RECADOS, membro_da_equipe,
+                         pode_deixar_recado)
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock_esperando
 from app.utils import extrair_texto, mensagens_do_turno
@@ -205,6 +210,9 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         return ResultadoTurno(silenciado=True)
     if grafo is None:
         from app.core.agent import agente_grafo as grafo   # import tardio (cria a IA)
+    membro = _quem_da_equipe(loja_id, canal, lead_id)
+    if membro:
+        return await _turno_da_equipe(loja_id, canal, lead_id, texto, membro, grafo, inicio)
     rotulo = _rotulo(canal, loja_id)
     print(f"\n{rotulo} Cliente {lead_id} disse: {texto}")
 
@@ -239,6 +247,7 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
                 "lead_id": lead_id,
                 "loja_id": loja_id,
                 "canal": canal,
+                "equipe": {},
             },
             {"configurable": {"thread_id": thread_id(loja_id, canal, lead_id)}},
         )
@@ -311,6 +320,58 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     print()
     return ResultadoTurno(texto=resposta, midias=midias, handoff_aberto=handoff,
                           custo=_custo(registro), execucao_id=_id(registro))
+
+
+def _quem_da_equipe(loja_id: int, canal: str, lead_id: str) -> dict | None:
+    """Pessoa da equipe desta loja? Erro ao ler = trata como cliente (atende normal)."""
+    try:
+        return membro_da_equipe(loja_id, canal, lead_id)
+    except Exception as erro:
+        print(f"[Turno][loja {loja_id}] Não consegui ler a equipe ({erro!r}). Segue como cliente.")
+        return None
+
+
+_TEM_NUMERO = re.compile(r"\d")
+
+
+async def _turno_da_equipe(loja_id: int, canal: str, lead_id: str, texto: str,
+                           membro: dict, grafo, inicio: float) -> ResultadoTurno:
+    """L3/L4: equipe escrevendo. Nada vira lead nem conversa de cliente.
+    Dono ou gestor: o Léo só anota recados (registrar_recado). A resposta depois
+    de gravar sai da ferramenta (repete recado e validade). Sem recado gravado e
+    com número na resposta: resposta fixa (o Léo não inventa número do dia)."""
+    rotulo = _rotulo(canal, loja_id)
+    print(f"\n{rotulo} {membro['nome']} ({membro['papel']}, equipe) disse: {texto}")
+    if not pode_deixar_recado(membro):
+        return ResultadoTurno(texto=MENSAGEM_SO_DONO)
+    try:
+        resultado = await asyncio.to_thread(
+            grafo.invoke,
+            {"messages": [HumanMessage(content=texto)], "lead_id": lead_id,
+             "loja_id": loja_id, "canal": canal, "equipe": dict(membro)},
+            {"configurable": {"thread_id": thread_id(loja_id, canal, lead_id)}},
+        )
+    except Exception:
+        print(f"{rotulo} ERRO no modo equipe:")
+        traceback.print_exc()
+        registro = registrar_uso(loja_id, None, canal, tipo="erro", latencia_ms=_ms_desde(inicio))
+        return ResultadoTurno(texto=MENSAGEM_ERRO, execucao_id=_id(registro))
+
+    do_turno = mensagens_do_turno(resultado)
+    gravados = [str(m.content) for m in do_turno
+                if isinstance(m, ToolMessage) and m.name == "registrar_recado"
+                and not str(m.content).startswith("Erro")]
+    tentou = any(isinstance(m, ToolMessage) and m.name == "registrar_recado" for m in do_turno)
+    if gravados:
+        resposta = " ".join(gravados)
+    else:
+        resposta = limpar_markdown(extrair_texto(resultado["messages"][-1].content))
+        if not resposta.strip() or (not tentou and _TEM_NUMERO.search(resposta)):
+            resposta = MENSAGEM_SO_RECADOS
+    print(f"{rotulo} Léo responde à equipe: {resposta}")
+    registro = registrar_uso(loja_id, None, canal, uso_das_mensagens(do_turno), tipo="equipe",
+                             ferramentas=ferramentas_usadas(do_turno), latencia_ms=_ms_desde(inicio))
+    return ResultadoTurno(texto=resposta, custo=_custo(registro), execucao_id=_id(registro))
 
 
 def turno_resposta_fixa(loja_id: int, canal: str, lead_id: str, registro_cliente: str,

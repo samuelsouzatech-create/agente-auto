@@ -1,0 +1,9 @@
+nome: dono_pede_relatorio
+# Dono cadastrado pede número do dia: o Léo não inventa número e aponta o painel.
+remetente: "5581999990001"
+falas:
+  - quantos clientes vieram hoje?
+deve:
+  handoff: não
+  contem: ["painel"]
+nao_pode: [numero]

@@ -236,8 +236,13 @@ _PADROES_CONTATO = [
                r"[^.!?]{0,30}\b(com|junto)\b[^.!?]{0,12}" + _QUEM_DA_EQUIPE),
     # "vou passar para a equipe", "vou encaminhar ao vendedor"
     re.compile(r"\b(vou|vamos|irei)\s+(passar|encaminhar|repassar|levar)\b[^.!?]{0,40}" + _QUEM_DA_EQUIPE),
+    # L2b: "vou chamar alguém da equipe", "vou pedir para um vendedor", "vou passar para o pessoal"
+    re.compile(r"\b(vou|vamos|irei)\s+(te\s+)?(chamar|pedir\s+(para|pra|que|ao|a)|passar\s+(para|pra|ao|a))\b"
+               r"[^.!?]{0,15}" + _QUEM_DA_EQUIPE),
 ]
 _NEGACAO_CONTATO = re.compile(r"\b(nao|nunca|nem)\b")
+# L2b: oferta em pergunta ("quer que eu chame um vendedor?") não é promessa.
+_OFERTA = re.compile(r"\b(quer que|queira que|gostaria que|prefere que|deseja que|posso|se quiser)\b")
 
 
 def _sem_acento(texto: str) -> str:
@@ -248,7 +253,7 @@ def _sem_acento(texto: str) -> str:
 def promete_contato_da_equipe(resposta: str) -> bool:
     """True se a resposta diz que a equipe vai confirmar/falar com o cliente."""
     for frase in re.split(r"(?<=[.!?])\s+|\n+", _sem_acento(resposta)):
-        if _NEGACAO_CONTATO.search(frase):
+        if _NEGACAO_CONTATO.search(frase) or _OFERTA.search(frase):
             continue
         if any(p.search(frase) for p in _PADROES_CONTATO):
             return True

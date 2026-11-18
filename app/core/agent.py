@@ -8,6 +8,10 @@ pelo modelo: mesmo que o modelo tente passar outros, são sobrescritos.
 
 Bloco 7A: o prompt também conhece o MOMENTO da conversa (primeiro contato,
 vendedor a caminho), lido do banco a cada mensagem.
+
+L3/L4: estado["equipe"] preenchido (dono ou gestor cadastrado escrevendo) =
+MODO EQUIPE: outro prompt e só a ferramenta registrar_recado. Cliente recebe os
+recados ativos da loja no prompt.
 """
 from datetime import datetime
 from typing import Annotated, TypedDict
@@ -25,9 +29,12 @@ from app.cliente_da_casa import compras_do_cliente
 from app.handoff import estado_do_handoff
 from app.lojas import carregar_loja
 from app.mensagens import ja_respondeu
+from app.recados import recados_ativos
+from app.relogio import dia_local
 from app.retomada import retomada_recente
 from app.core.montagem import (
-    TODAS_AS_FERRAMENTAS, ferramentas_da_loja, montar_prompt, fuso_da_loja,
+    FERRAMENTAS_EQUIPE, TODAS_AS_FERRAMENTAS, ferramentas_da_loja, montar_prompt,
+    montar_prompt_equipe, fuso_da_loja,
 )
 
 
@@ -45,8 +52,9 @@ ferramentas = TODAS_AS_FERRAMENTAS
 
 TOOLS_COM_LEAD_ID = {"registrar_troca", "agendar_visita", "registrar_lead",
                      "acionar_handoff", "registrar_interesse"}
-TOOLS_COM_LOJA_ID = {f.name for f in TODAS_AS_FERRAMENTAS}
+TOOLS_COM_LOJA_ID = {f.name for f in TODAS_AS_FERRAMENTAS + FERRAMENTAS_EQUIPE}
 TOOLS_COM_CANAL = {"registrar_interesse"}
+TOOLS_COM_AUTOR = {"registrar_recado"}     # L3/L4: autor vem do cadastro, nunca do modelo
 
 # Bloco S6: ferramenta fora desta loja (ou deste momento): o cliente não fica sabendo.
 FERRAMENTA_FORA = ("NÃO conte isso ao cliente: nada de 'não consegui consultar', 'não consegui "
@@ -62,6 +70,7 @@ class EstadoConversa(TypedDict):
     lead_id: str
     loja_id: int
     canal: str
+    equipe: dict      # L3/L4: vazio = cliente; preenchido = dono ou gestor (modo equipe)
 
 
 def _loja_do_estado(estado):
@@ -105,8 +114,22 @@ def _modelo_com(ferramentas_loja):
     return _modelos_amarrados[chave]
 
 
+def _recados_da_loja(loja_id, loja, agora) -> list:
+    """L3/L4: recados ativos para o prompt do cliente. Se o banco falhar, segue sem."""
+    try:
+        return recados_ativos(loja_id, dia_local(loja, agora))
+    except Exception as erro:
+        print(f"[Agente] Aviso: não consegui ler os recados ({erro!r}).")
+        return []
+
+
 def no_agente(estado: EstadoConversa):
     loja_id, loja = _loja_do_estado(estado)
+    if estado.get("equipe"):
+        agora = datetime.now(fuso_da_loja(loja))
+        prompt = montar_prompt_equipe(loja, estado["equipe"], agora)
+        resposta = _modelo_com(FERRAMENTAS_EQUIPE).invoke([("system", prompt)] + estado["messages"])
+        return {"messages": [resposta]}
     momento = _momento_da_conversa(estado, loja_id)
     ferramentas_loja = ferramentas_da_loja(loja, em_espera=momento["em_espera"])
     agora = datetime.now(fuso_da_loja(loja))
@@ -114,7 +137,8 @@ def no_agente(estado: EstadoConversa):
     # Etapa 2, Bloco 5B: já comprou aqui? (falhou: segue como lead normal)
     compras = compras_do_cliente(loja, estado.get("lead_id") or "", estado.get("canal") or "")
     prompt = montar_prompt(loja, ferramentas_loja, agora, retomada=retomada,
-                           compras=compras, **momento)
+                           compras=compras, recados=_recados_da_loja(loja_id, loja, agora),
+                           **momento)
     resposta = _modelo_com(ferramentas_loja).invoke([("system", prompt)] + estado["messages"])
     return {"messages": [resposta]}
 
@@ -126,8 +150,12 @@ def no_ferramentas(estado: EstadoConversa):
     lead_id = estado.get("lead_id", "")
     canal = estado.get("canal", "") or ""
     loja_id, loja = _loja_do_estado(estado)
-    momento = _momento_da_conversa(estado, loja_id)
-    permitidas = {f.name: f for f in ferramentas_da_loja(loja, em_espera=momento["em_espera"])}
+    equipe = estado.get("equipe") or {}
+    if equipe:      # L3/L4: modo equipe só tem registrar_recado
+        permitidas = {f.name: f for f in FERRAMENTAS_EQUIPE}
+    else:
+        momento = _momento_da_conversa(estado, loja_id)
+        permitidas = {f.name: f for f in ferramentas_da_loja(loja, em_espera=momento["em_espera"])}
     saidas = []
 
     for chamada in ultima.tool_calls:
@@ -154,6 +182,8 @@ def no_ferramentas(estado: EstadoConversa):
                 chamada_ajustada["args"]["lead_id"] = lead_id
             if nome in TOOLS_COM_CANAL:
                 chamada_ajustada["args"]["canal"] = canal
+            if nome in TOOLS_COM_AUTOR:
+                chamada_ajustada["args"]["autor"] = equipe.get("nome") or ""
 
             mensagem = tool.invoke(chamada_ajustada)
             mensagem.name = nome

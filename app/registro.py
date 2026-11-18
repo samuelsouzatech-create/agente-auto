@@ -154,3 +154,9 @@ ACOES_RELEVANTES.update({
     "gerar_link_senha": "app.links_senha.gerar_link_pelo_operador",
     "criar_senha_por_link": "app.links_senha.criar_senha",
 })
+
+
+# L3/L4: recados do dono (o painel do operador desativa).
+ACOES_RELEVANTES.update({
+    "desativar_recado": "app.recados.desativar_recado",
+})

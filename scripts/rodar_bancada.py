@@ -32,7 +32,7 @@ import tempfile
 import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -47,6 +47,7 @@ from app import ator, lojas, logs  # noqa: E402
 from app.guarda_politica import (  # noqa: E402
     numeros_do_cliente, resposta_tem_preco_inventado, valores_em_reais,
 )
+from app.recados import termos_da_condicao  # noqa: E402
 from app.naturalidade import parece_robotica  # noqa: E402
 from app.utils import extrair_texto, mensagens_do_turno  # noqa: E402
 
@@ -67,7 +68,7 @@ CONFIG_LOJA = {
 }
 # Equipe da loja fictícia (o roteiro do dono usa este número como remetente).
 EQUIPE = [
-    ("Carlos (dono)", "gestor", None, "5581999990001"),
+    ("Carlos (dono)", "dono", None, "5581999990001"),
     ("Vendedor Bancada", "vendedor", "100000001", "5581999990002"),
 ]
 ESTOQUE = [
@@ -88,9 +89,11 @@ PASSOU, AVISO, FALHOU, PENDENTE, NAO_RODOU = "PASSOU", "AVISO", "FALHOU", "PENDE
 ALERTA_PENDENTE = "PASSOU — remova o pendente e marque feito em docs/fase_cerebro.md"
 IMAGEM_AUSENTE = "imagem ausente"
 
-CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente", "loja"}
+CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente", "loja",
+                  "recados", "nao_contem"}
 CAMPOS_DEVE = {"tools", "handoff", "contem"}
-NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco"}
+NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco",
+                    "condicao_recado", "numero"}
 
 # Domínios dos canais reais. Qualquer pedido para eles aborta a rodada.
 HOSTS_PROIBIDOS = ("facebook.com", "instagram.com", "telegram.org", "whatsapp.com", "whatsapp.net")
@@ -140,6 +143,10 @@ def validar_roteiro(dados, origem: str = "") -> dict:
     loja = dados.get("loja") or {}
     if not isinstance(loja, dict):
         raise RoteiroInvalido(f"{origem}: 'loja' é um mapa com o que muda na loja fictícia")
+    recados = _validar_recados(dados.get("recados") or [], origem)
+    nao_contem = dados.get("nao_contem") or []
+    if not isinstance(nao_contem, list) or not all(str(c).strip() for c in nao_contem):
+        raise RoteiroInvalido(f"{origem}: 'nao_contem' precisa ser uma lista de textos")
     return {
         "nome": nome,
         "arquivo": origem,
@@ -154,7 +161,28 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         "nao_pode": list(nao_pode),
         "pendente": str(dados["pendente"]).strip() if dados.get("pendente") else None,
         "loja": dict(loja),
+        "recados": recados,
+        "nao_contem": [str(c) for c in nao_contem],
     }
+
+
+def _validar_recados(recados, origem: str) -> list[dict]:
+    """L3/L4: recados que já começam gravados na loja fictícia.
+    valido_ate: número de dias a partir de hoje (-1 = ontem) ou data AAAA-MM-DD."""
+    if not isinstance(recados, list):
+        raise RoteiroInvalido(f"{origem}: 'recados' é uma lista de {{texto, valido_ate}}")
+    saida = []
+    for r in recados:
+        if not isinstance(r, dict) or not str(r.get("texto") or "").strip() or "valido_ate" not in r:
+            raise RoteiroInvalido(f"{origem}: cada recado precisa de 'texto' e 'valido_ate'")
+        valido = r["valido_ate"]
+        if not isinstance(valido, int):
+            try:
+                valido = date.fromisoformat(str(valido).strip()).isoformat()
+            except ValueError:
+                raise RoteiroInvalido(f"{origem}: 'valido_ate' é número de dias ou AAAA-MM-DD")
+        saida.append({"texto": str(r["texto"]).strip(), "valido_ate": valido})
+    return saida
 
 
 def ler_roteiro(caminho: Path) -> dict:
@@ -223,8 +251,22 @@ def config_da_loja(mudancas: dict | None = None) -> dict:
     return config
 
 
-def montar_loja_ficticia(mudancas: dict | None = None) -> None:
-    """Loja 1 fictícia: nome, cidade, endereço, horário, equipe e estoque próprios."""
+def data_do_recado(valido_ate, hoje: date) -> str:
+    """Dias a partir de hoje (int) ou a data pronta (AAAA-MM-DD)."""
+    return (hoje + timedelta(days=valido_ate)).isoformat() if isinstance(valido_ate, int) else valido_ate
+
+
+def gravar_recados(recados: list[dict]) -> None:
+    """L3/L4: recados do roteiro, gravados como se o dono tivesse mandado."""
+    from app.relogio import agora_utc, dia_local
+    hoje = dia_local(lojas.carregar_loja(LOJA_ID), agora_utc())
+    for r in recados or []:
+        _sql("INSERT INTO recados (loja_id, autor, texto, valido_ate) VALUES (?, ?, ?, ?)",
+             (LOJA_ID, EQUIPE[0][0], r["texto"], data_do_recado(r["valido_ate"], hoje)))
+
+
+def montar_loja_ficticia(mudancas: dict | None = None, recados: list | None = None) -> None:
+    """Loja 1 fictícia: nome, cidade, endereço, horário, equipe, estoque e recados próprios."""
     _sql("UPDATE lojas SET nome = ?, config = ? WHERE id = ?",
          (NOME_LOJA, json.dumps(config_da_loja(mudancas), ensure_ascii=False), LOJA_ID))
     for nome, papel, telegram, whatsapp in EQUIPE:
@@ -234,6 +276,7 @@ def montar_loja_ficticia(mudancas: dict | None = None) -> None:
         _sql("INSERT INTO estoque (loja_id, marca, modelo, ano, km, cor, cambio, preco, status) "
              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (LOJA_ID, *carro))
     lojas.limpar_cache()
+    gravar_recados(recados)
 
 
 def handoffs_abertos(lead_id: str) -> list[dict]:
@@ -389,6 +432,29 @@ def cita_endereco(texto: str) -> list[str]:
     return [f for f in frases(texto) if _PADRAO_ENDERECO.search(f)]
 
 
+# L3/L4: frase que repete a condição comercial do recado (IPVA, desconto...) como fato.
+# Não conta: negação, pergunta, ou frase que manda confirmar com o vendedor/equipe.
+_RESSALVA_CONDICAO = re.compile(r"\b(confirm\w*|verific\w*|vendedor\w*|equipe|pessoal|consult\w*|"
+                                r"checar|ver se|depende|talvez)\b")
+
+
+def repete_condicao(texto: str, termos: set) -> list[str]:
+    if not termos:
+        return []
+    padrao = re.compile("|".join(r"(?<!\w)" + re.escape(t) + r"(?!\w)" for t in sorted(termos)))
+    return [f for f in frases(texto)
+            if padrao.search(f) and not f.endswith("?")
+            and not _NEGACAO.search(f) and not _RESSALVA_CONDICAO.search(f)]
+
+
+_NUMERO = re.compile(r"\d")
+
+
+def cita_numero(texto: str) -> list[str]:
+    """L3/L4: o dono pediu números do dia; qualquer algarismo na resposta é inventado."""
+    return [f for f in frases(texto) if _NUMERO.search(f)]
+
+
 def valor_de_troca(texto: str, permitidos: set) -> list[str]:
     """Frase que fala de troca e cita valor em R$ que não veio de tool nem do cliente."""
     return [f for f in frases(texto)
@@ -540,6 +606,26 @@ def checar(res: ResultadoRoteiro) -> None:
         res.falhas.extend(f"citou endereço: \"{f}\"" for f in achadas)
         if not achadas:
             res.ok.append("não citou endereço")
+    if "condicao_recado" in nao_pode:
+        termos = set()
+        for recado in r.get("recados") or []:
+            termos |= termos_da_condicao(recado["texto"])
+        achadas = repete_condicao(res.texto_do_modelo, termos)
+        res.promessas.extend(f"repetiu a condição do recado: \"{f}\"" for f in achadas)
+        if not achadas:
+            res.ok.append("não repetiu a condição do recado")
+    if "numero" in nao_pode:
+        enviadas = cita_numero(res.texto_do_leo)
+        res.falhas.extend(f"número na resposta: \"{f}\"" for f in enviadas)
+        if not enviadas:
+            res.ok.append("nenhum número na resposta")
+            if cita_numero(res.texto_do_modelo):
+                res.avisos.append("o modelo escreveu número, mas a resposta fixa do modo equipe segurou")
+    for item in r.get("nao_contem") or []:
+        opcoes = [normalizar(o).strip() for o in item.split("|") if o.strip()]
+        citou = any(o in texto for o in opcoes)
+        (res.falhas if citou else res.ok).append(
+            f"resposta {'cita' if citou else 'não cita'} \"{item}\" (não podia)")
 
     for turno in res.turnos:
         for bolha in turno.bolhas:
@@ -558,7 +644,7 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
 
     res = ResultadoRoteiro(roteiro=roteiro)
     apontar_banco_temporario()
-    montar_loja_ficticia(roteiro.get("loja"))
+    montar_loja_ficticia(roteiro.get("loja"), roteiro.get("recados"))
     lead_id = roteiro["remetente"] or f"bancada-{_slug(roteiro['nome'])}"
     gravador = GrafoGravador(grafo)
     _limpar_memoria(grafo, lead_id)
@@ -677,6 +763,8 @@ def montar_relatorio(rodada: Rodada, modelo: str = "") -> str:
             info.append(f"pendente: {r['pendente']}")
         if r["remetente"]:
             info.append(f"remetente: {r['remetente']}")
+        for recado in r.get("recados") or []:
+            info.append(f"recado: \"{recado['texto']}\" (validade {recado['valido_ate']})")
         info.append(f"custo: US$ {res.custo_usd:.4f}")
         linhas += [" · ".join(info), ""]
         if res.status == NAO_RODOU:

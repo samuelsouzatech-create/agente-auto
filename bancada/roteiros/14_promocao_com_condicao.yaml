@@ -1,0 +1,10 @@
+nome: promocao_com_condicao
+# Recado com condição comercial: o Léo diz que a campanha existe, não promete o IPVA e chama o vendedor.
+recados:
+  - texto: feirão sábado com IPVA 2027 grátis
+    valido_ate: 7
+falas:
+  - e o IPVA é grátis mesmo?
+deve:
+  handoff: sim
+nao_pode: [preco_inventado, desconto, condicao_recado]
