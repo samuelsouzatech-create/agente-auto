@@ -32,7 +32,7 @@ import tempfile
 import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -92,8 +92,10 @@ ALERTA_PENDENTE = "PASSOU — remova o pendente e marque feito em docs/fase_cere
 IMAGEM_AUSENTE = "imagem ausente"
 
 CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente", "loja",
-                  "recados", "nao_contem", "imagem_texto", "legenda"}
-CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead"}
+                  "recados", "nao_contem", "imagem_texto", "legenda",
+                  "canal", "conversa", "interesse", "venda", "passos"}      # L6: roteiros de job
+CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead",
+               "toques", "envios_pos_venda", "textos_diferentes", "envios_no_horario"}   # L6
 NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco",
                     "condicao_recado", "numero", "regra_entrada", "elogio_estado"}
 
@@ -135,7 +137,11 @@ def validar_roteiro(dados, origem: str = "") -> dict:
     if not nome:
         raise RoteiroInvalido(f"{origem}: falta 'nome'")
     tem_imagem = bool(dados.get("imagem") or dados.get("imagem_texto"))
-    falas = [] if falas is None and tem_imagem else falas
+    e_job = "passos" in dados                      # L6: roteiro de job não tem falas
+    falas = [] if falas is None and (tem_imagem or e_job) else falas
+    if e_job and falas:
+        raise RoteiroInvalido(f"{origem}: roteiro de job usa 'passos' (- cliente: ...), não 'falas'")
+    tem_imagem = tem_imagem or e_job
     if not isinstance(falas, list) or (not falas and not tem_imagem):
         raise RoteiroInvalido(f"{origem}: 'falas' precisa ser uma lista de falas (só a foto: pode ficar sem)")
     for i, fala in enumerate(falas, 1):
@@ -174,6 +180,13 @@ def validar_roteiro(dados, origem: str = "") -> dict:
             "contem": [str(c) for c in (deve.get("contem") or [])],
             # L3b: o chamado tem que abrir até esta fala (1 = primeira mensagem do cliente)
             "handoff_ate_fala": _inteiro_positivo(deve.get("handoff_ate_fala"), origem),
+            # L6: roteiros de job
+            "toques": deve.get("toques"),
+            "envios_pos_venda": deve.get("envios_pos_venda"),
+            "textos_diferentes": _sim_nao(deve["textos_diferentes"], "deve.textos_diferentes")
+            if "textos_diferentes" in deve else None,
+            "envios_no_horario": _sim_nao(deve["envios_no_horario"], "deve.envios_no_horario")
+            if "envios_no_horario" in deve else None,
             # L3b: texto que o motivo de algum chamado do cliente precisa ter
             "motivo_contem": [str(c) for c in (deve.get("motivo_contem") or [])],
             # L3b: a conversa fica gravada como de cliente (lead)?
@@ -184,6 +197,12 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         "loja": dict(loja),
         "recados": recados,
         "nao_contem": [str(c) for c in nao_contem],
+        # L6: roteiro de job
+        "passos": _validar_passos(dados["passos"], origem) if "passos" in dados else None,
+        "canal": str(dados.get("canal") or "telegram"),
+        "conversa": _validar_conversa(dados.get("conversa"), origem),
+        "interesse": str(dados["interesse"]).strip() if dados.get("interesse") else None,
+        "venda": dict(dados["venda"]) if isinstance(dados.get("venda"), dict) else None,
     }
 
 
@@ -281,9 +300,7 @@ def _ler(sql, parametros=()):
 
 def config_da_loja(mudancas: dict | None = None) -> dict:
     """Config da loja fictícia com o que o roteiro mudou (campo 'loja' do YAML)."""
-    config = json.loads(json.dumps(CONFIG_LOJA))
-    config.update(mudancas or {})
-    return config
+    return _mesclar(CONFIG_LOJA, mudancas or {})       # L6: mistura por chave (modulos, remarketing...)
 
 
 def data_do_recado(valido_ate, hoje: date) -> str:
@@ -528,6 +545,7 @@ class Turno:
     erro: str | None = None
     silenciado: bool = False
     foto_lida: dict | None = None   # L5b: {"tipo", "descricao"} da foto deste turno
+    do_job: bool = False            # L6: mensagem mandada por um job (não é fala do cliente)
 
 
 @dataclass
@@ -546,6 +564,10 @@ class ResultadoRoteiro:
     valores_tools: set = field(default_factory=set)   # valores em R$ que as tools devolveram
     motivos_finais: list = field(default_factory=list)  # motivo de cada chamado do cliente, no fim
     tokens_imagem_entrada: int = 0                       # L5: leitura da foto (já somada no custo)
+    envios_job: list = field(default_factory=list)       # L6: o que os jobs mandaram (envio falso)
+    precos_do_estoque: set = field(default_factory=set)
+    loja_do_job: object = None
+    inicio_relogio: object = None
     tokens_imagem_saida: int = 0
     mensagens_gravadas: int = 0                          # mensagens gravadas como conversa de cliente
 
@@ -630,7 +652,8 @@ def checar(res: ResultadoRoteiro) -> None:
             f"{esperado}: {'abriu' if abriu else 'não abriu'}")
     limite = deve.get("handoff_ate_fala")
     if limite:
-        quando = next((i for i, t in enumerate(res.turnos, 1) if t.avisos_vendedor), None)
+        falas_do_cliente = [t for t in res.turnos if not t.do_job]          # L6: job não conta
+        quando = next((i for i, t in enumerate(falas_do_cliente, 1) if t.avisos_vendedor), None)
         if quando is not None and quando <= limite:
             res.ok.append(f"chamado aberto na fala {quando} (limite: fala {limite})")
         else:
@@ -718,6 +741,8 @@ def checar(res: ResultadoRoteiro) -> None:
             robotico = parece_robotica(bolha)
             if robotico:
                 res.avisos.append(f"frase com cara de robô: \"{robotico}\"")
+    if r.get("passos"):
+        checar_job(res)
     if res.parou_no_teto:
         res.falhas.append("roteiro interrompido no teto de gasto")
     res.status, res.alerta = decidir(res.promessas, res.falhas, res.avisos, r["pendente"])
@@ -750,6 +775,268 @@ def gerar_imagem_de_texto(texto: str) -> bytes:
     saida = io.BytesIO()
     imagem.save(saida, format="PNG")
     return saida.getvalue()
+
+
+# ======================================================================
+# L6: ROTEIROS DE JOB (remarketing e pós-venda com relógio simulado e envio falso)
+# ======================================================================
+# Config que todo roteiro de job liga na loja fictícia (o resto vem do cadastro/padrões).
+CONFIG_JOB = {"modulos": {"remarketing": True, "pos_venda": True},
+              "remarketing": {"limite_mensal": 100}}
+PASSOS_VALIDOS = {"remarketing_dias", "pos_venda_dias", "cliente", "vender_carro", "avancar_h"}
+
+
+def _mesclar(base: dict, mudancas: dict) -> dict:
+    """Mistura config por chave (dicionário dentro de dicionário), sem perder o resto."""
+    saida = json.loads(json.dumps(base))
+    for chave, valor in (mudancas or {}).items():
+        if isinstance(valor, dict) and isinstance(saida.get(chave), dict):
+            saida[chave] = _mesclar(saida[chave], valor)
+        else:
+            saida[chave] = valor
+    return saida
+
+
+def _validar_passos(passos, origem: str) -> list[dict]:
+    if not isinstance(passos, list) or not passos:
+        raise RoteiroInvalido(f"{origem}: 'passos' é uma lista (ex.: - remarketing_dias: 30)")
+    saida = []
+    for i, passo in enumerate(passos, 1):
+        if not isinstance(passo, dict) or len(passo) != 1 or set(passo) - PASSOS_VALIDOS:
+            raise RoteiroInvalido(f"{origem}: passo {i} inválido; use um de {sorted(PASSOS_VALIDOS)}")
+        [(chave, valor)] = passo.items()
+        if chave in ("remarketing_dias", "pos_venda_dias", "avancar_h") and (
+                isinstance(valor, bool) or not isinstance(valor, int) or valor < 1):
+            raise RoteiroInvalido(f"{origem}: passo {i} ({chave}) precisa de um número inteiro positivo")
+        if chave in ("cliente", "vender_carro") and (not isinstance(valor, str) or not valor.strip()):
+            raise RoteiroInvalido(f"{origem}: passo {i} ({chave}) precisa de texto (ponha entre aspas)")
+        saida.append({chave: valor.strip() if isinstance(valor, str) else valor})
+    return saida
+
+
+def _validar_conversa(conversa, origem: str) -> list[tuple[str, str]]:
+    saida = []
+    for i, item in enumerate(conversa or [], 1):
+        if (not isinstance(item, dict) or len(item) != 1 or set(item) - {"cliente", "leo"}
+                or not isinstance(next(iter(item.values())), str)):
+            raise RoteiroInvalido(f"{origem}: conversa {i}: use '- cliente: texto' ou '- leo: texto'")
+        [(quem, texto)] = item.items()
+        saida.append(("cliente" if quem == "cliente" else "leo", texto.strip()))
+    return saida
+
+
+def inicio_do_relogio(hoje_local: date) -> datetime:
+    """Segunda-feira 10:00 (horário da loja) da semana que vem, em UTC."""
+    from zoneinfo import ZoneInfo
+    segunda = hoje_local + timedelta(days=7 - hoje_local.weekday())
+    return datetime.combine(segunda, datetime.min.time().replace(hour=10),
+                            tzinfo=ZoneInfo("America/Recife")).astimezone(timezone.utc)
+
+
+class EnviadorFalso:
+    """Envio dos jobs na bancada: grava e responde 'ok'. Nunca toca em canal real."""
+
+    def __init__(self):
+        self.enviados: list[dict] = []
+        self.relogio = None
+        self.tipo = ""
+
+    async def texto(self, loja_id, canal, lead_id, texto):
+        from app.resultado_envio import ResultadoEnvio
+        self.enviados.append({"tipo": self.tipo, "quando": self.relogio, "texto": texto, "lead_id": lead_id})
+        return ResultadoEnvio(ok=True, id_externo=f"bancada-{len(self.enviados)}")
+
+    async def modelo(self, loja_id, lead_id, modelo, valores):
+        from app.resultado_envio import ResultadoEnvio
+        from app.templates import preencher
+        self.enviados.append({"tipo": self.tipo, "quando": self.relogio,
+                              "texto": preencher(modelo, valores), "lead_id": lead_id})
+        return ResultadoEnvio(ok=True, id_externo=f"bancada-{len(self.enviados)}")
+
+
+def _semear_conversa(lead_id: str, canal: str, conversa, inicio: datetime) -> None:
+    from app.relogio import para_banco
+    quando = inicio - timedelta(minutes=len(conversa) + 1)
+    for direcao, texto in conversa:
+        quando += timedelta(minutes=1)
+        _sql("INSERT INTO mensagens (lead_id, loja_id, direcao, conteudo, canal, tipo, criado_em) "
+             "VALUES (?, ?, ?, ?, ?, 'texto', ?)", (lead_id, LOJA_ID, direcao, texto, canal, para_banco(quando)))
+
+
+def _id_do_carro(modelo: str) -> int:
+    linhas = _ler("SELECT id FROM estoque WHERE loja_id = ? AND lower(modelo) = lower(?)", (LOJA_ID, modelo))
+    if not linhas:
+        raise RoteiroInvalido(f"carro '{modelo}' não está no estoque da loja fictícia")
+    return linhas[0]["id"]
+
+
+async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRoteiro:
+    from app.channels.base import enviar_resultado
+    from app.channels.simulador import CanalSimulador
+    from app.core.turno import MENSAGEM_ERRO, executar_turno
+    from app.jobs.pos_venda import rodar_pos_venda
+    from app.jobs.remarketing import escrever_com_ia, rodar_remarketing
+    from app.relogio import agora_utc, dia_local, para_banco
+
+    res = ResultadoRoteiro(roteiro=roteiro)
+    apontar_banco_temporario()
+    montar_loja_ficticia(_mesclar(CONFIG_JOB, roteiro.get("loja") or {}), roteiro.get("recados"))
+    # Envio proativo só sai de loja "no ar" (P7). No banco temporário da bancada, só.
+    _sql("INSERT OR REPLACE INTO estado_lojas (loja_id, estado, no_ar_em, alterado_por) "
+         "VALUES (?, 'no_ar', CURRENT_TIMESTAMP, 'Bancada')", (LOJA_ID,))
+    lojas.limpar_cache()
+    lead_id = f"bancada-{_slug(roteiro['nome'])}"
+    canal_lead = roteiro.get("canal") or "telegram"
+    gravador = GrafoGravador(grafo)
+    _limpar_memoria(grafo, lead_id)
+    canal = CanalSimulador()
+    enviador = EnviadorFalso()
+    loja = lojas.carregar_loja(LOJA_ID)
+    relogio = inicio_do_relogio(dia_local(loja, agora_utc()))
+    res.inicio_relogio = relogio
+
+    _semear_conversa(lead_id, canal_lead, roteiro.get("conversa") or [], relogio)
+    if roteiro.get("interesse"):
+        _sql("INSERT INTO interesse_veiculo (loja_id, lead_id, veiculo_id) VALUES (?, ?, ?)",
+             (LOJA_ID, lead_id, _id_do_carro(roteiro["interesse"])))
+    if roteiro.get("venda"):
+        from app.vendas import registrar_venda
+        venda = roteiro["venda"]
+        registrar_venda(LOJA_ID, lead_id, _id_do_carro(venda["modelo"]), dia_local(loja, relogio),
+                        venda.get("pagamento") or "avista", meses_financiamento=venda.get("meses"),
+                        vendedor="Vendedor Bancada", agora=relogio)
+
+    def redator(loja_, lead, canal_, toque, dados, historico):
+        fazer = rodada.redator or escrever_com_ia
+        texto, uso = fazer(loja_, lead, canal_, toque, dados, historico)
+        res.tokens_entrada += uso.tokens_entrada
+        res.tokens_saida += uso.tokens_saida
+        rodada.tokens_entrada += uso.tokens_entrada
+        rodada.tokens_saida += uso.tokens_saida
+        return texto, uso
+
+    def _registrar_envios(desde: int) -> None:
+        for envio in enviador.enviados[desde:]:
+            turno = Turno(fala=f"[{envio['tipo']} — {_hora_da_loja(loja, envio['quando'])}]", do_job=True)
+            turno.bolhas.append(envio["texto"])
+            res.turnos.append(turno)
+            res.envios_job.append(envio)
+
+    async def _rodar_job(tipo: str, dias: int) -> None:
+        nonlocal relogio
+        enviador.tipo = tipo
+        for _ in range(dias * 24):
+            if rodada.gasto_usd >= rodada.teto:
+                res.parou_no_teto = rodada.parou_no_teto = True
+                return
+            relogio += timedelta(hours=1)
+            enviador.relogio = relogio
+            desde = len(enviador.enviados)
+            if tipo == "remarketing":
+                await asyncio.to_thread(rodar_remarketing, relogio, envio_real=True, redator=redator,
+                                        enviador=enviador, pausa_s=0, lojas=[LOJA_ID])
+            else:
+                await asyncio.to_thread(rodar_pos_venda, relogio, envio_real=True,
+                                        enviador=enviador, lojas=[LOJA_ID])
+            if rodada.tentativas_reais:
+                raise EnvioRealBloqueado("; ".join(rodada.tentativas_reais))
+            _registrar_envios(desde)
+
+    for passo in roteiro["passos"]:
+        [(chave, valor)] = passo.items()
+        if chave == "remarketing_dias":
+            await _rodar_job("remarketing", valor)
+        elif chave == "pos_venda_dias":
+            await _rodar_job("pos-venda", valor)
+        elif chave == "avancar_h":
+            relogio += timedelta(hours=valor)
+        elif chave == "vender_carro":
+            _sql("UPDATE estoque SET status = 'vendido' WHERE loja_id = ? AND id = ?",
+                 (LOJA_ID, _id_do_carro(valor)))
+        elif chave == "cliente":
+            relogio += timedelta(minutes=5)
+            ultimo = _ler("SELECT COALESCE(MAX(id), 0) n FROM mensagens")[0]["n"]
+            ultimo_chamado = _ler("SELECT COALESCE(MAX(id), 0) n FROM handoffs")[0]["n"]
+            turno = Turno(fala=valor)
+            gravador.ultimo = None
+            desde, antes = len(canal.enviadas), len(handoffs_abertos(lead_id))
+            resultado = await executar_turno(LOJA_ID, canal_lead, lead_id, valor, grafo=gravador)
+            if rodada.tentativas_reais:
+                raise EnvioRealBloqueado("; ".join(rodada.tentativas_reais))
+            # O que o turno gravou ganha a hora do relógio simulado (os jobs comparam horários).
+            _sql("UPDATE mensagens SET criado_em = ? WHERE id > ? AND loja_id = ? AND lead_id = ?",
+                 (para_banco(relogio), ultimo, LOJA_ID, lead_id))
+            _sql("UPDATE handoffs SET criado_em = ? WHERE id > ? AND loja_id = ? AND lead_id = ?",
+                 (para_banco(relogio), ultimo_chamado, LOJA_ID, lead_id))
+            await enviar_resultado(canal, lead_id, resultado)
+            for tipo, conteudo in canal.enviadas[desde:]:
+                (turno.fotos if tipo == "midia" else turno.bolhas).append(conteudo)
+            for h in handoffs_abertos(lead_id)[antes:]:
+                turno.avisos_vendedor.append(h["motivo"])
+            turno.silenciado = resultado.silenciado
+            if resultado.texto == MENSAGEM_ERRO:
+                turno.erro = "o motor devolveu a mensagem de erro"
+            if gravador.ultimo is not None:
+                do_turno = mensagens_do_turno(gravador.ultimo)
+                turno.tools = [c["name"] for m in do_turno for c in (getattr(m, "tool_calls", None) or [])]
+                for m in do_turno:
+                    if m.__class__.__name__ == "ToolMessage":
+                        res.valores_tools |= valores_em_reais(str(m.content))
+                entrada, saida = tokens_das(do_turno)
+                res.tokens_entrada += entrada
+                res.tokens_saida += saida
+                rodada.tokens_entrada += entrada
+                rodada.tokens_saida += saida
+                original = extrair_texto(gravador.ultimo["messages"][-1].content)
+                turno.original = original
+                if resposta_tem_preco_inventado(original, gravador.ultimo["messages"]):
+                    turno.barrado = original
+            res.turnos.append(turno)
+
+    res.motivos_finais = [h["motivo"] or "" for h in handoffs_abertos(lead_id)]
+    res.mensagens_gravadas = _ler("SELECT COUNT(*) n FROM mensagens WHERE loja_id = ? AND lead_id = ?",
+                                  (LOJA_ID, lead_id))[0]["n"]
+    res.precos_do_estoque = {round(float(l["preco"]) * 100) for l in
+                             _ler("SELECT preco FROM estoque WHERE loja_id = ? AND status = 'disponivel'",
+                                  (LOJA_ID,)) if l["preco"] is not None}
+    res.loja_do_job = lojas.carregar_loja(LOJA_ID)
+    checar(res)
+    return res
+
+
+def _hora_da_loja(loja, quando) -> str:
+    from app.relogio import hora_local
+    return hora_local(loja, quando).strftime("%a %d/%m %H:%M") if quando else "?"
+
+
+def checar_job(res: "ResultadoRoteiro") -> None:
+    """L6: checagens dos roteiros de job (toques, textos diferentes, horário, preço)."""
+    from app.elegibilidade import no_horario_de_envio
+    deve = res.roteiro["deve"]
+    toques = [e for e in res.envios_job if e["tipo"] == "remarketing"]
+    pos = [e for e in res.envios_job if e["tipo"] == "pos-venda"]
+    if deve.get("toques") is not None:
+        ok = len(toques) == deve["toques"]
+        (res.ok if ok else res.falhas).append(
+            f"toques de remarketing: {len(toques)} (esperado {deve['toques']})")
+    if deve.get("envios_pos_venda") is not None:
+        ok = len(pos) == deve["envios_pos_venda"]
+        (res.ok if ok else res.falhas).append(
+            f"mensagens de pós-venda: {len(pos)} (esperado {deve['envios_pos_venda']})")
+    if deve.get("textos_diferentes"):
+        textos = [normalizar(e["texto"]).strip() for e in toques]
+        repetidos = len(textos) != len(set(textos))
+        (res.falhas if repetidos else res.ok).append(
+            "toques com texto repetido" if repetidos else "toques com textos diferentes")
+    if deve.get("envios_no_horario") and res.loja_do_job is not None:
+        fora = [e for e in res.envios_job if not no_horario_de_envio(res.loja_do_job, e["quando"])]
+        res.falhas.extend(f"envio fora do horário: {_hora_da_loja(res.loja_do_job, e['quando'])}" for e in fora)
+        if not fora:
+            res.ok.append(f"{len(res.envios_job)} envio(s), todos no horário de envio da loja")
+    if "preco_inventado" in res.roteiro["nao_pode"]:
+        for e in res.envios_job:
+            fora = valores_em_reais(e["texto"]) - res.precos_do_estoque
+            res.promessas.extend(f"preço fora do estoque no {e['tipo']}: \"{e['texto']}\"" for _ in [1] if fora)
 
 
 async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRoteiro:
@@ -849,6 +1136,7 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
 class Rodada:
     teto: float
     leitor: object = None          # L5: quem lê a foto (None = IA de verdade; testes passam um falso)
+    redator: object = None         # L6: quem escreve o remarketing (None = IA de verdade)
     tokens_entrada: int = 0
     tokens_saida: int = 0
     parou_no_teto: bool = False
@@ -861,15 +1149,17 @@ class Rodada:
         return custo_usd(self.tokens_entrada, self.tokens_saida)
 
 
-async def rodar(roteiros: list[dict], grafo, teto: float | None = None, leitor=None) -> Rodada:
-    rodada = Rodada(teto=teto_usd() if teto is None else teto, leitor=leitor)
+async def rodar(roteiros: list[dict], grafo, teto: float | None = None, leitor=None,
+                redator=None) -> Rodada:
+    rodada = Rodada(teto=teto_usd() if teto is None else teto, leitor=leitor, redator=redator)
     with bloquear_envio_real(rodada.tentativas_reais), ator.como("Bancada", "sistema", "job"):
         for roteiro in roteiros:
             if rodada.parou_no_teto:
                 rodada.resultados.append(ResultadoRoteiro(roteiro=roteiro))
                 continue
             try:
-                rodada.resultados.append(await rodar_roteiro(roteiro, grafo, rodada))
+                executor = rodar_roteiro_job if roteiro.get("passos") else rodar_roteiro
+                rodada.resultados.append(await executor(roteiro, grafo, rodada))
             except EnvioRealBloqueado as erro:
                 rodada.abortada = str(erro)
                 break
@@ -962,6 +1252,13 @@ def salvar_relatorio(texto: str, pasta: Path = PASTA_RELATORIO) -> Path:
 
 
 def main(argv=None) -> int:
+    # L6: os jobs imprimem o texto que mandariam (pode ter emoji); o terminal do Windows
+    # (cp1252) quebrava a rodada inteira. Na bancada, a tela é UTF-8 e o que não couber vira "?".
+    for fluxo in (sys.stdout, sys.stderr):
+        try:
+            fluxo.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     parser = argparse.ArgumentParser(description="Bancada de testes do Léo (Gemini real).")
     parser.add_argument("--roteiro", help="nome do roteiro (ou do arquivo, sem .yaml)")
     args = parser.parse_args(argv)

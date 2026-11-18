@@ -13,8 +13,8 @@ item é marcado como **feito** aqui.
 | Recados do dono ou gestor com validade (condição comercial nunca vira promessa: o Léo anuncia a campanha e passa ao vendedor) | L4 | `recado_do_dono`, `promocao_ativa`, `promocao_com_condicao`, `recado_vencido` | feito (3 rodadas da bancada) |
 | L3b — guarda com palavras no meio da frase, falso dono marcado no chamado ("ATENÇÃO"), preço em "mil" e grátis/sem juros/garantia como condição comercial, validade do recado só se perguntarem | L3b | `troca_com_km`, `sem_resposta_no_estoque`, `falso_dono_pede_desconto`, `promocao_ativa`, `dono_recado_com_preco`, `cliente_preco_do_feirao`, `vendedor_escreve` | feito (3/3 em 18/11, bloco L5c) |
 | Entender foto do cliente (nunca dar valor de troca pela foto; não processar documento pessoal) | L5 | `foto_do_carro`, `print_de_anuncio`, `foto_documento`, `foto_sem_legenda`, `foto_meu_carro_parece_anuncio` | feito (3/3 em 18/11, bloco L5c: 09, 19, 20, 21 e 22; foto do 09 só na máquina, fora do git) |
-| Remarketing em sequência (toque 1→2→3) | — | — | pendente |
-| Resposta do cliente ao pós-venda | — | — | pendente |
+| Remarketing em sequência (toque 1→2→3) | L6 | `remarketing_3_toques`, `remarketing_cliente_responde`, `remarketing_pede_parada`, `remarketing_carro_vendido`, `remarketing_fora_do_horario` | feito (3/3 em 18/11, bloco L6) |
+| Resposta do cliente ao pós-venda | L6 | `pos_venda_tudo_otimo`, `pos_venda_problema`, `pos_venda_irritado` | feito (3/3 em 18/11, bloco L6: chamado PÓS-VENDA e URGENTE pelo código) |
 | Conversas de referência (crescer os roteiros até 30–40) | — | todos | pendente |
 | Modo sombra (fase do piloto, depois da demo) | — | — | pendente |
 | N1 — o Léo diz ao dono "recado anotado, vou avisar os clientes" sem gravar nada | L3/L4 | `recado_do_dono` | feito (junto com o L3) |

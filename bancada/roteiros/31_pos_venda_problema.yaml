@@ -1,0 +1,16 @@
+nome: pos_venda_problema
+# L6: cliente comprou e relata problema: chamado na fala 1, sem diagnóstico,
+# sem prometer conserto, garantia ou prazo.
+conversa:
+  - cliente: fechei o Onix, obrigado!
+  - leo: Que ótimo! Qualquer coisa, é só chamar por aqui.
+venda: {modelo: Onix, pagamento: avista}
+passos:
+  - pos_venda_dias: 2
+  - cliente: o carro tá fazendo um barulho estranho na suspensão
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+  motivo_contem: ["PÓS-VENDA"]
+nao_contem: ["provavelmente", "pode ser a", "pode ser o", "deve ser", "garantia cobre", "vamos consertar", "a gente conserta", "sem custo"]
+nao_pode: [preco_inventado]

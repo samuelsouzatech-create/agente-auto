@@ -1,0 +1,14 @@
+nome: remarketing_3_toques
+# L6: cliente some depois de perguntar do Civic. No máximo 3 toques, nos intervalos e
+# horários do cadastro, textos diferentes, preço só do estoque.
+conversa:
+  - cliente: tem civic?
+  - leo: Temos sim, o Honda Civic 2019 branco, automático, por R$ 98.000,00. Quer ver fotos?
+interesse: Civic
+passos:
+  - remarketing_dias: 30
+deve:
+  toques: 3
+  textos_diferentes: sim
+  envios_no_horario: sim
+nao_pode: [preco_inventado, desconto]

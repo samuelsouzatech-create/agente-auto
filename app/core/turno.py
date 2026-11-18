@@ -42,6 +42,7 @@ from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
 from app.estado_loja import pode_responder
 from app.formatacao import limpar_markdown
 from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da_equipe,
+                                 cliente_ameacou, motivo_com_marcas, relatou_problema_da_compra,
                                  corrigir_regra_de_entrada, diz_ser_da_equipe,
                                  pediu_valor_da_troca, pergunta_curta, pergunta_se_aceita_troca,
                                  promete_contato_da_equipe, resposta_tem_preco_inventado,
@@ -333,6 +334,11 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         handoff = True
         ferramentas.append(nome_guarda)
 
+    # L6: cliente irritado/ameaçando (URGENTE) e problema de quem comprou (PÓS-VENDA).
+    if marcar_pos_venda_e_urgencia(loja_id, lead_id, texto):
+        handoff = True
+        ferramentas.append("guarda_pos_venda")
+
     # L3b: número fora da equipe dizendo ser dono/gestor/da loja: o chamado avisa.
     if marcar_falso_dono(loja_id, lead_id, texto):
         handoff = True
@@ -375,6 +381,54 @@ MENSAGEM_FALSO_DONO = ("Esse número não está cadastrado na equipe da loja, en
                        "por aqui. O pessoal da equipe vai conferir.")
 MOTIVO_ACEITA_TROCA = "Cliente perguntou se a loja aceita troca (não está no cadastro)."
 JANELA_FALSO_DONO_HORAS = 24
+
+
+def _comprou_na_loja(loja_id: int, lead_id: str) -> bool:
+    conexao = conectar()
+    try:
+        return conexao.execute("SELECT 1 FROM vendas WHERE loja_id = ? AND lead_id = ? LIMIT 1",
+                               (loja_id, lead_id)).fetchone() is not None
+    finally:
+        conexao.close()
+
+
+def marcar_pos_venda_e_urgencia(loja_id: int, lead_id: str, texto: str) -> bool:
+    """L6 (código, não prompt):
+    - cliente irritado ou ameaçando (Procon, advogado, Reclame Aqui...): chamado com URGENTE;
+    - quem comprou na loja e relata problema (barulho, defeito, documento, transferência,
+      pagamento): chamado com "PÓS-VENDA: " no começo (o job de pós-venda para os passos).
+    Sem chamado aberto: abre. Com chamado aberto (até pela IA neste turno): marca o motivo.
+    Devolve True se abriu chamado agora. Nunca derruba o turno."""
+    try:
+        urgente = cliente_ameacou(texto)
+        comprou = _comprou_na_loja(loja_id, lead_id)
+        pos_venda = comprou and (urgente or relatou_problema_da_compra(texto))
+        if not (urgente or pos_venda):
+            return False
+        if estado_do_handoff(lead_id, loja_id) == "ativo":
+            base = ("Cliente irritado ou ameaçando reclamar." if urgente
+                    else "Cliente relatou problema com a compra.")
+            acionar_handoff.func(
+                motivo=motivo_com_marcas(f'{base} Pergunta do cliente: "{pergunta_curta(texto)}"',
+                                         pos_venda=pos_venda, urgente=urgente),
+                resumo=f"Mensagem do cliente: {texto}", lead_id=lead_id, loja_id=loja_id)
+            return True
+        conexao = conectar()
+        try:
+            linha = conexao.execute("SELECT id, motivo FROM handoffs WHERE loja_id = ? AND lead_id = ? "
+                                    "AND estado = 'aguardando_humano' ORDER BY id DESC LIMIT 1",
+                                    (loja_id, lead_id)).fetchone()
+            if linha is not None:
+                novo = motivo_com_marcas(linha["motivo"], pos_venda=pos_venda, urgente=urgente)
+                if novo != (linha["motivo"] or ""):
+                    conexao.execute("UPDATE handoffs SET motivo = ? WHERE id = ?", (novo, linha["id"]))
+                    conexao.commit()
+        finally:
+            conexao.close()
+        return False
+    except Exception as erro:
+        print(f"[Turno][loja {loja_id}] Aviso: não consegui marcar pós-venda/urgente ({erro!r}).")
+        return False
 
 
 def falso_dono_ativo(loja_id: int, lead_id: str) -> bool:
