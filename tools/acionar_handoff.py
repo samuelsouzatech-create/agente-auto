@@ -10,6 +10,16 @@ ORIENTACAO = ("Diga ao cliente, com naturalidade e sem anunciar transferência, 
               "e a hora do STATUS AGORA (não faça conta de horário).")
 
 
+def juntar_motivos(antigo, novo) -> str:
+    """L5c: "<motivo anterior> | <motivo novo>", sem repetir o que já está lá."""
+    antigo, novo = str(antigo or "").strip(), str(novo or "").strip()
+    if not antigo or antigo == novo:
+        return novo or antigo
+    if not novo or novo in antigo:
+        return antigo
+    return f"{antigo} | {novo}"
+
+
 @tool
 def acionar_handoff(motivo: str, resumo: str,
                     lead_id: Annotated[str, InjectedToolArg] = "",
@@ -27,13 +37,14 @@ def acionar_handoff(motivo: str, resumo: str,
     try:
         if lead_id:
             existente = conexao.execute(
-                "SELECT id FROM handoffs WHERE loja_id = ? AND lead_id = ? AND estado = 'aguardando_humano'",
+                "SELECT id, motivo FROM handoffs WHERE loja_id = ? AND lead_id = ? AND estado = 'aguardando_humano'",
                 (loja_id, lead_id),
             ).fetchone()
             if existente:
+                # L5c: o motivo novo não apaga o anterior (ex.: o do código): "<antigo> | <novo>".
                 conexao.execute(
                     "UPDATE handoffs SET motivo = ?, resumo = ? WHERE id = ?",
-                    (motivo, resumo, existente["id"]),
+                    (juntar_motivos(existente["motivo"], motivo), resumo, existente["id"]),
                 )
                 conexao.commit()
                 return "Handoff atualizado. " + ORIENTACAO

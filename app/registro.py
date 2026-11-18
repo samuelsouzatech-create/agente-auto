@@ -69,6 +69,7 @@ HISTORICO_PROPRIO = {
 # derrubam quem chamou. Não entram em ACOES_RELEVANTES (lá, sem ator falha).
 EVENTOS_DE_SISTEMA = {
     "mensagem_canal_sem_cadastro": "app.logs.registrar_canal_desconhecido", "mensagem_recusada_loja_em_teste": "app.core.turno.porta_fechada",
+    "leitura_foto_falhou": "app.core.turno.executar_turno_imagem",       # L5c
 }
 
 

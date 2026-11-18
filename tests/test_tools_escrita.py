@@ -214,7 +214,8 @@ def test_acionar_handoff_nao_duplica_mesmo_lead(banco_temporario):
     cursor.execute("SELECT * FROM handoffs WHERE lead_id = ?", ("conversa-hand",))
     linha = cursor.fetchone()
     conexao.close()
-    assert linha["motivo"] == "cliente quer falar com vendedor"
+    # L5c: o motivo novo não apaga o anterior ("<antigo> | <novo>").
+    assert linha["motivo"] == "cliente pediu desconto | cliente quer falar com vendedor"
     assert linha["estado"] == "aguardando_humano"
 
 

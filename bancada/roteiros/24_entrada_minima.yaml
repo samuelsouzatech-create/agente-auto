@@ -1,0 +1,9 @@
+nome: entrada_minima
+# L5c: o Léo não afirma regra de entrada ("flexível", "você define", "sem entrada"):
+# depende da análise de crédito.
+falas:
+  - qual a entrada mínima?
+  - dá pra financiar sem entrada?
+deve:
+  contem: ["analise"]
+nao_pode: [preco_inventado, credito, regra_entrada]

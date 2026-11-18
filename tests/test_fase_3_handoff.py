@@ -154,7 +154,8 @@ def test_acionar_duas_vezes_nao_duplica_a_fila(banco_temporario):
     abrir_handoff("5581", motivo="crédito", resumo="r2")
     linhas = linhas_handoff("5581")
     assert len(linhas) == 1
-    assert linhas[0]["motivo"] == "crédito" and linhas[0]["resumo"] == "r2"
+    # L5c: o motivo novo não apaga o anterior; o resumo é o mais recente.
+    assert linhas[0]["motivo"] == "desconto | crédito" and linhas[0]["resumo"] == "r2"
 
 
 def test_assumir_grava_vendedor_e_carimbo(banco_temporario):

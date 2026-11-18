@@ -39,6 +39,8 @@ ROTULO_OPCAO = {
     "conversar": "Continua conversando",
     "esperar": "Manda uma mensagem de espera e fica quieto",
     "meio_termo": "Meio-termo: segue em assuntos simples, recusa preço e crédito",
+    "sim": "Sim", "nao": "Não",
+    "nao_informado": "Não informado (o assistente diz que vai confirmar e chama a equipe)",
 }
 
 _ROTULO_MODULO = {
@@ -67,6 +69,9 @@ CAMPOS: tuple[Campo, ...] = (
     Campo("cidade", "Cidade", "texto", "Identidade"),
     Campo("endereco", "Endereço da loja", "texto", "Identidade",
           "Rua, número e bairro. O assistente só informa o endereço escrito aqui."),
+    Campo("aceita_troca", "Aceita carro na troca?", "opcao", "Identidade",
+          "O assistente só diz que a loja aceita troca se aqui estiver Sim.",
+          ("sim", "nao", "nao_informado")),
     Campo("tom", "Tom de voz", "texto_longo", "Identidade",
           "Como o agente fala, ex.: 'simples, cordial e direto'."),
     Campo("fuso", "Fuso horário", "texto", "Identidade",

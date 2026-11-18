@@ -6,4 +6,4 @@ legenda: quanto vocês dão nesse meu carro da foto?
 deve:
   handoff: sim
   handoff_ate_fala: 1
-nao_pode: [preco_inventado, valor_troca]
+nao_pode: [preco_inventado, valor_troca, elogio_estado]

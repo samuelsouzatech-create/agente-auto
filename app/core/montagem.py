@@ -53,6 +53,14 @@ TODAS_AS_FERRAMENTAS = [
     buscar_conhecimento, registrar_interesse,
 ]
 
+# L5c: o que o Léo pode dizer sobre aceitar carro na troca (vem do cadastro da loja).
+TEXTO_ACEITA_TROCA = {
+    "sim": "- Troca: a loja aceita carro na troca (avaliação presencial, com um vendedor).",
+    "nao": "- Troca: a loja NÃO aceita carro na troca. Se perguntarem, diga isso com educação.",
+    "nao_informado": ("- Troca: não está cadastrado se a loja aceita carro na troca. Se perguntarem, "
+                      "diga que vai confirmar com a equipe e chame acionar_handoff. Não diga que aceita."),
+}
+
 # L3/L4: no modo equipe só existe esta ferramenta (nunca aparece para cliente).
 FERRAMENTAS_EQUIPE = [registrar_recado]
 ROTULOS_EQUIPE = {"dono": "dono", "gestor": "gerente"}
@@ -226,6 +234,9 @@ def _camada_da_loja(loja, agora=None) -> str:
     else:
         linhas.append("- Endereço da loja: não cadastrado. Se perguntarem, diga que vai confirmar "
                       "com a equipe e chame acionar_handoff. Nunca invente endereço.")
+    # L5c: aceitar troca vem do cadastro, não da base de conhecimento.
+    linhas.append(TEXTO_ACEITA_TROCA.get(str(valor_config(cfg, "aceita_troca", "nao_informado")),
+                                         TEXTO_ACEITA_TROCA["nao_informado"]))
     vista = _loja_para_relogio(loja)
     horario = descrever_horarios(vista)
     if horario:

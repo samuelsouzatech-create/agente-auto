@@ -48,6 +48,7 @@ from app.guarda_politica import (  # noqa: E402
     numeros_do_cliente, resposta_tem_preco_inventado, valores_em_reais,
 )
 from app.recados import termos_da_condicao  # noqa: E402
+from app.guarda_politica import FRASES_PROIBIDAS, ELOGIO_DO_ESTADO  # noqa: E402
 from app.naturalidade import parece_robotica  # noqa: E402
 from app.utils import extrair_texto, mensagens_do_turno  # noqa: E402
 
@@ -62,6 +63,7 @@ NOME_LOJA = "Auto Bancada Recife (loja fictícia)"
 CONFIG_LOJA = {
     "cidade": "Recife",
     "endereco": "Av. Domingos Ferreira, 1000, Boa Viagem",
+    "aceita_troca": "sim",                     # L5c: vem do cadastro (não da base de conhecimento)
     "atendimento": {"horario_semana": {
         "0": "08:00-18:00", "1": "08:00-18:00", "2": "08:00-18:00",
         "3": "08:00-18:00", "4": "08:00-18:00", "5": "08:00-13:00"}},
@@ -93,7 +95,7 @@ CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "p
                   "recados", "nao_contem", "imagem_texto", "legenda"}
 CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead"}
 NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco",
-                    "condicao_recado", "numero"}
+                    "condicao_recado", "numero", "regra_entrada", "elogio_estado"}
 
 # Domínios dos canais reais. Qualquer pedido para eles aborta a rodada.
 HOSTS_PROIBIDOS = ("facebook.com", "instagram.com", "telegram.org", "whatsapp.com", "whatsapp.net")
@@ -485,6 +487,17 @@ def repete_condicao(texto: str, termos: set) -> list[str]:
             and not _NEGACAO.search(f) and not _RESSALVA_CONDICAO.search(f)]
 
 
+def afirma_regra_de_entrada(texto: str) -> list[str]:
+    """L5c: frase que afirma regra de entrada (sem "depende da análise")."""
+    from app.guarda_politica import corrigir_regra_de_entrada
+    return [f for f in frases(texto) if corrigir_regra_de_entrada(f)[1]]
+
+
+def elogia_estado(texto: str) -> list[str]:
+    """L5c: frase que avalia/elogia o estado do carro ("bem conservado", "ótimo estado")."""
+    return [f for f in frases(texto) if ELOGIO_DO_ESTADO.search(f)]
+
+
 _NUMERO = re.compile(r"\d")
 
 
@@ -681,6 +694,19 @@ def checar(res: ResultadoRoteiro) -> None:
             res.ok.append("nenhum número na resposta")
             if cita_numero(res.texto_do_modelo):
                 res.avisos.append("o modelo escreveu número, mas a resposta fixa do modo equipe segurou")
+    # L5c: checagem GLOBAL (todos os roteiros): frases proibidas no que o cliente recebeu.
+    proibidas = [f for f in frases(res.texto_do_leo) if FRASES_PROIBIDAS.search(f)]
+    res.falhas.extend(f"frase proibida: \"{f}\"" for f in proibidas)
+    detectores_l5c = {"regra_entrada": ("afirmou regra de entrada", afirma_regra_de_entrada),
+                      "elogio_estado": ("elogiou o estado do carro da foto", elogia_estado)}
+    for chave, (rotulo, detector) in detectores_l5c.items():
+        if chave in nao_pode:
+            achadas = detector(res.texto_do_leo)
+            res.falhas.extend(f"{rotulo}: \"{f}\"" for f in achadas)
+            if not achadas:
+                res.ok.append(f"ok: {chave}")
+                if detector(res.texto_do_modelo):
+                    res.avisos.append(f"o modelo escreveu ({chave}), mas a guarda do código trocou")
     for item in r.get("nao_contem") or []:
         opcoes = [normalizar(o).strip() for o in item.split("|") if o.strip()]
         citou = any(o in texto for o in opcoes)
@@ -890,8 +916,11 @@ def montar_relatorio(rodada: Rodada, modelo: str = "") -> str:
             if turno.silenciado:
                 linhas.append("_(Léo em silêncio)_  ")
             if turno.foto_lida:
+                erro = turno.foto_lida.get("erro")
+                extra = (f" · erro: {erro}, tentativas: {turno.foto_lida.get('tentativas', 1)}"
+                         if erro else "")
                 linhas.append(f"🖼️ foto lida como **{turno.foto_lida['tipo']}**: "
-                              f"{turno.foto_lida['descricao'] or '(sem descrição)'}  ")
+                              f"{turno.foto_lida['descricao'] or '(sem descrição)'}{extra}  ")
             for bolha in turno.bolhas:
                 linhas.append(f"**Léo:** {bolha}  ")
             for foto in turno.fotos:

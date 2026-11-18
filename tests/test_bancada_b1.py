@@ -60,7 +60,7 @@ def pasta_temporaria_da_bancada(monkeypatch, tmp_path):
 
 def test_os_roteiros_carregam():
     roteiros = rb.carregar_roteiros()
-    assert len(roteiros) == 23
+    assert len(roteiros) == 24
     pendentes = {r["nome"]: r["pendente"] for r in roteiros if r["pendente"]}
     assert pendentes == {}
     longa = next(r for r in roteiros if r["nome"] == "conversa_longa")
@@ -603,7 +603,7 @@ def test_l5b_fala_que_nao_e_texto_e_recusada_com_erro_claro(tmp_path):
 def test_l5b_roteiro_17_tem_a_fala_inteira():
     roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
     assert roteiros["dono_recado_com_preco"]["falas"] == ["Léo, anota aí: no feirão o Civic sai por 90 mil"]
-    assert len(roteiros) == 23
+    assert len(roteiros) == 24
     novo = roteiros["foto_meu_carro_parece_anuncio"]
     assert "Toyota Corolla preto" in novo["imagem_texto"] and novo["legenda"] == "quanto vocês dão no meu carro?"
     assert novo["deve"]["handoff_ate_fala"] == 1 and "135.000" in novo["nao_contem"]
@@ -619,3 +619,42 @@ def test_l5b_relatorio_mostra_o_tipo_lido_da_foto():
 def test_l5b_foto_do_carro_esta_fora_do_git():
     ignorados = (RAIZ / ".gitignore").read_text(encoding="utf-8")
     assert "bancada/imagens/carro_teste.jpg" in ignorados
+
+
+# ------------------------------------------------------------------- L5c
+
+def test_l5c_roteiros():
+    roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
+    assert len(roteiros) == 24
+    assert "registrar_troca" in roteiros["conversa_longa"]["deve"]["tools"]
+    assert "elogio_estado" in roteiros["foto_do_carro"]["nao_pode"]
+    assert "regra_entrada" in roteiros["entrada_minima"]["nao_pode"]
+    assert rb.CONFIG_LOJA["aceita_troca"] == "sim"
+
+
+def test_l5c_frase_proibida_falha_em_qualquer_roteiro(monkeypatch):
+    # A guarda do código troca a frase; aqui ela é desligada para provar que a bancada pega.
+    from app.core import turno
+    monkeypatch.setattr(turno, "trocar_frases_proibidas", lambda r: (r, False))
+    rodada = rodar([roteiro()], GrafoFalso(lambda t, l, c: [AIMessage(content="A equipe já está acompanhando.")]))
+    assert rodada.resultados[0].status == rb.FALHOU
+    assert any("frase proibida" in f for f in rodada.resultados[0].falhas)
+
+
+def test_l5c_regra_de_entrada_com_guarda_vira_aviso():
+    rodada = rodar([roteiro(nao_pode=["regra_entrada"])],
+                   GrafoFalso(lambda t, l, c: [AIMessage(content="A entrada é flexível, você define.")]))
+    res = rodada.resultados[0]
+    assert res.status == rb.AVISO and "depende da análise" in res.texto_do_leo
+
+
+def test_l5c_elogio_ao_estado_na_bancada():
+    assert rb.elogia_estado("Seu carro está bem conservado. A avaliação é presencial.") == ["seu carro esta bem conservado."]
+    assert rb.afirma_regra_de_entrada("A entrada é flexível.") == ["a entrada e flexivel."]
+
+
+def test_l5c_relatorio_mostra_o_erro_da_foto():
+    from app.imagens import LeituraImagem
+    rodada = asyncio.run(rb.rodar([roteiro(falas=None, imagem_texto="x")], GrafoFalso(), teto=1.0,
+                                  leitor=lambda i, m: LeituraImagem(ok=False, erro="limite_429", tentativas=2)))
+    assert "erro: limite_429, tentativas: 2" in rb.montar_relatorio(rodada)
