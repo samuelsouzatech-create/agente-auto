@@ -14,7 +14,7 @@ Se o código não for como a documentação diz: pare, anote o que viu e pergunt
 1. **Catraca de `loja_id`:** nenhuma função recebe `loja_id` com valor padrão. Existe um teste (`tests/test_catraca_loja.py`) que impede isso. Em rota de API, a loja vem só da sessão, nunca da URL nem do corpo.
 2. **Regra de negócio fica em `app/`.** Telas (Streamlit ou React) só mostram e enviam ações. Tela não calcula etapa, não converte horário e não valida regra.
 3. **Horário:** fonte única em `app/relogio.py`. O banco guarda UTC; tudo que o usuário vê sai no fuso da loja. Não duplique conta de horário.
-4. **Migrações:** só crie uma migração com o número previsto no plano (18 é do Instagram, 19 dos recados). Cada migração tem teste de subida a partir da versão anterior e nunca apaga dado. Se precisar de outra, pare e pergunte.
+4. **Migrações:** só crie uma migração com o número previsto no plano (19 recados, 20 modo sombra; a do Instagram será a 21). Migrações nunca reusam número, nem um que ficou para trás (18 não existe e não será usado). Cada migração tem teste de subida a partir da versão anterior e nunca apaga dado. Se precisar de outra, pare e pergunte.
 5. **Venda:** só existe um caminho, `registrar_venda`. Não crie outro.
 6. **Contrato da API v1 só cresce:** campo novo opcional, rota nova. Nunca renomear nem remover campo. Quem muda o contrato muda os dados falsos de `docs/api/mocks/`, e `docs/api/conferir_mocks.py` precisa passar.
 7. **Sem texto técnico nas telas:** nada de id, UTC, nome de arquivo, comando de terminal.

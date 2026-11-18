@@ -1,0 +1,8 @@
+nome: cliente_usa_emoji
+# L10: o cliente usou emoji: a resposta pode ter no máximo 1 (a checagem global confere).
+falas:
+  - "oi 😊 tem civic?"
+  - e qual a cor dele?
+deve:
+  contem: ["civic"]
+nao_pode: [preco_inventado]

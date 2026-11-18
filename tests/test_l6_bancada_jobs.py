@@ -92,13 +92,22 @@ def test_tres_toques_no_horario_com_textos_diferentes():
     assert "[remarketing" in rb.montar_relatorio(rodada)
 
 
-def test_texto_repetido_e_preco_fora_do_estoque_falham():
+def test_texto_repetido_e_preco_fora_do_estoque_nao_chegam_ao_cliente():
+    # L10: o job descarta preço fora do estoque e texto igual a um toque anterior
+    # (usa o texto reserva, um diferente por toque). A bancada confere o resultado.
     def repete(loja, lead_id, canal, toque, dados, historico):
         return "O Civic sai por R$ 80.000,00 só hoje!", Uso()
 
     rodada = rodar([roteiro(deve={"textos_diferentes": True}, nao_pode=["preco_inventado"])], redator=repete)
     res = rodada.resultados[0]
-    assert res.status == rb.FALHOU
+    assert res.status == rb.PASSOU, (res.falhas, res.promessas)
+    assert all("80.000" not in e["texto"] for e in res.envios_job)
+    assert len({e["texto"] for e in res.envios_job}) == len(res.envios_job)
+
+
+def test_bancada_pega_toques_repetidos_se_chegarem():
+    textos = ["O Civic sai por R$ 98.000,00.", "O Civic sai por R$ 98.000,00."]
+    assert rb.toques_parecidos(textos)
 
 
 def test_cliente_responde_e_o_remarketing_para():
