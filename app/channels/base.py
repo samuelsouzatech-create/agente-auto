@@ -25,13 +25,14 @@ class MensagemEntrada:
     canal: str
     id_externo: str          # id da mensagem no canal (usado no dedup)
     lead_id: str             # quem mandou (número, chat_id...)
-    tipo: str                # "texto" | "audio" | "nao_suportado"
-    texto: str = ""
-    id_midia: str = ""       # áudio: id para baixar
+    tipo: str                # "texto" | "audio" | "imagem" (L5) | "nao_suportado"
+    texto: str = ""          # imagem: a legenda (pode vir vazia)
+    id_midia: str = ""       # áudio e imagem: id para baixar
     mime: str = ""
     tipo_original: str = ""  # tipo cru do canal: "text", "image", "sticker"...
     id_canal: str = ""       # conta da LOJA que recebeu (phone_number_id, id do bot)
     hora: int = 0            # timestamp da mensagem
+    conteudo: bytes = b""    # L5, só no simulador: a imagem já vem junto (nunca é guardada)
 
 
 class Canal(ABC):

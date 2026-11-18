@@ -90,7 +90,7 @@ ALERTA_PENDENTE = "PASSOU — remova o pendente e marque feito em docs/fase_cere
 IMAGEM_AUSENTE = "imagem ausente"
 
 CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente", "loja",
-                  "recados", "nao_contem"}
+                  "recados", "nao_contem", "imagem_texto", "legenda"}
 CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead"}
 NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco",
                     "condicao_recado", "numero"}
@@ -132,8 +132,12 @@ def validar_roteiro(dados, origem: str = "") -> dict:
     falas = dados.get("falas")
     if not nome:
         raise RoteiroInvalido(f"{origem}: falta 'nome'")
-    if not isinstance(falas, list) or not falas or not all(str(f).strip() for f in falas):
-        raise RoteiroInvalido(f"{origem}: 'falas' precisa ser uma lista de falas")
+    tem_imagem = bool(dados.get("imagem") or dados.get("imagem_texto"))
+    falas = [] if falas is None and tem_imagem else falas
+    if not isinstance(falas, list) or (not falas and not tem_imagem) or not all(str(f).strip() for f in falas):
+        raise RoteiroInvalido(f"{origem}: 'falas' precisa ser uma lista de falas (só a foto: pode ficar sem)")
+    if dados.get("imagem") and dados.get("imagem_texto"):
+        raise RoteiroInvalido(f"{origem}: use 'imagem' (arquivo) ou 'imagem_texto' (gerada), não os dois")
     deve = dados.get("deve") or {}
     if not isinstance(deve, dict) or set(deve) - CAMPOS_DEVE:
         raise RoteiroInvalido(f"{origem}: 'deve' aceita só {sorted(CAMPOS_DEVE)}")
@@ -153,6 +157,9 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         "falas": [str(f).strip() for f in falas],
         "remetente": str(dados["remetente"]).strip() if dados.get("remetente") else None,
         "imagem": str(dados["imagem"]).strip() if dados.get("imagem") else None,
+        # L5: imagem gerada pela bancada (Pillow) com este texto e "FICTÍCIO" escrito
+        "imagem_texto": str(dados["imagem_texto"]).strip() if dados.get("imagem_texto") else None,
+        "legenda": str(dados.get("legenda") or "").strip(),
         "deve": {
             "tools": [str(t) for t in (deve.get("tools") or [])],
             "handoff": _sim_nao(deve["handoff"], "deve.handoff") if "handoff" in deve else None,
@@ -518,6 +525,8 @@ class ResultadoRoteiro:
     parou_no_teto: bool = False
     valores_tools: set = field(default_factory=set)   # valores em R$ que as tools devolveram
     motivos_finais: list = field(default_factory=list)  # motivo de cada chamado do cliente, no fim
+    tokens_imagem_entrada: int = 0                       # L5: leitura da foto (já somada no custo)
+    tokens_imagem_saida: int = 0
     mensagens_gravadas: int = 0                          # mensagens gravadas como conversa de cliente
 
     @property
@@ -681,10 +690,39 @@ def checar(res: ResultadoRoteiro) -> None:
     res.status, res.alerta = decidir(res.promessas, res.falhas, res.avisos, r["pendente"])
 
 
+def _mime_da_imagem(nome: str) -> str:
+    return {".png": "image/png", ".webp": "image/webp"}.get(Path(nome).suffix.lower(), "image/jpeg")
+
+
+def gerar_imagem_de_texto(texto: str) -> bytes:
+    """L5: imagem de teste (PNG) com o texto do roteiro e "FICTÍCIO" escrito.
+    Só a bancada usa (Pillow fica fora do requirements do Léo)."""
+    import io
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    imagem = Image.new("RGB", (900, 500), "white")
+    desenho = ImageDraw.Draw(imagem)
+    try:
+        fonte = ImageFont.load_default(size=40)
+        pequena = ImageFont.load_default(size=28)
+    except TypeError:                       # Pillow antigo: fonte de tamanho fixo
+        fonte = pequena = ImageFont.load_default()
+    y = 60
+    for linha in str(texto).split("\n"):
+        desenho.text((40, y), linha, fill="black", font=fonte)
+        y += 70
+    desenho.rectangle((20, 20, 880, 480), outline="black", width=4)
+    desenho.text((40, 420), "FICTÍCIO - imagem de teste da bancada", fill="red", font=pequena)
+    saida = io.BytesIO()
+    imagem.save(saida, format="PNG")
+    return saida.getvalue()
+
+
 async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRoteiro:
     from app.channels.base import enviar_resultado
     from app.channels.simulador import CanalSimulador
-    from app.core.turno import MENSAGEM_ERRO, executar_turno, turno_midia_nao_suportada
+    from app.core.turno import MENSAGEM_ERRO, executar_turno, executar_turno_imagem
 
     res = ResultadoRoteiro(roteiro=roteiro)
     apontar_banco_temporario()
@@ -700,27 +738,7 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
         for h in handoffs_abertos(lead_id)[handoffs_antes:]:
             turno.avisos_vendedor.append(h["motivo"])
 
-    if roteiro["imagem"]:
-        imagem = RAIZ / roteiro["imagem"]
-        if not imagem.is_file():
-            res.avisos.append(f"{IMAGEM_AUSENTE}: {roteiro['imagem']}")
-        else:
-            # Hoje o canal real responde assim a uma foto (o Léo ainda não lê imagem).
-            turno = Turno(fala=f"[foto: {imagem.name}]")
-            desde, antes = len(canal.enviadas), len(handoffs_abertos(lead_id))
-            resultado = turno_midia_nao_suportada(LOJA_ID, CANAL, lead_id, "image")
-            await enviar_resultado(canal, lead_id, resultado)
-            _registrar_envios(turno, desde, antes)
-            res.turnos.append(turno)
-
-    for fala in roteiro["falas"]:
-        if rodada.gasto_usd >= rodada.teto:
-            res.parou_no_teto = rodada.parou_no_teto = True
-            break
-        turno = Turno(fala=fala)
-        gravador.ultimo = None
-        desde, antes = len(canal.enviadas), len(handoffs_abertos(lead_id))
-        resultado = await executar_turno(LOJA_ID, CANAL, lead_id, fala, grafo=gravador)
+    async def _depois_do_turno(turno, resultado, desde, antes):
         if rodada.tentativas_reais:
             raise EnvioRealBloqueado("; ".join(rodada.tentativas_reais))
         await enviar_resultado(canal, lead_id, resultado)
@@ -745,6 +763,43 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
                 turno.barrado = original
         res.turnos.append(turno)
 
+    async def _turno(fala_do_relatorio, chamar):
+        turno = Turno(fala=fala_do_relatorio)
+        gravador.ultimo = None
+        desde, antes = len(canal.enviadas), len(handoffs_abertos(lead_id))
+        resultado = await chamar()
+        uso = getattr(resultado, "uso_imagem", None)
+        if uso is not None:                      # L5: a leitura da foto entra no custo
+            res.tokens_imagem_entrada += uso.tokens_entrada
+            res.tokens_imagem_saida += uso.tokens_saida
+            res.tokens_entrada += uso.tokens_entrada
+            res.tokens_saida += uso.tokens_saida
+            rodada.tokens_entrada += uso.tokens_entrada
+            rodada.tokens_saida += uso.tokens_saida
+        await _depois_do_turno(turno, resultado, desde, antes)
+
+    foto = None
+    if roteiro["imagem"]:
+        caminho = RAIZ / roteiro["imagem"]
+        if not caminho.is_file():
+            res.avisos.append(f"{IMAGEM_AUSENTE}: {roteiro['imagem']}")
+        else:
+            foto = (caminho.name, caminho.read_bytes(), _mime_da_imagem(caminho.name))
+    elif roteiro.get("imagem_texto"):
+        foto = ("imagem gerada", gerar_imagem_de_texto(roteiro["imagem_texto"]), "image/png")
+    if foto:
+        nome, conteudo, mime = foto
+        legenda = roteiro.get("legenda") or ""
+        await _turno(f"[foto: {nome}] {legenda}".strip(),
+                     lambda: executar_turno_imagem(LOJA_ID, CANAL, lead_id, conteudo, mime, legenda,
+                                                   grafo=gravador, leitor=rodada.leitor))
+
+    for fala in roteiro["falas"]:
+        if rodada.gasto_usd >= rodada.teto:
+            res.parou_no_teto = rodada.parou_no_teto = True
+            break
+        await _turno(fala, lambda fala=fala: executar_turno(LOJA_ID, CANAL, lead_id, fala, grafo=gravador))
+
     res.motivos_finais = [h["motivo"] or "" for h in handoffs_abertos(lead_id)]
     res.mensagens_gravadas = _ler("SELECT COUNT(*) n FROM mensagens WHERE loja_id = ? AND lead_id = ?",
                                   (LOJA_ID, lead_id))[0]["n"]
@@ -759,6 +814,7 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
 @dataclass
 class Rodada:
     teto: float
+    leitor: object = None          # L5: quem lê a foto (None = IA de verdade; testes passam um falso)
     tokens_entrada: int = 0
     tokens_saida: int = 0
     parou_no_teto: bool = False
@@ -771,8 +827,8 @@ class Rodada:
         return custo_usd(self.tokens_entrada, self.tokens_saida)
 
 
-async def rodar(roteiros: list[dict], grafo, teto: float | None = None) -> Rodada:
-    rodada = Rodada(teto=teto_usd() if teto is None else teto)
+async def rodar(roteiros: list[dict], grafo, teto: float | None = None, leitor=None) -> Rodada:
+    rodada = Rodada(teto=teto_usd() if teto is None else teto, leitor=leitor)
     with bloquear_envio_real(rodada.tentativas_reais), ator.como("Bancada", "sistema", "job"):
         for roteiro in roteiros:
             if rodada.parou_no_teto:
@@ -813,6 +869,10 @@ def montar_relatorio(rodada: Rodada, modelo: str = "") -> str:
         for recado in r.get("recados") or []:
             info.append(f"recado: \"{recado['texto']}\" (validade {recado['valido_ate']})")
         info.append(f"custo: US$ {res.custo_usd:.4f}")
+        if res.tokens_imagem_entrada or res.tokens_imagem_saida:
+            info.append(f"leitura da foto: US$ {custo_usd(res.tokens_imagem_entrada, res.tokens_imagem_saida):.4f} "
+                        f"({res.tokens_imagem_entrada} tokens de entrada, {res.tokens_imagem_saida} de saída; "
+                        "já dentro do custo)")
         linhas += [" · ".join(info), ""]
         if res.status == NAO_RODOU:
             linhas += ["Não rodou (teto de gasto atingido antes).", ""]

@@ -60,9 +60,9 @@ def pasta_temporaria_da_bancada(monkeypatch, tmp_path):
 
 def test_os_roteiros_carregam():
     roteiros = rb.carregar_roteiros()
-    assert len(roteiros) == 19
+    assert len(roteiros) == 22
     pendentes = {r["nome"]: r["pendente"] for r in roteiros if r["pendente"]}
-    assert pendentes == {"foto_do_carro": "L5"}
+    assert pendentes == {}
     longa = next(r for r in roteiros if r["nome"] == "conversa_longa")
     assert len(longa["falas"]) == 12
 
@@ -510,3 +510,78 @@ def test_l3b_vendedor_nao_vira_lead_na_bancada():
     assert rodada.resultados[0].status == rb.PASSOU
     cliente = rodar([roteiro(falas=["oi"], deve={"vira_lead": False})], GrafoFalso())
     assert cliente.resultados[0].status == rb.FALHOU
+
+
+# ------------------------------------------------------------------- L5
+
+def _leitor(tipo, descricao=""):
+    from app.custos import Uso
+    from app.imagens import LeituraImagem
+    vistos = []
+
+    def ler(imagem, mime):
+        vistos.append((imagem[:8], mime))
+        return LeituraImagem(ok=True, tipo=tipo, descricao=descricao, uso=Uso(500, 60))
+    ler.vistos = vistos
+    return ler
+
+
+def test_l5_roteiros_de_foto():
+    roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
+    assert roteiros["foto_do_carro"]["pendente"] is None
+    assert roteiros["foto_do_carro"]["falas"] == [] and roteiros["foto_do_carro"]["legenda"]
+    assert "Honda Civic 2019" in roteiros["print_de_anuncio"]["imagem_texto"]
+    assert roteiros["print_de_anuncio"]["deve"]["tools"] == ["consultar_estoque"]
+    assert "123.456.789-00" in roteiros["foto_documento"]["imagem_texto"]
+    assert "123.456.789" in roteiros["foto_documento"]["nao_contem"]
+    assert roteiros["foto_sem_legenda"]["legenda"] == ""
+
+
+def test_l5_imagem_gerada_e_png_com_ficticio():
+    from io import BytesIO
+    from PIL import Image
+    conteudo = rb.gerar_imagem_de_texto("Honda Civic 2019")
+    assert conteudo.startswith(b"\x89PNG")
+    assert Image.open(BytesIO(conteudo)).size == (900, 500)
+
+
+def test_l5_roteiro_invalido_com_arquivo_e_imagem_gerada():
+    with pytest.raises(rb.RoteiroInvalido):
+        roteiro(imagem="bancada/imagens/x.jpg", imagem_texto="x")
+    with pytest.raises(rb.RoteiroInvalido):
+        rb.validar_roteiro({"nome": "sem nada"}, "teste")
+    assert roteiro(falas=None, imagem_texto="x")["falas"] == []
+
+
+def test_l5_foto_gerada_vai_para_o_turno_e_o_custo_entra_no_relatorio():
+    ler = _leitor("anuncio", "Honda Civic 2019")
+    vistos = []
+
+    def responder(texto, loja_id, lead_id):
+        vistos.append(texto)
+        return [AIMessage(content="Temos o Civic 2019!")]
+
+    rodada = asyncio.run(rb.rodar([roteiro(falas=None, imagem_texto="Honda Civic 2019", legenda="tem esse?")],
+                                  GrafoFalso(responder), teto=1.0, leitor=ler))
+    res = rodada.resultados[0]
+    assert ler.vistos == [(b"\x89PNG\r\n\x1a\n", "image/png")]
+    assert vistos[0].startswith("[Foto do cliente: print de anúncio. Carro do anúncio: Honda Civic 2019]")
+    assert (res.tokens_imagem_entrada, res.tokens_imagem_saida) == (500, 60)
+    assert res.tokens_entrada >= 500 and rodada.tokens_entrada >= 500
+    assert "leitura da foto: US$" in rb.montar_relatorio(rodada)
+
+
+def test_l5_documento_na_bancada_abre_chamado_e_nao_repete_o_numero():
+    rodada = asyncio.run(rb.rodar(
+        [roteiro(falas=None, imagem_texto="CNH 123.456.789-00", legenda="segue",
+                 deve={"handoff": True, "handoff_ate_fala": 1, "motivo_contem": ["documento"]},
+                 nao_contem=["123.456.789"])],
+        GrafoFalso(), teto=1.0, leitor=_leitor("documento")))
+    assert rodada.resultados[0].status == rb.PASSOU
+
+
+def test_l5_arquivo_de_foto_ausente_continua_aviso():
+    rodada = asyncio.run(rb.rodar([roteiro(falas=None, imagem="bancada/imagens/nao_existe.jpg",
+                                           deve={"handoff": True})],
+                                  GrafoFalso(), teto=1.0, leitor=_leitor("carro")))
+    assert rodada.resultados[0].status == rb.AVISO

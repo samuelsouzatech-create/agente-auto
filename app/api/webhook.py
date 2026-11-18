@@ -21,9 +21,12 @@ from app.config import WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET
 from app.core.agent import agente_grafo
 from app.core.turno import (
     executar_turno, aguardar_vez, porta_fechada, turno_midia_nao_suportada, turno_audio_falhou,
+    executar_turno_imagem,
 )
 from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
 from app.api.receber_audio import transcrever_audio, pegar_uso_da_transcricao
+from app.api.receber_imagem import baixar_imagem_whatsapp
+from app.redis_lock import adquirir_lock_esperando
 from app.custos import registrar_uso
 from app.channels.whatsapp import CanalWhatsApp
 from app.redis_lock import liberar_lock
@@ -134,6 +137,39 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
         await liberar_lock(numero, token, loja_id=loja_id)
 
 
+async def processar_imagem(numero: str, id_midia: str, legenda: str = "",
+                           loja_id: int | None = None):
+    """L5: foto do cliente -> lock -> executar_turno_imagem -> envio.
+    Sem debounce: a foto é um turno sozinha. A imagem não é guardada."""
+    loja_id = exigir_loja(loja_id)
+    if porta_fechada(loja_id, CANAL, numero):           # P7: nem baixa (custo)
+        return
+    token = await adquirir_lock_esperando(numero, loja_id=loja_id)
+    if token is None:
+        return
+    try:
+        baixada = await baixar_imagem_whatsapp(id_midia, loja_id=loja_id)
+        imagem, mime = baixada if baixada else (b"", "")
+        atraso = await calcular_atraso(numero, loja_id=loja_id)
+        resultado = await executar_turno_imagem(
+            loja_id, CANAL, numero, imagem, mime, legenda, grafo=agente_grafo,
+            leitor=None if imagem else _leitura_falhou)
+        if resultado.silenciado or not resultado.texto:
+            return
+        await sinalizar_leitura(loja_id, numero)
+        await enviar_resposta_humanizada(numero, resultado.texto, atraso, loja_id=loja_id)
+        for url in resultado.midias:
+            await enviar_foto_whatsapp(numero, url, loja_id=loja_id)
+    finally:
+        await liberar_lock(numero, token, loja_id=loja_id)
+
+
+def _leitura_falhou(imagem, mime):
+    """Foto que não deu para baixar: o turno segue como leitura que falhou."""
+    from app.imagens import LeituraImagem
+    return LeituraImagem(ok=False)
+
+
 async def responder_midia_nao_suportada(numero: str, tipo_original: str,
                                         loja_id: int | None = None):
     loja_id = exigir_loja(loja_id)
@@ -170,6 +206,8 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
             tarefas.add_task(processar_mensagem, entrada.lead_id, entrada.texto, None, loja_id)
         elif entrada.tipo == "audio":
             tarefas.add_task(processar_mensagem, entrada.lead_id, None, entrada.id_midia, loja_id)
+        elif entrada.tipo == "imagem":
+            tarefas.add_task(processar_imagem, entrada.lead_id, entrada.id_midia, entrada.texto, loja_id)
         else:
             tarefas.add_task(responder_midia_nao_suportada, entrada.lead_id,
                              entrada.tipo_original, loja_id)

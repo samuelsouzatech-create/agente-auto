@@ -94,6 +94,8 @@ class ResultadoTurno:
     # Custo em R$ (None = preço ainda não cadastrado). Fora da comparação (==).
     custo: float | None = field(default=None, compare=False)
     execucao_id: str | None = field(default=None, compare=False)
+    # L5: tokens da leitura da foto (a bancada soma no custo). Fora da comparação (==).
+    uso_imagem: object = field(default=None, compare=False)
 
     @property
     def respostas(self) -> list[str]:
@@ -441,3 +443,103 @@ def turno_midia_nao_suportada(loja_id: int, canal: str, lead_id: str,
 def turno_audio_falhou(loja_id: int, canal: str, lead_id: str) -> ResultadoTurno:
     return turno_resposta_fixa(loja_id, canal, lead_id, "[áudio não entendido]",
                                MENSAGEM_AUDIO_FALHOU, tipo="audio")
+
+
+# ======================================================================
+# L5: foto do cliente
+# ======================================================================
+MENSAGEM_DOCUMENTO = ("Recebi, mas por aqui eu não leio nem guardo documentos. Vou passar para o "
+                      "pessoal da equipe, que cuida disso com segurança.")
+MENSAGEM_IMAGEM_FALHOU = ("Não consegui ver a foto por aqui. Pode me contar por texto o que ela "
+                          "mostra? Também passei para o pessoal da equipe dar uma olhada.")
+MENSAGEM_EQUIPE_SO_TEXTO = "Por aqui eu só anoto recados por texto."
+MOTIVO_DOCUMENTO = "Cliente mandou documento (nenhum dado foi lido nem guardado)."
+MOTIVO_IMAGEM_FALHOU = "Cliente mandou uma foto que não consegui ver."
+MOTIVO_AVALIACAO = "Avaliação: cliente mandou foto do carro."
+
+
+def _chamado_da_foto(loja_id: int, lead_id: str, motivo: str, resumo: str) -> None:
+    """Abre o chamado. Se já houver um aberto, acrescenta o motivo (não apaga o anterior)."""
+    estado = estado_do_handoff(lead_id, loja_id)
+    if estado == "ativo":
+        acionar_handoff.func(motivo=motivo, resumo=resumo, lead_id=lead_id, loja_id=loja_id)
+        return
+    conexao = conectar()
+    try:
+        conexao.execute(
+            "UPDATE handoffs SET motivo = COALESCE(motivo, '') || ' · ' || ? "
+            "WHERE loja_id = ? AND lead_id = ? AND estado = 'aguardando_humano' "
+            "AND instr(COALESCE(motivo, ''), ?) = 0", (motivo, loja_id, lead_id, motivo))
+        conexao.commit()
+    finally:
+        conexao.close()
+
+
+def _anotar_foto_na_troca(loja_id: int, lead_id: str, descricao: str) -> None:
+    """Se o cliente já tem troca registrada, a última ganha 'foto recebida: ...'."""
+    if not descricao:
+        return
+    conexao = conectar()
+    try:
+        linha = conexao.execute("SELECT id, estado FROM trocas WHERE loja_id = ? AND lead_id = ? "
+                                "ORDER BY id DESC LIMIT 1", (loja_id, lead_id)).fetchone()
+        if linha is None:
+            return
+        nota = f"foto recebida: {descricao}"
+        estado = (linha["estado"] or "").strip()
+        if nota not in estado:
+            estado = f"{estado} | {nota}" if estado else nota
+            conexao.execute("UPDATE trocas SET estado = ? WHERE id = ?", (estado, linha["id"]))
+            conexao.commit()
+    finally:
+        conexao.close()
+
+
+def _resposta_fixa_com_chamado(loja_id, canal, lead_id, registro, resposta, motivo, uso):
+    resultado = turno_resposta_fixa(loja_id, canal, lead_id, registro, resposta, tipo="imagem")
+    if not resultado.silenciado:
+        _chamado_da_foto(loja_id, lead_id, motivo, "Resposta automática do Léo: " + resposta)
+        resultado.handoff_aberto = True
+    resultado.uso_imagem = uso
+    return resultado
+
+
+async def executar_turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: bytes,
+                                mime: str = "image/jpeg", legenda: str = "", *,
+                                grafo=None, leitor=None) -> ResultadoTurno:
+    """L5: um turno com a foto do cliente. A imagem é lida (uma chamada de IA) e
+    nunca é guardada: só a descrição curta vira a mensagem do cliente.
+    Documento e falha de leitura: resposta fixa + chamado, sem passar pelo Léo.
+    Carro: chamado de avaliação antes do Léo responder; troca anotada depois."""
+    from app import imagens            # aqui dentro: o SDK de visão só carrega se precisar
+    if porta_fechada(loja_id, canal, lead_id):          # P7: nem lê a foto (custo)
+        return ResultadoTurno(silenciado=True)
+    membro = _quem_da_equipe(loja_id, canal, lead_id)
+    if membro:
+        return ResultadoTurno(texto=MENSAGEM_EQUIPE_SO_TEXTO if pode_deixar_recado(membro)
+                              else MENSAGEM_SO_DONO)
+    if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
+        salvar_mensagem(lead_id, "cliente", "[foto]", canal=canal, tipo="imagem", loja_id=loja_id)
+        return ResultadoTurno(silenciado=True)
+
+    rotulo = _rotulo(canal, loja_id)
+    leitura = (leitor or imagens.ler_imagem)(imagem, mime)
+    registrar_uso(loja_id, lead_id, canal, leitura.uso, tipo="imagem", ferramentas=["leitura_imagem"])
+    print(f"{rotulo} Cliente {lead_id} mandou foto: {leitura.tipo if leitura.ok else 'não lida'}")
+
+    if not leitura.ok:
+        return _resposta_fixa_com_chamado(loja_id, canal, lead_id, "[foto não lida]",
+                                          MENSAGEM_IMAGEM_FALHOU, MOTIVO_IMAGEM_FALHOU, leitura.uso)
+    if leitura.tipo == imagens.DOCUMENTO:
+        return _resposta_fixa_com_chamado(loja_id, canal, lead_id, "[documento]",
+                                          MENSAGEM_DOCUMENTO, MOTIVO_DOCUMENTO, leitura.uso)
+    if leitura.tipo == imagens.CARRO:
+        _chamado_da_foto(loja_id, lead_id, MOTIVO_AVALIACAO, f"Foto do carro: {leitura.descricao}")
+
+    resultado = await executar_turno(loja_id, canal, lead_id, imagens.texto_para_o_leo(leitura, legenda),
+                                     grafo=grafo, tipo="imagem")
+    if leitura.tipo == imagens.CARRO:
+        _anotar_foto_na_troca(loja_id, lead_id, leitura.descricao)
+        resultado.handoff_aberto = True
+    resultado.uso_imagem = leitura.uso
+    return resultado

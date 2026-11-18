@@ -27,6 +27,7 @@ Se o código não for como a documentação diz: pare, anote o que viu e pergunt
 - **Nunca prometer** o que a loja pode não ter: vídeo, ficha em PDF, desconto, crédito aprovado, carro "que chegou".
 - **Horário da loja:** a fonte é o cadastro. Documento de conhecimento não repete horário.
 - **"Para de me mandar mensagem"** é checado em código antes da IA. Errar para o lado de parar é melhor.
+- **Foto do cliente** (`app/imagens.py`): a imagem nunca é guardada, só a descrição curta. Documento não é lido nem repetido: resposta fixa e chamado. Nunca valor pela foto.
 - **Mudança de prompt ou de comportamento exige rodada com IA real** (`-m api`) e o texto completo das respostas salvo no relatório. "Passou" sem ver o texto não prova nada. Não mude prompt só para fazer um caso passar sem avisar.
 
 ## Testes

@@ -71,6 +71,13 @@ class CanalWhatsApp(Canal):
             return MensagemEntrada(tipo="audio", id_midia=str(id_midia),
                                    mime=corpo.get("mime_type", ""), **comum)
 
+        if tipo == "image":                          # L5: foto (a legenda vem em caption)
+            id_midia = corpo.get("id")
+            if not id_midia:
+                return None
+            return MensagemEntrada(tipo="imagem", id_midia=str(id_midia), mime=corpo.get("mime_type", ""),
+                                   texto=str(corpo.get("caption") or "").strip(), **comum)
+
         texto = ""
         if tipo == "text":
             texto = corpo.get("body", "")
