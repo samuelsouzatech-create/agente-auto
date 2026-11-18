@@ -91,7 +91,7 @@ IMAGEM_AUSENTE = "imagem ausente"
 
 CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente", "loja",
                   "recados", "nao_contem"}
-CAMPOS_DEVE = {"tools", "handoff", "contem"}
+CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead"}
 NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco",
                     "condicao_recado", "numero"}
 
@@ -157,6 +157,12 @@ def validar_roteiro(dados, origem: str = "") -> dict:
             "tools": [str(t) for t in (deve.get("tools") or [])],
             "handoff": _sim_nao(deve["handoff"], "deve.handoff") if "handoff" in deve else None,
             "contem": [str(c) for c in (deve.get("contem") or [])],
+            # L3b: o chamado tem que abrir até esta fala (1 = primeira mensagem do cliente)
+            "handoff_ate_fala": _inteiro_positivo(deve.get("handoff_ate_fala"), origem),
+            # L3b: texto que o motivo de algum chamado do cliente precisa ter
+            "motivo_contem": [str(c) for c in (deve.get("motivo_contem") or [])],
+            # L3b: a conversa fica gravada como de cliente (lead)?
+            "vira_lead": _sim_nao(deve["vira_lead"], "deve.vira_lead") if "vira_lead" in deve else None,
         },
         "nao_pode": list(nao_pode),
         "pendente": str(dados["pendente"]).strip() if dados.get("pendente") else None,
@@ -166,9 +172,21 @@ def validar_roteiro(dados, origem: str = "") -> dict:
     }
 
 
+def _inteiro_positivo(valor, origem: str):
+    if valor is None:
+        return None
+    if isinstance(valor, bool) or not isinstance(valor, int) or valor < 1:
+        raise RoteiroInvalido(f"{origem}: 'handoff_ate_fala' é o número da fala (1, 2, ...)")
+    return valor
+
+
+DIAS_DA_SEMANA = ("segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo")
+
+
 def _validar_recados(recados, origem: str) -> list[dict]:
     """L3/L4: recados que já começam gravados na loja fictícia.
-    valido_ate: número de dias a partir de hoje (-1 = ontem) ou data AAAA-MM-DD."""
+    valido_ate: número de dias a partir de hoje (-1 = ontem), dia da semana
+    ("sábado" = o próximo sábado, hoje se hoje for sábado) ou data AAAA-MM-DD."""
     if not isinstance(recados, list):
         raise RoteiroInvalido(f"{origem}: 'recados' é uma lista de {{texto, valido_ate}}")
     saida = []
@@ -176,11 +194,13 @@ def _validar_recados(recados, origem: str) -> list[dict]:
         if not isinstance(r, dict) or not str(r.get("texto") or "").strip() or "valido_ate" not in r:
             raise RoteiroInvalido(f"{origem}: cada recado precisa de 'texto' e 'valido_ate'")
         valido = r["valido_ate"]
-        if not isinstance(valido, int):
+        if not isinstance(valido, int) and normalizar(valido).strip() in DIAS_DA_SEMANA:
+            valido = normalizar(valido).strip()
+        elif not isinstance(valido, int):
             try:
                 valido = date.fromisoformat(str(valido).strip()).isoformat()
             except ValueError:
-                raise RoteiroInvalido(f"{origem}: 'valido_ate' é número de dias ou AAAA-MM-DD")
+                raise RoteiroInvalido(f"{origem}: 'valido_ate' é número de dias, dia da semana ou AAAA-MM-DD")
         saida.append({"texto": str(r["texto"]).strip(), "valido_ate": valido})
     return saida
 
@@ -252,8 +272,13 @@ def config_da_loja(mudancas: dict | None = None) -> dict:
 
 
 def data_do_recado(valido_ate, hoje: date) -> str:
-    """Dias a partir de hoje (int) ou a data pronta (AAAA-MM-DD)."""
-    return (hoje + timedelta(days=valido_ate)).isoformat() if isinstance(valido_ate, int) else valido_ate
+    """Dias a partir de hoje (int), dia da semana (o próximo) ou a data pronta (AAAA-MM-DD)."""
+    if isinstance(valido_ate, int):
+        return (hoje + timedelta(days=valido_ate)).isoformat()
+    if valido_ate in DIAS_DA_SEMANA:
+        faltam = (DIAS_DA_SEMANA.index(valido_ate) - hoje.weekday()) % 7
+        return (hoje + timedelta(days=faltam)).isoformat()
+    return valido_ate
 
 
 def gravar_recados(recados: list[dict]) -> None:
@@ -492,6 +517,8 @@ class ResultadoRoteiro:
     alerta: str | None = None
     parou_no_teto: bool = False
     valores_tools: set = field(default_factory=set)   # valores em R$ que as tools devolveram
+    motivos_finais: list = field(default_factory=list)  # motivo de cada chamado do cliente, no fim
+    mensagens_gravadas: int = 0                          # mensagens gravadas como conversa de cliente
 
     @property
     def custo_usd(self) -> float:
@@ -572,6 +599,23 @@ def checar(res: ResultadoRoteiro) -> None:
         esperado = "abrir chamado para o vendedor" if deve["handoff"] else "não abrir chamado"
         (res.ok if abriu == deve["handoff"] else res.falhas).append(
             f"{esperado}: {'abriu' if abriu else 'não abriu'}")
+    limite = deve.get("handoff_ate_fala")
+    if limite:
+        quando = next((i for i, t in enumerate(res.turnos, 1) if t.avisos_vendedor), None)
+        if quando is not None and quando <= limite:
+            res.ok.append(f"chamado aberto na fala {quando} (limite: fala {limite})")
+        else:
+            res.falhas.append(f"chamado {'aberto na fala ' + str(quando) if quando else 'não aberto'}"
+                              f" (tinha que abrir até a fala {limite})")
+    for item in deve.get("motivo_contem") or []:
+        tem = any(normalizar(item) in normalizar(m) for m in res.motivos_finais)
+        (res.ok if tem else res.falhas).append(
+            f"motivo do chamado {'tem' if tem else 'não tem'} \"{item}\"")
+    if deve.get("vira_lead") is not None:
+        virou = res.mensagens_gravadas > 0
+        esperado = "gravar como cliente" if deve["vira_lead"] else "não gravar como cliente"
+        (res.ok if virou == deve["vira_lead"] else res.falhas).append(
+            f"{esperado}: {res.mensagens_gravadas} mensagem(ns) gravada(s)")
     texto = normalizar(res.texto_do_leo)
     for item in deve["contem"]:
         opcoes = [normalizar(o).strip() for o in item.split("|") if o.strip()]
@@ -701,6 +745,9 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
                 turno.barrado = original
         res.turnos.append(turno)
 
+    res.motivos_finais = [h["motivo"] or "" for h in handoffs_abertos(lead_id)]
+    res.mensagens_gravadas = _ler("SELECT COUNT(*) n FROM mensagens WHERE loja_id = ? AND lead_id = ?",
+                                  (LOJA_ID, lead_id))[0]["n"]
     checar(res)
     return res
 

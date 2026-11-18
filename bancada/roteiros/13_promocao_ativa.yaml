@@ -2,7 +2,7 @@ nome: promocao_ativa
 # Recado do dono sem condição comercial: o Léo pode contar.
 recados:
   - texto: feirão sábado com test-drive e café
-    valido_ate: 7
+    valido_ate: sábado
 falas:
   - tem alguma promoção?
 deve:

@@ -239,6 +239,10 @@ _PADROES_CONTATO = [
     # L2b: "vou chamar alguém da equipe", "vou pedir para um vendedor", "vou passar para o pessoal"
     re.compile(r"\b(vou|vamos|irei)\s+(te\s+)?(chamar|pedir\s+(para|pra|que|ao|a)|passar\s+(para|pra|ao|a))\b"
                r"[^.!?]{0,15}" + _QUEM_DA_EQUIPE),
+    # L3b: verbo de promessa e alguém da equipe na MESMA frase, com qualquer coisa no meio
+    # ("vou verificar essa informação específica sobre o laudo com o pessoal da equipe")
+    re.compile(r"\b(vou|vamos|irei)\s+(te\s+)?(verificar|confirmar|checar|ver|chamar|passar)\b"
+               r"[^.!?]*" + _QUEM_DA_EQUIPE),
 ]
 _NEGACAO_CONTATO = re.compile(r"\b(nao|nunca|nem)\b")
 # L2b: oferta em pergunta ("quer que eu chame um vendedor?") não é promessa.
@@ -258,3 +262,19 @@ def promete_contato_da_equipe(resposta: str) -> bool:
         if any(p.search(frase) for p in _PADROES_CONTATO):
             return True
     return False
+
+
+# L3b: cliente (número fora da equipe) dizendo ser dono, gestor ou da loja.
+# "sou o dono do carro" não conta: dono DE alguma coisa que não é a loja.
+PREFIXO_FALSO_DONO = "ATENÇÃO: diz ser da equipe, mas o número não está cadastrado"
+_CARGO = r"(dono|dona|gestor|gestora|gerente|socio|socia|proprietario|proprietaria)"
+_FALSO_DONO = [
+    re.compile(r"\b(sou|aqui e|quem fala e)\b[^.!?]{0,30}\b" + _CARGO + r"\b"
+               r"(?!\s+d[oae]s?\s+(?!loja\b))"),
+    re.compile(r"\b(sou|aqui e)\s+(da loja|da equipe|funcionari[oa]|vendedor[a]? da loja)\b"),
+]
+
+
+def diz_ser_da_equipe(texto: str) -> bool:
+    frase = _sem_acento(texto)
+    return any(p.search(frase) for p in _FALSO_DONO)

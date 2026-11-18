@@ -41,8 +41,9 @@ from app.chaves import exigir_loja, thread_id
 from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
 from app.estado_loja import pode_responder
 from app.formatacao import limpar_markdown
-from app.guarda_politica import (MENSAGEM_SEGURA, promete_contato_da_equipe,
-                                 resposta_tem_preco_inventado)
+from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, diz_ser_da_equipe,
+                                 promete_contato_da_equipe, resposta_tem_preco_inventado)
+from banco import conectar
 from app.handoff import estado_do_handoff
 from app.humanizador import dividir_em_bolhas
 from app.mensagens import salvar_mensagem, mensagens_desde_a_ultima_resposta_do_leo
@@ -299,6 +300,11 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         handoff = True
         ferramentas.append("guarda_contato")
 
+    # L3b: número fora da equipe dizendo ser dono/gestor/da loja: o chamado avisa.
+    if marcar_falso_dono(loja_id, lead_id, texto):
+        handoff = True
+        ferramentas.append("guarda_falso_dono")
+
     robotico = parece_robotica(resposta)
     if robotico:
         print(f"{rotulo} ALERTA de naturalidade: a resposta tem \"{robotico}\". Revise o prompt.")
@@ -320,6 +326,45 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     print()
     return ResultadoTurno(texto=resposta, midias=midias, handoff_aberto=handoff,
                           custo=_custo(registro), execucao_id=_id(registro))
+
+
+def _ja_disse_ser_da_equipe(loja_id: int, lead_id: str) -> bool:
+    conexao = conectar()
+    try:
+        linhas = conexao.execute("SELECT conteudo FROM mensagens WHERE loja_id = ? AND lead_id = ? "
+                                 "AND direcao = 'cliente'", (loja_id, lead_id)).fetchall()
+    finally:
+        conexao.close()
+    return any(diz_ser_da_equipe(l["conteudo"]) for l in linhas)
+
+
+def marcar_falso_dono(loja_id: int, lead_id: str, texto: str) -> bool:
+    """L3b: cliente que diz ser da equipe (número não cadastrado).
+    Disse agora e não há chamado: abre um. Há chamado aberto e ele disse isso em
+    algum momento da conversa: o motivo passa a começar com o aviso.
+    Devolve True se abriu chamado neste turno. Nunca derruba o turno."""
+    try:
+        abriu = False
+        if diz_ser_da_equipe(texto) and estado_do_handoff(lead_id, loja_id) == "ativo":
+            acionar_handoff.func(motivo=PREFIXO_FALSO_DONO + ".",
+                                 resumo=f"Mensagem do cliente: {texto}",
+                                 lead_id=lead_id, loja_id=loja_id)
+            abriu = True
+        if abriu or _ja_disse_ser_da_equipe(loja_id, lead_id):
+            conexao = conectar()
+            try:
+                conexao.execute(
+                    "UPDATE handoffs SET motivo = ? || ' — ' || COALESCE(motivo, '') "
+                    "WHERE loja_id = ? AND lead_id = ? AND estado = 'aguardando_humano' "
+                    "AND COALESCE(motivo, '') NOT LIKE ? || '%'",
+                    (PREFIXO_FALSO_DONO, loja_id, lead_id, PREFIXO_FALSO_DONO))
+                conexao.commit()
+            finally:
+                conexao.close()
+        return abriu
+    except Exception as erro:
+        print(f"[Turno][loja {loja_id}] Aviso: não consegui marcar o falso dono ({erro!r}).")
+        return False
 
 
 def _quem_da_equipe(loja_id: int, canal: str, lead_id: str) -> dict | None:

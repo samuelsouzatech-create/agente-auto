@@ -31,8 +31,9 @@ MENSAGEM_SO_RECADOS = "Por aqui eu só anoto recados; os números ficam no paine
 
 _CONDICAO = re.compile(
     r"\b(preco|precos|valor|r\$|desconto|descontos|abatimento|entrada|taxa|taxas|juros|"
-    r"parcela|parcelas|parcelamento|ipva|brinde|brindes|bonus|emplacamento|cashback)\b"
-    r"|r\$|\d+\s*%")
+    r"parcela|parcelas|parcelamento|ipva|brinde|brindes|bonus|emplacamento|cashback|"
+    r"gratis|gratuito|gratuita|sem juros|garantia)\b"
+    r"|r\$|\d+\s*%|\d+\s*mil\b")
 
 
 class RecadoInvalido(ValueError):
@@ -222,7 +223,8 @@ def camada_dos_recados(recados: list[dict]) -> str:
         linhas.append(f"- {r['texto']} (vale até {r['valido_ate'].strftime('%d/%m')}){marca}")
     linhas.append("- Comente o recado quando o cliente perguntar de promoção, feirão ou novidade, "
                   "ou quando estiver indeciso. Use só o que está escrito: não invente data, "
-                  "horário, brinde nem detalhe.")
+                  "horário, brinde nem detalhe. Só diga até quando o recado vale se o cliente "
+                  "perguntar até quando vale.")
     if tem_condicao:
         linhas.append("- Recado com [CONDIÇÃO COMERCIAL]: diga só que a campanha existe (ex.: "
                       "\"tem um feirão no sábado\"). NÃO repita nem confirme a condição (preço, "
