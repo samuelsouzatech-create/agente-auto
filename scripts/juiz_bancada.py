@@ -127,12 +127,23 @@ def julgar(relatorio: str, *, chamar=None, teto: float | None = None, modelo: st
     return avaliacoes, custo_usd(entrada, saida)
 
 
-def montar(avaliacoes: list[Avaliacao], origem: str, custo: float, modelo: str) -> str:
+AVISO_MESMO_MODELO = "juiz = mesmo modelo do Léo (notas otimistas)"
+
+
+def juiz_e_o_mesmo_modelo() -> bool:
+    """L10: sem LEO_JUIZ_MODELO, o juiz usa o modelo do Léo (ele tende a se dar nota alta)."""
+    return not (os.getenv("LEO_JUIZ_MODELO") or "").strip()
+
+
+def montar(avaliacoes: list[Avaliacao], origem: str, custo: float, modelo: str,
+           mesmo_modelo: bool = False) -> str:
     notas = [a.nota for a in avaliacoes if a.nota is not None]
     media = f"{sum(notas) / len(notas):.1f}" if notas else "—"
     linhas = [f"# Juiz da bancada — {origem}", "",
               f"Modelo: {modelo} · custo: US$ {custo:.4f} · média: {media} ({len(notas)} de "
               f"{len(avaliacoes)} roteiros avaliados). A nota só informa; não muda o resultado.", "",
+              *([f"**Atenção: {AVISO_MESMO_MODELO}.** Defina LEO_JUIZ_MODELO para usar outro modelo.", ""]
+                if mesmo_modelo else []),
               "| Roteiro | Resultado | Nota | Justificativa |", "|---|---|---|---|"]
     for a in avaliacoes:
         linhas.append(f"| {a.roteiro} | {a.status} | {a.nota if a.nota is not None else '—'} | "
@@ -163,7 +174,8 @@ def main(argv=None) -> int:
     modelo = modelo_do_juiz()
     avaliacoes, custo = julgar(caminho.read_text(encoding="utf-8"), modelo=modelo)
     destino = caminho.with_name(f"juiz_{caminho.stem}.md")
-    destino.write_text(montar(avaliacoes, caminho.name, custo, modelo), encoding="utf-8")
+    destino.write_text(montar(avaliacoes, caminho.name, custo, modelo, juiz_e_o_mesmo_modelo()),
+                       encoding="utf-8")
     print(f"Juiz: {destino} · custo US$ {custo:.4f} (teto US$ {teto_do_juiz():.2f})")
     return 0
 

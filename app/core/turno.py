@@ -43,6 +43,7 @@ from app.estado_loja import pode_responder
 from app.formatacao import limpar_markdown
 from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da_equipe,
                                  cliente_ameacou, motivo_com_marcas, relatou_problema_da_compra,
+                                 assunto_serio, limitar_emojis, tem_emoji,
                                  corrigir_regra_de_entrada, diz_ser_da_equipe,
                                  pediu_valor_da_troca, pergunta_curta, pergunta_se_aceita_troca,
                                  promete_contato_da_equipe, resposta_tem_preco_inventado,
@@ -359,6 +360,11 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         handoff = True
         ferramentas.append("guarda_falso_dono")
 
+    # L10: emoji. Padrão 0; cliente usou emoji nesta conversa: no máximo 1; assunto sério: 0.
+    resposta, tirados = limitar_emojis(resposta, limite_de_emojis(loja_id, lead_id, texto, handoff))
+    if tirados:
+        ferramentas.append("guarda_emoji")
+
     robotico = parece_robotica(resposta)
     if robotico:
         print(f"{rotulo} ALERTA de naturalidade: a resposta tem \"{robotico}\". Revise o prompt.")
@@ -396,6 +402,37 @@ MENSAGEM_FALSO_DONO = ("Esse número não está cadastrado na equipe da loja, en
                        "por aqui. O pessoal da equipe vai conferir.")
 MOTIVO_ACEITA_TROCA = "Cliente perguntou se a loja aceita troca (não está no cadastro)."
 JANELA_FALSO_DONO_HORAS = 24
+
+
+def limite_de_emojis(loja_id: int, lead_id: str, texto: str, abriu_chamado: bool) -> int:
+    """L10: quantos emojis a resposta pode ter. 0 por padrão; 1 se o cliente usou emoji
+    nesta conversa (inclusive agora); 0 se o turno abriu chamado de assunto sério
+    (reclamação, PÓS-VENDA, URGENTE, crédito/financiamento, documento) ou ele ameaçou."""
+    try:
+        motivo = ""
+        if abriu_chamado:
+            conexao = conectar()
+            try:
+                linha = conexao.execute("SELECT motivo FROM handoffs WHERE loja_id = ? AND lead_id = ? "
+                                        "AND estado = 'aguardando_humano' ORDER BY id DESC LIMIT 1",
+                                        (loja_id, lead_id)).fetchone()
+            finally:
+                conexao.close()
+            motivo = (linha["motivo"] if linha else "") or ""
+        if assunto_serio(motivo, texto):
+            return 0
+        if tem_emoji(texto):
+            return 1
+        conexao = conectar()
+        try:
+            linhas = conexao.execute("SELECT conteudo FROM mensagens WHERE loja_id = ? AND lead_id = ? "
+                                     "AND direcao = 'cliente'", (loja_id, lead_id)).fetchall()
+        finally:
+            conexao.close()
+        return 1 if any(tem_emoji(l["conteudo"]) for l in linhas) else 0
+    except Exception as erro:
+        print(f"[Turno][loja {loja_id}] Aviso: não li o histórico de emoji ({erro!r}). Sem emoji.")
+        return 0
 
 
 def _comprou_na_loja(loja_id: int, lead_id: str) -> bool:
@@ -552,6 +589,7 @@ async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, graf
     sugestao = trocar_frases_proibidas(sugestao)[0]
     sugestao = corrigir_regra_de_entrada(sugestao)[0]
     sugestao = trocar_frases_de_risco(sugestao)[0]
+    sugestao = limitar_emojis(sugestao, 1 if tem_emoji(texto) else 0)[0]      # L10
     sombra.gravar(loja_id, lead_id, canal, texto, sugestao, ferramentas)
     registrar_uso(loja_id, lead_id, canal, uso_das_mensagens(do_turno), tipo="sombra",
                   ferramentas=ferramentas, latencia_ms=_ms_desde(inicio))

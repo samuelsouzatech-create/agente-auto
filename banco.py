@@ -818,7 +818,8 @@ _MIGRACAO_19 = """
 -- L3/L4 (Fase Cérebro): recados do dono ou gestor para o Léo comentar com os clientes.
 -- valido_ate: o último dia em que o recado vale, no fuso da loja (AAAA-MM-DD).
 -- Nada é apagado: recado que sai é desativado (ativo = 0).
--- Número 19 reservado para os recados (CLAUDE.md); o 18 é do Instagram.
+-- Número 19 reservado para os recados (CLAUDE.md). O 18 não existe e não será usado:
+-- migrações nunca reusam número; a do Instagram será a 21.
 -- Pode rodar de novo (IF NOT EXISTS): testes antigos voltam o user_version.
 CREATE TABLE IF NOT EXISTS recados (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

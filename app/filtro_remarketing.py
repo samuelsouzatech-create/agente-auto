@@ -110,3 +110,32 @@ def precos_do_estoque(loja_id, dados) -> set:
     finally:
         conexao.close()
     return {int(round(float(l["preco"]) * 100)) for l in linhas if l["preco"] is not None}
+
+
+# L10: os toques têm de ser diferentes de verdade (abertura e semelhança).
+LIMITE_SEMELHANCA = 0.60
+PALAVRAS_DA_ABERTURA = 5
+
+
+def _normal(texto: str) -> str:
+    import unicodedata
+    sem = unicodedata.normalize("NFD", str(texto or ""))
+    return "".join(c for c in sem if unicodedata.category(c) != "Mn").lower()
+
+
+def abertura(texto: str) -> str:
+    """As 5 primeiras palavras, sem acento e sem pontuação."""
+    return " ".join(re.findall(r"[a-z0-9]+", _normal(texto))[:PALAVRAS_DA_ABERTURA])
+
+
+def repete_toque(texto: str, anteriores: list[str]) -> bool:
+    """True se o texto começa igual a um toque anterior ou passa de 60% de semelhança."""
+    import difflib
+    novo = _normal(texto)
+    for velho in anteriores or []:
+        velho_n = _normal(velho)
+        if abertura(novo) and abertura(novo) == abertura(velho_n):
+            return True
+        if difflib.SequenceMatcher(None, novo, velho_n).ratio() > LIMITE_SEMELHANCA:
+            return True
+    return False

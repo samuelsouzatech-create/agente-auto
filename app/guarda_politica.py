@@ -29,8 +29,66 @@ from langchain_core.messages import ToolMessage, HumanMessage
 # Nada de preço, nada de promessa: só avisa que um vendedor vai continuar.
 MENSAGEM_SEGURA = (
     "Deixa eu confirmar esse valor certinho com um vendedor pra não te passar "
-    "nada errado. Já já alguém da equipe continua com você por aqui. 👍"
+    "nada errado. Já já alguém da equipe continua com você por aqui."
 )
+
+# ======================================================================
+# L10: emoji no que o cliente recebe (CÓDIGO)
+# ======================================================================
+# Padrão: nenhum. Cliente usou emoji nesta conversa: no máximo 1. Assunto sério (chamado
+# de reclamação, PÓS-VENDA, URGENTE, crédito/financiamento, documento): nenhum.
+_BASE_EMOJI = "[\U0001F000-\U0001F3FA\U0001F400-\U0001FAFF☀-➿⬀-⯿⌀-⏿]"
+_MODIFICADOR = "(?:️|[\U0001F3FB-\U0001F3FF])"
+EMOJI = re.compile("[\U0001F1E6-\U0001F1FF]{2}|"           # bandeira (2 letras) conta como 1
+                   f"{_BASE_EMOJI}{_MODIFICADOR}*(?:‍{_BASE_EMOJI}{_MODIFICADOR}*)*|️")
+_SERIO = re.compile(r"reclama|pos-venda|pos venda|urgente|credit|financ|document|comprova|negativad")
+
+
+def contar_emojis(texto: str) -> int:
+    return len([m for m in EMOJI.findall(str(texto or "")) if m != "️"])
+
+
+def tem_emoji(texto: str) -> bool:
+    return contar_emojis(texto) > 0
+
+
+def limitar_emojis(texto: str, maximo: int) -> tuple[str, int]:
+    """Deixa no máximo `maximo` emojis (os primeiros) e tira o resto. Não sobra espaço
+    duplo, espaço antes de pontuação nem linha vazia criada pela remoção.
+    Devolve (texto, quantos tirou)."""
+    texto = str(texto or "")
+    if not EMOJI.search(texto):
+        return texto, 0
+    mantidos, removidos = 0, 0
+
+    def trocar(m):
+        nonlocal mantidos, removidos
+        if m.group(0) == "️":
+            return ""
+        if mantidos < maximo:
+            mantidos += 1
+            return m.group(0)
+        removidos += 1
+        return ""
+
+    linhas = []
+    for linha in texto.split("\n"):
+        nova = EMOJI.sub(trocar, linha)
+        nova = re.sub(r"[ \t]{2,}", " ", nova)
+        nova = re.sub(r" +([,.!?;:])", r"\1", nova).strip()
+        if nova or not linha.strip():      # linha que só tinha emoji some; linha vazia original fica
+            linhas.append(nova)
+    saida = re.sub(r"\n{3,}", "\n\n", "\n".join(linhas)).strip()
+    return saida, removidos
+
+
+def sem_emoji(texto: str) -> str:
+    return limitar_emojis(texto, 0)[0]
+
+
+def assunto_serio(motivo_do_chamado: str = "", texto_do_cliente: str = "") -> bool:
+    """Chamado de reclamação/PÓS-VENDA/URGENTE/crédito/documento, ou cliente ameaçando."""
+    return bool(_SERIO.search(_sem_acento(motivo_do_chamado))) or cliente_ameacou(texto_do_cliente)
 
 # 98.000 | 75 000 (espaço de milhar) | 98000
 _INTEIRO = r"(\d{1,3}(?:\.\d{3})+|\d{1,3}(?: \d{3}(?!\d))+|\d+)"

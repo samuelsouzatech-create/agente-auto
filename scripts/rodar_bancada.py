@@ -791,6 +791,7 @@ def checar(res: ResultadoRoteiro) -> None:
         (res.ok if ok else res.falhas).append(
             f"carros de troca registrados: {res.trocas_gravadas} (esperado {r['deve']['trocas']})")
     checar_sombra(res)
+    checar_emojis(res)
     checar_tom(res)
     if res.parou_no_teto:
         res.falhas.append("roteiro interrompido no teto de gasto")
@@ -1169,6 +1170,48 @@ def checar_fotos_e_rajada(res: "ResultadoRoteiro") -> None:
             f"respostas do Léo à rajada: {res.respostas_rajada} (esperado {deve['respostas']})")
 
 
+LIMITE_SEMELHANCA = 0.60
+PALAVRAS_DA_ABERTURA = 5
+
+
+def _abertura(texto: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", normalizar(texto))[:PALAVRAS_DA_ABERTURA])
+
+
+def toques_parecidos(textos: list[str]) -> list[str]:
+    """L10: dois toques com a mesma abertura (5 primeiras palavras) ou mais de 60% parecidos."""
+    import difflib
+    problemas = []
+    for i in range(len(textos)):
+        for j in range(i + 1, len(textos)):
+            a, b = normalizar(textos[i]), normalizar(textos[j])
+            if _abertura(a) and _abertura(a) == _abertura(b):
+                problemas.append(f"toques {i + 1} e {j + 1} começam igual: \"{_abertura(a)}\"")
+            razao = difflib.SequenceMatcher(None, a, b).ratio()
+            if razao > LIMITE_SEMELHANCA:
+                problemas.append(f"toques {i + 1} e {j + 1} {razao:.0%} parecidos (limite {LIMITE_SEMELHANCA:.0%})")
+    return problemas
+
+
+def checar_emojis(res: "ResultadoRoteiro") -> None:
+    """L10: checagem GLOBAL. Sem emoji se o cliente não usou; no máximo 1 por resposta;
+    mensagem de job (remarketing/pós-venda): nenhum."""
+    from app.guarda_politica import contar_emojis
+    cliente_usou = False
+    for turno in res.turnos:
+        if not turno.do_job and contar_emojis(turno.fala):
+            cliente_usou = True
+        n = contar_emojis(" ".join(turno.bolhas))
+        if not n:
+            continue
+        if turno.do_job:
+            res.falhas.append(f"emoji em mensagem do job ({n}): \"{' '.join(turno.bolhas)[:80]}\"")
+        elif not cliente_usou:
+            res.falhas.append(f"emoji sem o cliente ter usado ({n}) na resposta a \"{turno.fala[:60]}\"")
+        elif n > 1:
+            res.falhas.append(f"{n} emojis numa resposta (máximo 1) a \"{turno.fala[:60]}\"")
+
+
 def checar_job(res: "ResultadoRoteiro") -> None:
     """L6: checagens dos roteiros de job (toques, textos diferentes, horário, preço)."""
     from app.elegibilidade import no_horario_de_envio
@@ -1184,10 +1227,10 @@ def checar_job(res: "ResultadoRoteiro") -> None:
         (res.ok if ok else res.falhas).append(
             f"mensagens de pós-venda: {len(pos)} (esperado {deve['envios_pos_venda']})")
     if deve.get("textos_diferentes"):
-        textos = [normalizar(e["texto"]).strip() for e in toques]
-        repetidos = len(textos) != len(set(textos))
-        (res.falhas if repetidos else res.ok).append(
-            "toques com texto repetido" if repetidos else "toques com textos diferentes")
+        parecidos = toques_parecidos([e["texto"] for e in toques])
+        res.falhas.extend(parecidos)
+        if not parecidos:
+            res.ok.append(f"{len(toques)} toque(s) diferentes de verdade (abertura e semelhança)")
     if deve.get("envios_no_horario") and res.loja_do_job is not None:
         fora = [e for e in res.envios_job if not no_horario_de_envio(res.loja_do_job, e["quando"])]
         res.falhas.extend(f"envio fora do horário: {_hora_da_loja(res.loja_do_job, e['quando'])}" for e in fora)

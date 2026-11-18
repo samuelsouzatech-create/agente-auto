@@ -104,7 +104,7 @@ PADROES: dict = {
         "posts_comentario": "todos",
         "resposta_publica": False,
         "limite_private_replies_h": 20,
-        "texto_private_reply": "Oi! Vi seu comentário, te chamei por aqui para te ajudar 🙂",
+        "texto_private_reply": "Oi! Vi seu comentário, te chamei por aqui para te ajudar.",
     },
     "custos": {"teto_diario_llm": None},
     "envio_real": {"remarketing": False, "pos_venda": False, "reativacao": False},

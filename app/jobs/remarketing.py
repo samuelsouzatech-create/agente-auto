@@ -50,8 +50,9 @@ from app.pausa import pausado
 from app.sombra import em_sombra
 from app.modo_envio import real_para
 from app.custos import Uso, registrar_uso, uso_das_mensagens
+from app.guarda_politica import sem_emoji
 from app.filtro_remarketing import (acao_inventada, fato_inventado, preco_fora,
-                                    precos_da_conversa, precos_do_estoque)
+                                    precos_da_conversa, precos_do_estoque, repete_toque)
 from app.elegibilidade import Decisao, avaliar, candidatos, elegiveis
 from app.lojas import PADROES, TETO_TOQUES_REMARKETING, Loja, carregar_loja, modulo_ativo
 from app.relogio import agora_utc, do_banco, para_banco
@@ -172,7 +173,7 @@ vai mandar agora para retomar o contato (retomada {toque} de no máximo {max_toq
 
 Como escrever:
 - Uma mensagem só, curta: no máximo 2 frases e 300 caracteres.
-- Natural, como um vendedor de verdade no WhatsApp. Sem markdown, sem listas, no máximo 1 emoji.
+- Natural, como um vendedor de verdade no WhatsApp. Sem markdown, sem listas, sem emoji.
 - Retome o assunto da conversa abaixo. Não repita o que você já disse.
 - OFEREÇA, não diga que já fez: nada de "separei", "consegui separar", "já te mandei" ou "reservei".
 - Não invente preço, condição nem desconto. Só fale de carros que aparecem na conversa
@@ -184,7 +185,7 @@ Como escrever:
 - Não ofereça vídeo nem material que não existe.
 - Não diga prazo nem palavra de tempo ("já já", "em breve", "logo").
 - {_ORIENTACAO_DO_TOQUE.get(toque, _ORIENTACAO_DO_TOQUE[3])}
-- Escreva só a mensagem, sem aspas.
+- Escreva só a mensagem, sem aspas.{_bloco_dos_anteriores(dados)}
 
 Nome do cliente: {dados['nome'] or 'não informado'}
 Interesse anotado: {dados['interesse'] or '-'}
@@ -192,6 +193,17 @@ Carro de interesse: {_linha_do_carro(dados)}
 
 Conversa (mais antiga primeiro):
 {conversa}"""
+
+
+def _bloco_dos_anteriores(dados: dict) -> str:
+    """L10: o redator vê o que já mandou e não pode repetir abertura nem pergunta final."""
+    anteriores = dados.get("toques_anteriores") or []
+    if not anteriores:
+        return ""
+    linhas = "\n".join(f"- Retomada {i}: {t}" for i, t in enumerate(anteriores, 1))
+    return ("\n- PROIBIDO repetir a abertura (as primeiras palavras, ex.: \"Oi, tudo bem?\") e a "
+            "pergunta final das retomadas que você já mandou. Comece de outro jeito e termine "
+            "de outro jeito (ou sem pergunta).\n\nRetomadas que você já mandou:\n" + linhas)
 
 
 def _texto_da_ia(resposta) -> str:
@@ -213,7 +225,7 @@ def _limpar_texto(texto, permitidos=frozenset()) -> str:
     """Bloco S1: barra também ação inventada e preço fora de permitidos (centavos)."""
     if not isinstance(texto, str):
         return ""
-    t = texto.replace("**", "").replace("__", "").strip().strip('"').strip()
+    t = sem_emoji(texto.replace("**", "").replace("__", "").strip().strip('"').strip())   # L10
     t = re.sub(r"\n{3,}", "\n\n", t)
     if not t or len(t) > LIMITE_TEXTO_LIVRE or _CARA_DE_ROBO.search(t) or _PROMESSA.search(t) or acao_inventada(t) or fato_inventado(t) or preco_fora(t, permitidos):
         return ""
@@ -225,16 +237,46 @@ def _primeiro_nome(nome: str) -> str:
     return partes[0] if partes else ""
 
 
-def _texto_reserva(loja: Loja, dados: dict) -> str:
+def _texto_reserva(loja: Loja, dados: dict, toque: int = 1) -> str:
+    """Texto pronto quando a IA falha ou repete um toque anterior. L10: um diferente por toque."""
     nome = _primeiro_nome(dados["nome"])
     oi = f"Oi, {nome}!" if nome else "Oi!"
     quem = f"{loja.get('nome_agente') or 'Léo'} aqui, da {loja.nome}."
     if dados.get("alternativa"):
-        return (f"{oi} {quem} Aquele {dados['carro']} já foi vendido, mas temos um "
-                f"{dados['alternativa']} bem parecido. Quer dar uma olhada?")
-    if dados["carro_disponivel"]:
-        return f"{oi} {quem} O {dados['carro']} que você viu continua disponível. Quer que eu te passe mais detalhes?"
-    return f"{oi} {quem} Passando para saber se ainda posso te ajudar. Ficou alguma dúvida?"
+        opcoes = (f"{oi} {quem} Aquele {dados['carro']} já foi vendido, mas temos um "
+                  f"{dados['alternativa']} bem parecido. Quer dar uma olhada?",
+                  f"Lembrei de você: o {dados['alternativa']} ainda está aqui na loja, parecido com o "
+                  f"{dados['carro']} que você viu. Se quiser, te conto mais.",
+                  f"Fico à disposição se quiser ver o {dados['alternativa']} ou outra opção do estoque.")
+    elif dados["carro_disponivel"]:
+        opcoes = (f"{oi} {quem} O {dados['carro']} que você viu continua disponível. Quer que eu te passe mais detalhes?",
+                  f"Lembrei de você: o {dados['carro']} ainda está aqui na loja. Se quiser, marco uma visita.",
+                  f"Fico à disposição para quando quiser falar do {dados['carro']}.")
+    else:
+        opcoes = (f"{oi} {quem} Passando para saber se ainda posso te ajudar. Ficou alguma dúvida?",
+                  "Lembrei de você por aqui. Se ainda estiver procurando carro, me conta o que precisa.",
+                  "Fico à disposição para quando quiser voltar a conversar.")
+    return opcoes[min(max(toque, 1), len(opcoes)) - 1]
+
+
+def _toques_anteriores(loja_id: int, lead_id: str, canal: str, toque: int) -> list[str]:
+    """L10: textos dos toques já ENVIADOS a este cliente, nesta loja e canal."""
+    conexao = conectar()
+    try:
+        linhas = conexao.execute(
+            "SELECT contexto FROM remarketing_envios WHERE loja_id = ? AND lead_id = ? AND canal = ? "
+            "AND toque < ? AND estado = 'enviado' ORDER BY toque", (loja_id, lead_id, canal, toque)).fetchall()
+    finally:
+        conexao.close()
+    textos = []
+    for l in linhas:
+        try:
+            texto = (json.loads(l["contexto"] or "{}") or {}).get("texto")
+        except ValueError:
+            texto = None
+        if texto:
+            textos.append(texto)
+    return textos
 
 
 # ------------------------------------------------------------ banco
@@ -422,7 +464,7 @@ def _registrar(loja: Loja, d: Decisao, agora: datetime, estado: str, *, real: bo
     print(f"[Remarketing][loja {loja.id}] {rotulo} toque {d.toque} -> {d.lead_id} ({d.canal})"
           + (f" | {MOTIVOS.get(motivo, motivo)}" if motivo else ""))
     if texto and estado in ("simulado", "enviado"):
-        print(f'    "{texto}"')
+        print(f'    "{sem_emoji(texto)}"')
     return estado
 
 
@@ -444,6 +486,8 @@ def _extra_da_alternativa(dados: dict) -> dict | None:
 
 
 def _mensagem_livre(loja, d, agora, dados, *, real, redator, enviador) -> str:
+    anteriores = _toques_anteriores(loja.id, d.lead_id, d.canal, d.toque)
+    dados = {**dados, "toques_anteriores": anteriores}
     try:
         bruto, uso = redator(loja, d.lead_id, d.canal, d.toque, dados,
                              _historico(loja.id, d.lead_id, d.canal))
@@ -453,8 +497,11 @@ def _mensagem_livre(loja, d, agora, dados, *, real, redator, enviador) -> str:
     historico = _historico(loja.id, d.lead_id, d.canal)
     permitidos = precos_da_conversa(historico) | precos_do_estoque(loja.id, dados)
     texto, origem = _limpar_texto(bruto, permitidos), "ia"
+    if texto and repete_toque(texto, anteriores):          # L10: igual a um toque anterior
+        print(f"[Remarketing][loja {loja.id}] Texto da IA repetia um toque anterior; usando reserva.")
+        texto = ""
     if not texto:
-        texto, origem = _texto_reserva(loja, dados), "reserva"
+        texto, origem = _texto_reserva(loja, dados, d.toque), "reserva"
     comum = dict(real=real, texto=texto, origem=origem, categoria="livre",
                  veiculo_id=dados["alternativa_id"] or dados["veiculo_id"], uso=uso,
                  extra=_extra_da_alternativa(dados))
@@ -538,12 +585,12 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
             fila = elegiveis(loja_id, agora)
             real = real_para(loja, "remarketing", envio_real)
         except Exception as erro:        # uma loja com problema não trava as outras
-            print(f"[Remarketing] Erro na loja {loja_id}: {erro!r}")
+            print(f"[Remarketing] Erro na loja {loja_id}: {sem_emoji(repr(erro))}")
             continue
         try:
             avisar_limite(loja, agora, real=real)
         except Exception as erro:        # o aviso nunca trava os envios
-            print(f"[Remarketing] Erro no aviso de limite da loja {loja_id}: {erro!r}")
+            print(f"[Remarketing] Erro no aviso de limite da loja {loja_id}: {sem_emoji(repr(erro))}")
         processados = 0
         for decisao in fila:
             if processados >= max_por_loja:
@@ -552,7 +599,7 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
                 estado = processar_lead(loja, decisao, agora, real=real,
                                         redator=redator, enviador=enviador)
             except Exception as erro:
-                print(f"[Remarketing][loja {loja_id}] Erro com {decisao.lead_id}: {erro!r}")
+                print(f"[Remarketing][loja {loja_id}] Erro com {decisao.lead_id}: {sem_emoji(repr(erro))}")
                 estado = "erro"
             totais[estado] += 1
             if estado != "pulado":       # pulado não ocupa vaga da rodada

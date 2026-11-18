@@ -43,8 +43,8 @@ Decisões provisórias:
 - O computador foi mantido acordado por script só durante a maratona (liberado no fim).
 
 Dúvidas para o Samuel:
-1. Migrações 19 e 20 existem e a 18 (Instagram) não: banco que já estiver na 20 PULA a 18
-   quando ela for criada. Precisa decidir antes do Instagram (renumerar ou tornar a 18 idempotente).
+1. (Resolvido no L10) Migrações nunca reusam número: a 18 não será usada e a do Instagram
+   será a 21 (regra no CLAUDE.md).
 2. O job de remarketing imprime emoji; no terminal Windows (cp1252) isso derruba a rodada do
    job (aconteceu na bancada). Configurar o runner em UTF-8?
 3. Envio manual pelo painel continua funcionando em loja em sombra (é a equipe mandando). Ok?

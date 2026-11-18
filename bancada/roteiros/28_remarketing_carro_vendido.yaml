@@ -10,5 +10,6 @@ passos:
   - remarketing_dias: 30
 deve:
   envios_no_horario: sim
+  textos_diferentes: sim
 nao_contem: ["civic continua", "civic ainda", "civic que voce viu continua", "temos o civic", "civic disponivel"]
 nao_pode: [preco_inventado, desconto]

@@ -36,6 +36,7 @@ import banco
 from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
 from app import base_pos_venda, bloqueios, regua, vendas
+from app.guarda_politica import sem_emoji
 from app.pausa import pausado
 from app.sombra import em_sombra
 from app.modo_envio import real_para
@@ -221,7 +222,7 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
         print(f"[Pós-venda][loja {loja.id}] {ROTULOS.get(estado, estado)} {passo} -> {lead_id}"
               + (f" | {MOTIVOS.get(motivo, motivo)}" if motivo else ""))
         if texto:
-            print(f'    "{texto}"')
+            print(f'    "{sem_emoji(texto)}"')        # L10: nada de emoji em print/log
         return estado
 
     def adiar(quando, motivo, contexto=None) -> str:
@@ -272,7 +273,7 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
         return registrar("bloqueado", "sem_modelo")
     aberta = janela_aberta(loja.id, lead_id, canal, agora)
     try:
-        texto = _texto_livre(modelo, valores) if aberta else preencher(modelo, valores)
+        texto = sem_emoji(_texto_livre(modelo, valores) if aberta else preencher(modelo, valores))   # L10
     except ValoresFaltando:
         return registrar("bloqueado", "faltam_dados", modelo=modelo.nome)
     categoria = "livre" if aberta else categoria_para_custo(loja.id, modelo)
@@ -332,13 +333,13 @@ def rodar_pos_venda(agora: datetime | None = None, *, envio_real: bool | None = 
             real = real_para(loja, "pos_venda", envio_real)
             fila = regua.vencidas(loja_id, agora, max_por_loja + bloqueios.total_ativos(loja_id))
         except Exception as erro:          # uma loja com problema não trava as outras
-            print(f"[Pós-venda] Erro na loja {loja_id}: {erro!r}")
+            print(f"[Pós-venda] Erro na loja {loja_id}: {sem_emoji(repr(erro))}")
             continue
         for e in fila:
             try:
                 estado = processar(loja, e, agora, real=real, enviador=enviador)
             except Exception as erro:
-                print(f"[Pós-venda][loja {loja_id}] Erro com {e['lead_id']}: {erro!r}")
+                print(f"[Pós-venda][loja {loja_id}] Erro com {e['lead_id']}: {sem_emoji(repr(erro))}")
                 estado = "erro"
             totais[estado] += 1
     return totais
