@@ -93,9 +93,11 @@ IMAGEM_AUSENTE = "imagem ausente"
 
 CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente", "loja",
                   "recados", "nao_contem", "imagem_texto", "legenda",
-                  "canal", "conversa", "interesse", "venda", "passos"}      # L6: roteiros de job
+                  "canal", "conversa", "interesse", "venda", "passos",      # L6: roteiros de job
+                  "rajada"}                                                 # L7: mensagens seguidas
 CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead",
-               "toques", "envios_pos_venda", "textos_diferentes", "envios_no_horario"}   # L6
+               "toques", "envios_pos_venda", "textos_diferentes", "envios_no_horario",   # L6
+               "fotos", "fotos_de", "respostas"}                                          # L7
 NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco",
                     "condicao_recado", "numero", "regra_entrada", "elogio_estado"}
 
@@ -138,6 +140,11 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         raise RoteiroInvalido(f"{origem}: falta 'nome'")
     tem_imagem = bool(dados.get("imagem") or dados.get("imagem_texto"))
     e_job = "passos" in dados                      # L6: roteiro de job não tem falas
+    rajada = dados.get("rajada")
+    if rajada is not None and (not isinstance(rajada, list) or len(rajada) < 2
+                               or not all(isinstance(m, str) and m.strip() for m in rajada)):
+        raise RoteiroInvalido(f"{origem}: 'rajada' é uma lista de 2 ou mais mensagens (texto)")
+    tem_imagem = tem_imagem or bool(rajada)
     falas = [] if falas is None and (tem_imagem or e_job) else falas
     if e_job and falas:
         raise RoteiroInvalido(f"{origem}: roteiro de job usa 'passos' (- cliente: ...), não 'falas'")
@@ -187,6 +194,10 @@ def validar_roteiro(dados, origem: str = "") -> dict:
             if "textos_diferentes" in deve else None,
             "envios_no_horario": _sim_nao(deve["envios_no_horario"], "deve.envios_no_horario")
             if "envios_no_horario" in deve else None,
+            # L7: fotos que saíram (número exato) e de qual carro; respostas do Léo à rajada
+            "fotos": deve.get("fotos"),
+            "fotos_de": str(deve["fotos_de"]).strip() if deve.get("fotos_de") else None,
+            "respostas": deve.get("respostas"),
             # L3b: texto que o motivo de algum chamado do cliente precisa ter
             "motivo_contem": [str(c) for c in (deve.get("motivo_contem") or [])],
             # L3b: a conversa fica gravada como de cliente (lead)?
@@ -203,6 +214,7 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         "conversa": _validar_conversa(dados.get("conversa"), origem),
         "interesse": str(dados["interesse"]).strip() if dados.get("interesse") else None,
         "venda": dict(dados["venda"]) if isinstance(dados.get("venda"), dict) else None,
+        "rajada": [m.strip() for m in rajada] if rajada else None,
     }
 
 
@@ -322,6 +334,25 @@ def gravar_recados(recados: list[dict]) -> None:
              (LOJA_ID, EQUIPE[0][0], r["texto"], data_do_recado(r["valido_ate"], hoje)))
 
 
+# L7: fotos fictícias dos carros da loja (Pillow, pasta temporária, fora do git).
+# O HB20 fica SEM foto de propósito (roteiro 34 e "me manda foto do HB20" do roteiro 10).
+FOTOS_POR_CARRO = 2
+CARROS_SEM_FOTO = {"HB20"}
+
+
+def fotos_do_carro(marca: str, modelo: str, ano: int) -> list[str]:
+    """Gera (uma vez) as fotos de teste do carro e devolve as URLs file:///."""
+    pasta = pasta_temporaria() / "fotos"
+    pasta.mkdir(parents=True, exist_ok=True)
+    urls = []
+    for n in range(1, FOTOS_POR_CARRO + 1):
+        arquivo = pasta / f"{_slug(modelo)}_{n}.png"
+        if not arquivo.exists():
+            arquivo.write_bytes(gerar_imagem_de_texto(f"{marca} {modelo} {ano}\nfoto {n} de {FOTOS_POR_CARRO}"))
+        urls.append(arquivo.resolve().as_uri())
+    return urls
+
+
 def montar_loja_ficticia(mudancas: dict | None = None, recados: list | None = None) -> None:
     """Loja 1 fictícia: nome, cidade, endereço, horário, equipe, estoque e recados próprios."""
     _sql("UPDATE lojas SET nome = ?, config = ? WHERE id = ?",
@@ -330,8 +361,10 @@ def montar_loja_ficticia(mudancas: dict | None = None, recados: list | None = No
         _sql("INSERT INTO usuarios (loja_id, nome, papel, contato_telegram, contato_whatsapp) "
              "VALUES (?, ?, ?, ?, ?)", (LOJA_ID, nome, papel, telegram, whatsapp))
     for carro in ESTOQUE:
-        _sql("INSERT INTO estoque (loja_id, marca, modelo, ano, km, cor, cambio, preco, status) "
-             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (LOJA_ID, *carro))
+        marca, modelo, ano = carro[0], carro[1], carro[2]
+        fotos = "" if modelo in CARROS_SEM_FOTO else ",".join(fotos_do_carro(marca, modelo, ano))
+        _sql("INSERT INTO estoque (loja_id, marca, modelo, ano, km, cor, cambio, preco, status, fotos) "
+             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (LOJA_ID, *carro, fotos))
     lojas.limpar_cache()
     gravar_recados(recados)
 
@@ -565,6 +598,7 @@ class ResultadoRoteiro:
     motivos_finais: list = field(default_factory=list)  # motivo de cada chamado do cliente, no fim
     tokens_imagem_entrada: int = 0                       # L5: leitura da foto (já somada no custo)
     envios_job: list = field(default_factory=list)       # L6: o que os jobs mandaram (envio falso)
+    respostas_rajada: int = 0                            # L7: quantas vezes o Léo respondeu à rajada
     precos_do_estoque: set = field(default_factory=set)
     loja_do_job: object = None
     inicio_relogio: object = None
@@ -743,6 +777,7 @@ def checar(res: ResultadoRoteiro) -> None:
                 res.avisos.append(f"frase com cara de robô: \"{robotico}\"")
     if r.get("passos"):
         checar_job(res)
+    checar_fotos_e_rajada(res)
     if res.parou_no_teto:
         res.falhas.append("roteiro interrompido no teto de gasto")
     res.status, res.alerta = decidir(res.promessas, res.falhas, res.avisos, r["pendente"])
@@ -1009,6 +1044,70 @@ def _hora_da_loja(loja, quando) -> str:
     return hora_local(loja, quando).strftime("%a %d/%m %H:%M") if quando else "?"
 
 
+INTERVALO_DA_RAJADA_S = 0.3        # o cliente manda uma mensagem atrás da outra
+DEBOUNCE_DA_BANCADA_S = 1.5        # o real é 8 s; na bancada, o mesmo mecanismo mais rápido
+
+
+async def processar_rajada(mensagens: list[str], lead_id: str, executar) -> list[tuple]:
+    """L7: cada mensagem passa por aguardar_vez (debounce + lock, como nos canais) com um
+    Redis FALSO em memória (fakeredis). Só a dona da rajada chama o Léo, com o texto juntado.
+    Devolve [(texto_juntado, resultado)] de quem respondeu."""
+    import fakeredis
+
+    import app.redis_atraso as ra
+    import app.redis_cliente as rc
+    import app.redis_debounce as rd
+    import app.redis_lock as rl
+    from app.core.turno import aguardar_vez
+
+    falso = fakeredis.FakeAsyncRedis(server=fakeredis.FakeServer(), decode_responses=True)
+    modulos = (rc, rd, rl, ra)
+    originais = [m.redis_cliente for m in modulos]
+    debounce_original = rd.DEBOUNCE_SEGUNDOS
+    for m in modulos:
+        m.redis_cliente = falso
+    rd.DEBOUNCE_SEGUNDOS = DEBOUNCE_DA_BANCADA_S
+    try:
+        async def uma(i: int, texto: str):
+            await asyncio.sleep(INTERVALO_DA_RAJADA_S * i)
+            juntado, token = await aguardar_vez(LOJA_ID, lead_id, texto)
+            if juntado is None:
+                return None
+            try:
+                return juntado, await executar(juntado)
+            finally:
+                await rl.liberar_lock(lead_id, token, loja_id=LOJA_ID)
+
+        resultados = await asyncio.gather(*(uma(i, t) for i, t in enumerate(mensagens)))
+    finally:
+        for m, original in zip(modulos, originais):
+            m.redis_cliente = original
+        rd.DEBOUNCE_SEGUNDOS = debounce_original
+    return [r for r in resultados if r]
+
+
+def checar_fotos_e_rajada(res: "ResultadoRoteiro") -> None:
+    """L7: quantas fotos saíram, de qual carro, e quantas respostas a rajada teve."""
+    deve = res.roteiro["deve"]
+    fotos = [f for t in res.turnos for f in t.fotos]
+    if deve.get("fotos") is not None:
+        ok = len(fotos) == deve["fotos"]
+        (res.ok if ok else res.falhas).append(f"fotos enviadas: {len(fotos)} (esperado {deve['fotos']})")
+    if deve.get("fotos_de"):
+        alvo = _slug(deve["fotos_de"]) + "_"
+        erradas = [f for f in fotos if not f.rsplit("/", 1)[-1].startswith(alvo)]
+        if not fotos:
+            res.falhas.append(f"nenhuma foto do {deve['fotos_de']} saiu")
+        elif erradas:
+            res.promessas.append(f"foto de outro carro enviada: {', '.join(e.rsplit('/', 1)[-1] for e in erradas)}")
+        else:
+            res.ok.append(f"{len(fotos)} foto(s), todas do {deve['fotos_de']}")
+    if deve.get("respostas") is not None:
+        ok = res.respostas_rajada == deve["respostas"]
+        (res.ok if ok else res.falhas).append(
+            f"respostas do Léo à rajada: {res.respostas_rajada} (esperado {deve['respostas']})")
+
+
 def checar_job(res: "ResultadoRoteiro") -> None:
     """L6: checagens dos roteiros de job (toques, textos diferentes, horário, preço)."""
     from app.elegibilidade import no_horario_de_envio
@@ -1114,6 +1213,16 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
         await _turno(f"[foto: {nome}] {legenda}".strip(),
                      lambda: executar_turno_imagem(LOJA_ID, CANAL, lead_id, conteudo, mime, legenda,
                                                    grafo=gravador, leitor=rodada.leitor))
+
+    if roteiro.get("rajada"):       # L7: mensagens seguidas, pelo debounce de verdade (Redis falso)
+        desde, antes = len(canal.enviadas), len(handoffs_abertos(lead_id))
+        gravador.ultimo = None
+        respondidas = await processar_rajada(
+            roteiro["rajada"], lead_id,
+            lambda juntado: executar_turno(LOJA_ID, CANAL, lead_id, juntado, grafo=gravador))
+        res.respostas_rajada = len(respondidas)
+        for juntado, resultado in respondidas:
+            await _depois_do_turno(Turno(fala=f"[rajada] {juntado}"), resultado, desde, antes)
 
     for fala in roteiro["falas"]:
         if rodada.gasto_usd >= rodada.teto:

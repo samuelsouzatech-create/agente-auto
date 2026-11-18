@@ -424,6 +424,29 @@ _PROBLEMA_DA_COMPRA = re.compile(
     r"|\bpagamento\b|\bboleto\b|\bparcela\w*\s+(atrasad\w*|errad\w*)|\bcobranca\b")
 
 
+# L7: o Léo diz que mandou/vai mandar fotos, mas nenhuma foto saiu neste turno.
+PROMESSA_DE_FOTO = re.compile(
+    r"\b(segue|seguem|estou\s+enviando|enviando|te\s+envio|te\s+mando|vou\s+(te\s+)?(mandar|enviar)"
+    r"|ja\s+(te\s+)?(mandei|enviei)|mandei|enviei|aqui\s+estao|olha\s+so)\b[^.!?]{0,30}\bfotos?\b"
+    r"|\bfotos?\b[^.!?]{0,20}\b(a\s+caminho|logo\s+abaixo|acima|enviadas?|seguem)\b")
+FRASE_SEM_FOTO = "Por aqui não tenho fotos desse carro para mandar."
+
+
+def tirar_promessa_de_foto(resposta: str) -> tuple[str, bool]:
+    """L7: só vale quando nenhuma foto saiu no turno. Frase que promete/diz que mandou
+    foto vira "Por aqui não tenho fotos desse carro para mandar." (uma vez só)."""
+    saida, trocou = [], False
+    for frase in _frases_originais(resposta):
+        f = _sem_acento(frase)
+        if PROMESSA_DE_FOTO.search(f) and not re.search(r"\b(quer|gostaria|posso|prefere)\b", f):
+            if not trocou:
+                saida.append(FRASE_SEM_FOTO)
+            trocou = True
+        else:
+            saida.append(frase)
+    return (" ".join(saida) if trocou else resposta), trocou
+
+
 def cliente_ameacou(texto: str) -> bool:
     """Cliente irritado ou ameaçando (Procon, advogado, Reclame Aqui...)."""
     return bool(_AMEACA.search(_sem_acento(texto)))

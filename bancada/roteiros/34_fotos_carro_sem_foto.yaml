@@ -1,0 +1,8 @@
+nome: fotos_carro_sem_foto
+# L7: o HB20 não tem foto cadastrada: o Léo diz que não tem, sem inventar nem prometer.
+falas:
+  - tem foto do HB20?
+deve:
+  fotos: 0
+nao_contem: ["segue a foto", "seguem as fotos", "enviando as fotos", "mandei as fotos"]
+nao_pode: [preco_inventado]
