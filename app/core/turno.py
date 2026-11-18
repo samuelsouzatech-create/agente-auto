@@ -47,6 +47,7 @@ from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da
                                  pediu_valor_da_troca, pergunta_curta, pergunta_se_aceita_troca,
                                  promete_contato_da_equipe, resposta_tem_preco_inventado,
                                  tirar_elogio_da_descricao, tirar_elogio_do_estado,
+                                 tirar_promessa_de_foto,
                                  trocar_frases_proibidas)
 from banco import conectar
 from app.handoff import estado_do_handoff
@@ -312,6 +313,11 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     if trocou:
         print(f"{rotulo} GUARDA: regra de entrada trocada por 'depende da análise'.")
         ferramentas.append("guarda_entrada")
+    if not midias:                       # L7: disse que mandou foto, mas nenhuma saiu
+        resposta, trocou = tirar_promessa_de_foto(resposta)
+        if trocou:
+            print(f"{rotulo} GUARDA: promessa de foto sem foto enviada trocada.")
+            ferramentas.append("guarda_foto")
     if foto_carro:
         resposta, trocou = tirar_elogio_do_estado(resposta)
         if trocou:

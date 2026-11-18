@@ -1,0 +1,8 @@
+nome: manda_fotos_civic
+# L7: o cliente pede fotos do Civic: saem SÓ fotos do Civic (nunca de outro carro).
+falas:
+  - me manda fotos do Civic
+deve:
+  tools: [enviar_fotos]
+  fotos_de: Civic
+nao_pode: [preco_inventado]

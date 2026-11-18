@@ -1,0 +1,11 @@
+nome: fotos_modulo_desligado
+# L7: a loja desligou o envio de fotos: nenhuma foto sai e o Léo não promete foto.
+loja:
+  modulos:
+    fotos: false
+falas:
+  - me manda fotos do Civic
+deve:
+  fotos: 0
+nao_contem: ["segue a foto", "seguem as fotos", "enviando as fotos", "mandei as fotos", "vou te mandar as fotos", "vou mandar as fotos"]
+nao_pode: [preco_inventado]

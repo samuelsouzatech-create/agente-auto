@@ -11,5 +11,5 @@ passos:
 deve:
   handoff: não
   envios_no_horario: sim
-nao_contem: ["indica", "indicacao", "temos outros", "nosso estoque", "aproveite"]
+nao_contem: ["indica", "indicacao", "temos outros", "nosso estoque", "aproveite para", "aproveite a oportunidade", "aproveite a promo"]
 nao_pode: [preco_inventado, desconto]

@@ -1,0 +1,11 @@
+nome: mensagens_seguidas
+# L7: o cliente manda 3 mensagens em sequência rápida. O debounce junta e o Léo responde
+# UMA vez, cobrindo as 3 (Civic e câmbio automático).
+rajada:
+  - oi
+  - tem civic?
+  - automático?
+deve:
+  respostas: 1
+  contem: ["civic", "automatic"]
+nao_pode: [preco_inventado]
