@@ -48,7 +48,7 @@ from app.guarda_politica import (  # noqa: E402
     numeros_do_cliente, resposta_tem_preco_inventado, valores_em_reais,
 )
 from app.recados import termos_da_condicao  # noqa: E402
-from app.core.turno import resposta_do_turno  # noqa: E402
+from app.core.turno import _agenda_do_turno, _fichas_do_turno, resposta_do_turno  # noqa: E402
 from app.guarda_politica import FRASES_PROIBIDAS, ELOGIO_DO_ESTADO  # noqa: E402
 from app.naturalidade import parece_robotica  # noqa: E402
 from app.utils import extrair_texto, mensagens_do_turno  # noqa: E402
@@ -620,6 +620,8 @@ class Turno:
     foto_lida: dict | None = None   # L5b: {"tipo", "descricao"} da foto deste turno
     do_job: bool = False            # L6: mensagem mandada por um job (não é fala do cliente)
     antes_da_tool: list = field(default_factory=list)   # L11: texto que o modelo escreveu junto da tool
+    ficha: str = ""                 # L12: o que as ferramentas de estoque devolveram no turno
+    agenda_gravou: bool = False     # L12: a ferramenta de agenda gravou neste turno
 
 
 @dataclass
@@ -640,6 +642,7 @@ class ResultadoRoteiro:
     tokens_imagem_entrada: int = 0                       # L5: leitura da foto (já somada no custo)
     envios_job: list = field(default_factory=list)       # L6: o que os jobs mandaram (envio falso)
     respostas_rajada: int = 0                            # L7: quantas vezes o Léo respondeu à rajada
+    sugestoes_texto: list = field(default_factory=list)  # L12: sugestões guardadas no modo sombra
     trocas_gravadas: int = 0                             # L8: carros de troca registrados
     sugestoes_sombra: int = 0                            # L9: sugestões guardadas no modo sombra
     chamados_gravados: int = 0
@@ -829,6 +832,7 @@ def checar(res: ResultadoRoteiro) -> None:
     checar_sombra(res)
     checar_emojis(res)
     checar_texto_e_politica(res)
+    checar_acao_e_estado(res)
     checar_tom(res)
     if res.parou_no_teto:
         res.falhas.append("roteiro interrompido no teto de gasto")
@@ -1076,6 +1080,8 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
                 rodada.tokens_saida += saida
                 original = resposta_do_turno(do_turno, gravador.ultimo["messages"][-1])   # L11
                 turno.antes_da_tool = textos_antes_da_tool(do_turno)
+                turno.ficha = _fichas_do_turno(do_turno)                     # L12
+                turno.agenda_gravou = _agenda_do_turno(do_turno) is not None
                 turno.original = original
                 if resposta_tem_preco_inventado(original, gravador.ultimo["messages"]):
                     turno.barrado = original
@@ -1088,6 +1094,9 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
                                (LOJA_ID, lead_id))[0]["n"]
     res.sugestoes_sombra = _ler("SELECT COUNT(*) n FROM sombra_sugestoes WHERE loja_id = ? AND lead_id = ?",
                                 (LOJA_ID, lead_id))[0]["n"]
+    res.sugestoes_texto = [l["sugestao"] for l in _ler(
+        "SELECT sugestao FROM sombra_sugestoes WHERE loja_id = ? AND lead_id = ? ORDER BY id", (LOJA_ID, lead_id))]
+    _limpar_memoria(grafo, lead_id)          # L12: a conversa do roteiro não fica na memória do grafo
     res.chamados_gravados = len(handoffs_abertos(lead_id))
     res.precos_do_estoque = {round(float(l["preco"]) * 100) for l in
                              _ler("SELECT preco FROM estoque WHERE loja_id = ? AND status = 'disponivel'",
@@ -1243,29 +1252,102 @@ def textos_antes_da_tool(do_turno) -> list[str]:
 
 
 _POLITICA_NA_RESPOSTA = re.compile(r"\bnao\s+(trabalhamos|fazemos|realizamos)\b|\bnossas?\s+politicas?\b")
-_SO_CONTATO = re.compile(r"\b(equipe|pessoal|vendedor\w*)\b|\b(horario|amanha|retoma\w*|fechad\w*|abre|abrimos)\b"
+_SO_CONTATO_ANTIGO = re.compile(r"\b(equipe|pessoal|vendedor\w*)\b|\b(horario|amanha|retoma\w*|fechad\w*|abre|abrimos)\b"
                          r"|\d{1,2}[:h]\d{2}|^(oi|ola|aqui e|bom dia|boa tarde|boa noite)\b")
 
 
 def checar_texto_e_politica(res: "ResultadoRoteiro") -> None:
-    """L11:
-    - FALHOU se o texto que o Léo escreveu junto da ferramenta não chegou ao cliente;
-    - AVISO se a resposta com chamado só diz que a equipe vai falar (não responde o assunto);
+    """L11/L12:
+    - FALHOU se o texto que o Léo escreveu junto da ferramenta não chegou ao cliente
+      (as frases de "a equipe vai falar" e de horário não contam: a limpeza tira as repetidas);
+    - AVISO se a resposta com chamado NÃO toca no assunto do cliente;
     - AVISO "afirmação de política: conferir na base" ("não trabalhamos com", "nossa política")."""
+    from app.guarda_politica import _CONTATO_FRASE, _RETORNO, promete_contato_da_equipe
     for turno in res.turnos:
         if turno.do_job or not turno.bolhas:
             continue
         enviado = normalizar(" ".join(turno.bolhas))
         for texto in turno.antes_da_tool:
-            pedacos = [f for f in frases(texto) if len(f) > 15]
+            pedacos = [f for f in frases(texto) if len(f) > 15 and not _CONTATO_FRASE.search(f)
+                       and not _RETORNO.search(f) and not promete_contato_da_equipe(f)]
             if pedacos and not any(f in enviado for f in pedacos):
                 res.falhas.append(f"o texto antes da ferramenta não chegou ao cliente: \"{texto[:90]}\"")
-        if turno.avisos_vendedor and "?" in turno.fala:
-            sobra = [f for f in frases(" ".join(turno.bolhas)) if not _SO_CONTATO.search(f)]
-            if not sobra:
-                res.avisos.append(f"chamado aberto, mas a resposta só diz que a equipe vai falar: \"{turno.fala[:60]}\"")
+        if turno.avisos_vendedor and "?" in turno.fala and not toca_no_assunto(turno.fala, " ".join(turno.bolhas)):
+            res.avisos.append(f"chamado aberto, mas a resposta não toca no assunto do cliente: \"{turno.fala[:60]}\"")
     achadas = [f for f in frases(res.texto_do_leo) if _POLITICA_NA_RESPOSTA.search(f)]
     res.avisos.extend(f"afirmação de política: conferir na base: \"{f[:100]}\"" for f in achadas)
+
+
+# L12: "toca no assunto" = a resposta repete uma palavra de conteúdo da pergunta (pelo começo
+# da palavra) ou diz "sobre (o/a/essa questão de) <assunto>".
+_PALAVRAS_VAZIAS = {
+    "voces", "voce", "tenho", "temos", "quero", "queria", "pode", "posso", "seria", "esse", "essa", "esta",
+    "isso", "aqui", "loja", "mesmo", "mesma", "ainda", "sobre", "como", "quando", "quanto", "qual", "quais",
+    "para", "pra", "pelo", "pela", "porque", "consigo", "consegue", "fazer", "falar", "equipe", "pessoal",
+    "vendedor", "carro", "dele", "dela", "minha", "meu", "seus", "suas", "muito", "bem", "tambem", "entao",
+}
+_SOBRE_ASSUNTO = re.compile(r"\bsobre\s+(o|a|os|as|essa|esse|sua|seu|a\s+sua|o\s+seu)?\s*"
+                            r"(questao|assunto|parte|duvida)?\s*(d[aoe]s?\s+)?([a-z]{4,})")
+
+
+def _palavras(texto: str) -> list[str]:
+    return [p for p in re.findall(r"[a-z]{4,}", normalizar(texto)) if p not in _PALAVRAS_VAZIAS]
+
+
+# Palavras do mesmo assunto (pelo começo, 5 letras): "pagam" na pergunta e "avaliação" na
+# resposta tocam no mesmo assunto; "sinal" e "reserva" também.
+_MESMO_ASSUNTO = [
+    {"pagam", "pagar", "pagou", "valor", "valem", "preco", "propo", "avali", "cobre", "cobra", "desco", "barat"},
+    {"reser", "sinal", "segur", "guard", "separ"},
+    {"troca", "troco", "trocar", "avali"},
+    {"entre", "levar", "frete", "cidad"},
+    {"docum", "papel", "trans", "laudo", "caute", "leila", "proce"},
+    {"finan", "credi", "parce", "entra", "negat", "aprov", "renda", "compr", "autono"},
+    {"ender", "local", "onde"},
+]
+_QUESTAO_DE = re.compile(r"\b(questao|assunto|parte)\s+(d[aoe]s?)\s+([a-z]{4,})")
+
+
+def toca_no_assunto(pergunta: str, resposta: str) -> bool:
+    resp = normalizar(resposta)
+    palavras_resposta = {p[:5] for p in _palavras(resp)}
+    da_pergunta = {p[:5] for p in _palavras(pergunta)}
+    if da_pergunta & palavras_resposta:
+        return True
+    if any(grupo & da_pergunta and grupo & palavras_resposta for grupo in _MESMO_ASSUNTO):
+        return True
+    vazias = _PALAVRAS_VAZIAS | {"questao", "assunto", "duvida", "parte"}
+    return (any(m.group(4) not in vazias for m in _SOBRE_ASSUNTO.finditer(resp))
+            or any(m.group(3) not in vazias for m in _QUESTAO_DE.finditer(resp)))
+
+
+# L12: ação prometida sem ferramenta e estado do carro sem ficha (FALHOU, todos os roteiros).
+_FOTO_DITA = re.compile(r"\b(enviei|acabei\s+de\s+enviar|estou\s+enviando|aqui\s+estao\s+as\s+fotos"
+                        r"|seguem\s+as\s+fotos|mandei\s+as\s+fotos)\b")
+
+
+def checar_acao_e_estado(res: "ResultadoRoteiro") -> None:
+    from app.guarda_politica import AGENDOU_DITO, cortar_estado_inventado
+    for turno in res.turnos:
+        if turno.do_job or not turno.bolhas:
+            continue
+        texto = " ".join(turno.bolhas)
+        normal = normalizar(texto)
+        for frase in frases(texto):
+            if AGENDOU_DITO.search(frase) and not frase.endswith("?") and not turno.agenda_gravou:
+                res.falhas.append(f"disse que agendou sem a agenda gravar: \"{frase[:90]}\"")
+            if _FOTO_DITA.search(frase) and not turno.fotos:
+                res.falhas.append(f"disse que mandou foto sem foto sair: \"{frase[:90]}\"")
+        if cortar_estado_inventado(texto, turno.ficha)[1]:
+            res.promessas.append(f"afirmou estado do carro sem a ficha: \"{normal[:90]}\"")
+        elif turno.original and cortar_estado_inventado(turno.original, turno.ficha)[1]:
+            res.avisos.append("o modelo afirmou estado do carro, mas a guarda do código cortou")
+    for sugestao in res.sugestoes_texto:
+        for frase in frases(sugestao):
+            if AGENDOU_DITO.search(frase) and not frase.endswith("?"):
+                res.falhas.append(f"sugestão da sombra diz que agendou (sombra não grava): \"{frase[:90]}\"")
+            if _FOTO_DITA.search(frase) and "fotos que o leo mandaria" not in normalizar(sugestao):
+                res.falhas.append(f"sugestão da sombra diz que mandou foto sem guardar as fotos: \"{frase[:90]}\"")
 
 
 def checar_emojis(res: "ResultadoRoteiro") -> None:
@@ -1357,6 +1439,8 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
             rodada.tokens_saida += saida
             original = resposta_do_turno(do_turno, gravador.ultimo["messages"][-1])   # L11
             turno.antes_da_tool = textos_antes_da_tool(do_turno)
+            turno.ficha = _fichas_do_turno(do_turno)                         # L12
+            turno.agenda_gravou = _agenda_do_turno(do_turno) is not None
             turno.original = original
             if resposta_tem_preco_inventado(original, gravador.ultimo["messages"]):
                 turno.barrado = original
@@ -1417,6 +1501,9 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
                                (LOJA_ID, lead_id))[0]["n"]
     res.sugestoes_sombra = _ler("SELECT COUNT(*) n FROM sombra_sugestoes WHERE loja_id = ? AND lead_id = ?",
                                 (LOJA_ID, lead_id))[0]["n"]
+    res.sugestoes_texto = [l["sugestao"] for l in _ler(
+        "SELECT sugestao FROM sombra_sugestoes WHERE loja_id = ? AND lead_id = ? ORDER BY id", (LOJA_ID, lead_id))]
+    _limpar_memoria(grafo, lead_id)          # L12: a conversa do roteiro não fica na memória do grafo
     res.chamados_gravados = len(handoffs_abertos(lead_id))
     checar(res)
     return res

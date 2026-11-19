@@ -169,7 +169,7 @@ def test_bancada_avisa_chamado_que_so_promete_contato_e_politica(bancada):
     rb = bancada
     rodada = asyncio.run(rb.rodar([rb.validar_roteiro({"nome": "t2", "falas": ["qual o endereço?"]}, "t")],
                                   GrafoComTool("Oi!", "O pessoal da equipe vai falar com você por aqui."), teto=1.0))
-    assert any("só diz que a equipe vai falar" in a for a in rodada.resultados[0].avisos)
+    assert any("não toca no assunto do cliente" in a for a in rodada.resultados[0].avisos)   # L12
 
     class Politica:
         def invoke(self, entrada, config=None):
@@ -193,7 +193,7 @@ def test_base_ficticia_do_roteiro(bancada):
 def test_roteiros_l11(bancada):
     rb = bancada
     roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
-    assert len(roteiros) == 51
+    assert len(roteiros) == 52
     assert "20%" not in roteiros["entrada_sem_base"]["conhecimento"][0]
     assert "não trabalhamos" in roteiros["pede_pix_reserva"]["nao_contem"]
     assert "não realizamos" in roteiros["entrega_outra_cidade"]["nao_contem"]

@@ -49,7 +49,8 @@ from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da
                                  promete_contato_da_equipe, resposta_tem_preco_inventado,
                                  tirar_elogio_da_descricao, tirar_elogio_do_estado,
                                  tirar_promessa_de_foto, pedido_da_equipe, trocar_frases_de_risco,
-                                 trocar_politica_sem_base,
+                                 trocar_politica_sem_base, cortar_estado_inventado,
+                                 tirar_agendamento_falso, limpar_repeticoes, FRASE_CNH, FRASE_CONTATO,
                                  trocar_frases_proibidas)
 from banco import conectar
 from app.handoff import estado_do_handoff
@@ -287,6 +288,7 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
 
     do_turno = mensagens_do_turno(resultado)
     resposta = resposta_do_turno(do_turno, resultado["messages"][-1])   # L11: texto antes da tool também
+    resposta_inicial = resposta                                          # L12: para saber se guarda mexeu
     midias = extrair_midias(do_turno)
     handoff = _chamou_handoff(do_turno)
     ferramentas = ferramentas_usadas(do_turno)
@@ -337,9 +339,25 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
             print(f"{rotulo} GUARDA: elogio ao estado do carro da foto retirado.")
             ferramentas.append("guarda_elogio")
 
+    # L12: estado/qualidade de carro só se vier da ficha (o que as ferramentas devolveram).
+    resposta, trocou = cortar_estado_inventado(resposta, _fichas_do_turno(do_turno))
+    if trocou:
+        print(f"{rotulo} GUARDA: estado do carro sem ficha cortado.")
+        ferramentas.append("guarda_estado")
+    # L12: "agendei" só se a ferramenta de agenda gravou neste turno; test-drive lembra a CNH.
+    agenda = _agenda_do_turno(do_turno)
+    if agenda is None:
+        resposta, trocou = tirar_agendamento_falso(resposta)
+        if trocou:
+            print(f"{rotulo} GUARDA: agendamento dito sem a ferramenta gravar; vira pedido à equipe.")
+            ferramentas.append("guarda_agenda")
+    elif "test-drive" in agenda.lower() and "cnh" not in resposta.lower():
+        resposta = f"{resposta} {FRASE_CNH}"
+
     # L2 e L5b: chamado aberto pelo CÓDIGO no mesmo turno (a resposta não muda), quando
     # o cliente pede valor da troca, pergunta assunto que só a equipe responde
     # (laudo, leilão, IPVA...) ou o Léo prometeu contato da equipe sem chamado.
+    abriu_pelo_codigo = False
     motivo_guarda = motivo_do_chamado_pelo_codigo(texto, resposta, _aceita_troca(loja_id))
     if motivo_guarda and not handoff and estado_do_handoff(lead_id, loja_id) == "ativo":
         motivo, nome_guarda = motivo_guarda
@@ -352,11 +370,18 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         )
         handoff = True
         ferramentas.append(nome_guarda)
+        abriu_pelo_codigo = True
 
     # L6: cliente irritado/ameaçando (URGENTE) e problema de quem comprou (PÓS-VENDA).
     if marcar_pos_venda_e_urgencia(loja_id, lead_id, texto):
         handoff = True
         ferramentas.append("guarda_pos_venda")
+        abriu_pelo_codigo = True
+
+    # L12: chamado aberto pelo código e a resposta não avisa o cliente: avisa (uma vez).
+    if abriu_pelo_codigo and not _avisa_contato(resposta):
+        resposta = f"{resposta} {FRASE_CONTATO}"
+        ferramentas.append("guarda_aviso_chamado")
 
     # L3b: número fora da equipe dizendo ser dono/gestor/da loja: o chamado avisa.
     if marcar_falso_dono(loja_id, lead_id, texto):
@@ -367,6 +392,9 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     resposta, tirados = limitar_emojis(resposta, limite_de_emojis(loja_id, lead_id, texto, handoff))
     if tirados:
         ferramentas.append("guarda_emoji")
+
+    # L12: sem repetir "a equipe vai falar", horário de retorno, frase quase igual; sem pergunta solta.
+    resposta = limpar_repeticoes(resposta, guarda_mexeu=resposta != resposta_inicial)
 
     robotico = parece_robotica(resposta)
     if robotico:
@@ -593,12 +621,44 @@ async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, graf
     sugestao = corrigir_regra_de_entrada(sugestao)[0]
     sugestao = trocar_frases_de_risco(sugestao)[0]
     sugestao = trocar_politica_sem_base(sugestao)[0]                         # L11
+    # L12: estado só da ficha; "agendei" só se gravou (em sombra a agenda nunca grava);
+    # fotos: ficam guardadas com a sugestão (o vendedor manda) ou a sugestão não diz que mandou.
+    sugestao = cortar_estado_inventado(sugestao, _fichas_do_turno(do_turno))[0]
+    if _agenda_do_turno(do_turno) is None:
+        sugestao = tirar_agendamento_falso(sugestao)[0]
+    fotos = extrair_midias(do_turno)
+    if not fotos:
+        sugestao = tirar_promessa_de_foto(sugestao)[0]
+    sugestao = limpar_repeticoes(sugestao)
+    if fotos:
+        sugestao = f"{sugestao}\n[Fotos que o Léo mandaria: {', '.join(fotos)}]"
     sugestao = limitar_emojis(sugestao, 1 if tem_emoji(texto) else 0)[0]      # L10
     sombra.gravar(loja_id, lead_id, canal, texto, sugestao, ferramentas)
     registrar_uso(loja_id, lead_id, canal, uso_das_mensagens(do_turno), tipo="sombra",
                   ferramentas=ferramentas, latencia_ms=_ms_desde(inicio))
     print(f"{rotulo} [SOMBRA] Sugestão guardada (nada enviado): {sugestao}")
     return ResultadoTurno(silenciado=True)
+
+
+def _fichas_do_turno(do_turno) -> str:
+    """L12: o que as ferramentas de estoque devolveram no turno (a 'ficha' do carro)."""
+    return " ".join(str(m.content) for m in do_turno if isinstance(m, ToolMessage)
+                    and m.name in ("consultar_estoque", "detalhes_veiculo"))
+
+
+def _agenda_do_turno(do_turno) -> str | None:
+    """L12: texto da agenda se a ferramenta GRAVOU neste turno; None se não gravou."""
+    for m in do_turno:
+        if isinstance(m, ToolMessage) and m.name == "agendar_visita" and str(m.content).startswith(
+                ("Agendamento confirmado", "Agendamento atualizado")):
+            return str(m.content)
+    return None
+
+
+def _avisa_contato(resposta: str) -> bool:
+    import re as _re
+    return promete_contato_da_equipe(resposta) or bool(
+        _re.search(r"(?i)\b(equipe|vendedor\w*)\b", resposta))
 
 
 def _frases_do_texto(texto: str) -> list[str]:
