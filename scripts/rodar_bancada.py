@@ -102,7 +102,8 @@ CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem"
                "toques", "envios_pos_venda", "textos_diferentes", "envios_no_horario",   # L6
                "fotos", "fotos_de", "respostas",                                          # L7
                "trocas",                                                                  # L8
-               "envios", "sugestoes_sombra"}                                              # L9
+               "envios", "sugestoes_sombra",                                              # L9
+               "silencio_no_fim"}                                                         # M2
 NAO_PODE_VALIDOS = {"preco_inventado", "credito", "desconto", "valor_troca", "endereco",
                     "condicao_recado", "numero", "regra_entrada", "elogio_estado"}
 
@@ -206,6 +207,8 @@ def validar_roteiro(dados, origem: str = "") -> dict:
             "trocas": deve.get("trocas"),                       # L8: carros de troca registrados
             "envios": deve.get("envios"),                       # L9: mensagens/fotos que saíram
             "sugestoes_sombra": deve.get("sugestoes_sombra"),   # L9: sugestões guardadas
+            "silencio_no_fim": _sim_nao(deve["silencio_no_fim"], "deve.silencio_no_fim")   # M2
+            if "silencio_no_fim" in deve else None,
             # L3b: texto que o motivo de algum chamado do cliente precisa ter
             "motivo_contem": [str(c) for c in (deve.get("motivo_contem") or [])],
             # L3b: a conversa fica gravada como de cliente (lead)?
@@ -225,6 +228,11 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         "rajada": [m.strip() for m in rajada] if rajada else None,
         "conhecimento": _validar_conhecimento(dados.get("conhecimento"), origem),
     }
+
+
+def _politicas_demo() -> list[str]:
+    from app.demo import POLITICAS_DEMO
+    return [f"{titulo}: {texto}" for titulo, texto in POLITICAS_DEMO]
 
 
 def _validar_conhecimento(conhecimento, origem: str):
@@ -298,8 +306,10 @@ def ler_roteiro(caminho: Path) -> dict:
     return validar_roteiro(dados, caminho.stem)
 
 
-def carregar_roteiros(pasta: Path = PASTA_ROTEIROS, so: str | None = None) -> list[dict]:
-    roteiros = [ler_roteiro(c) for c in sorted(pasta.glob("*.yaml"))]
+def carregar_roteiros(pasta: Path = PASTA_ROTEIROS, so: str | None = None, demo: bool = False) -> list[dict]:
+    """M2: os roteiros demo_*.yaml (ensaio da demonstração) só rodam com --loja-demo; sem ela, ficam de fora."""
+    arquivos = [c for c in sorted(pasta.glob("*.yaml")) if c.stem.startswith("demo_") == demo]
+    roteiros = [ler_roteiro(c) for c in arquivos]
     if so:
         roteiros = [r for r in roteiros if so in (r["nome"], r["arquivo"])]
         if not roteiros:
@@ -392,6 +402,23 @@ def fotos_do_carro(marca: str, modelo: str, ano: int) -> list[str]:
             arquivo.write_bytes(gerar_imagem_de_texto(f"{marca} {modelo} {ano}\nfoto {n} de {FOTOS_POR_CARRO}"))
         urls.append(arquivo.resolve().as_uri())
     return urls
+
+
+_LOJA_DEMO = False     # M2: --loja-demo (a rodada usa a loja de demonstração no banco temporário)
+
+
+def preparar_loja(mudancas: dict | None = None, recados: list | None = None) -> None:
+    """A loja do roteiro: a fictícia de sempre, ou (com --loja-demo) a loja demo de app/demo.py,
+    sem histórico e sem índice de busca (a base vem das políticas da demo, sem Chroma)."""
+    if not _LOJA_DEMO:
+        montar_loja_ficticia(mudancas, recados)
+        return
+    from app.demo import CONFIG_DEMO, criar_loja_demo
+    criar_loja_demo(loja_id=LOJA_ID, indexar=False, com_historico=False, pasta_fotos=pasta_temporaria() / "demo_fotos")
+    _sql("UPDATE lojas SET config = ? WHERE id = ?",
+         (json.dumps(_mesclar(CONFIG_DEMO, mudancas or {}), ensure_ascii=False), LOJA_ID))
+    lojas.limpar_cache()
+    gravar_recados(recados)
 
 
 def montar_loja_ficticia(mudancas: dict | None = None, recados: list | None = None) -> None:
@@ -834,6 +861,12 @@ def checar(res: ResultadoRoteiro) -> None:
         (res.ok if ok else res.falhas).append(
             f"carros de troca registrados: {res.trocas_gravadas} (esperado {r['deve']['trocas']})")
     checar_sombra(res)
+    if r["deve"].get("silencio_no_fim") is not None:
+        falas = [t for t in res.turnos if not t.do_job]
+        calado = bool(falas) and falas[-1].silenciado and not falas[-1].bolhas
+        esperado = r["deve"]["silencio_no_fim"]
+        (res.ok if calado == esperado else res.falhas).append(
+            f"Léo em silêncio na última fala: {'sim' if calado else 'não'} (esperado {'sim' if esperado else 'não'})")
     checar_emojis(res)
     checar_texto_e_politica(res)
     checar_acao_e_estado(res)
@@ -879,7 +912,8 @@ def gerar_imagem_de_texto(texto: str) -> bytes:
 # Config que todo roteiro de job liga na loja fictícia (o resto vem do cadastro/padrões).
 CONFIG_JOB = {"modulos": {"remarketing": True, "pos_venda": True},
               "remarketing": {"limite_mensal": 100}}
-PASSOS_VALIDOS = {"remarketing_dias", "pos_venda_dias", "cliente", "vender_carro", "avancar_h"}
+PASSOS_VALIDOS = {"remarketing_dias", "pos_venda_dias", "cliente", "vender_carro", "avancar_h",
+                  "vendedor_assume", "mudar_config"}                    # M2
 
 
 def _mesclar(base: dict, mudancas: dict) -> dict:
@@ -906,6 +940,8 @@ def _validar_passos(passos, origem: str) -> list[dict]:
             raise RoteiroInvalido(f"{origem}: passo {i} ({chave}) precisa de um número inteiro positivo")
         if chave in ("cliente", "vender_carro") and (not isinstance(valor, str) or not valor.strip()):
             raise RoteiroInvalido(f"{origem}: passo {i} ({chave}) precisa de texto (ponha entre aspas)")
+        if chave == "mudar_config" and (not isinstance(valor, dict) or not valor):
+            raise RoteiroInvalido(f"{origem}: passo {i} (mudar_config) é um mapa (ex.: tom: formal)")
         saida.append({chave: valor.strip() if isinstance(valor, str) else valor})
     return saida
 
@@ -976,7 +1012,7 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
 
     res = ResultadoRoteiro(roteiro=roteiro)
     apontar_banco_temporario()
-    montar_loja_ficticia(_mesclar(CONFIG_JOB, roteiro.get("loja") or {}), roteiro.get("recados"))
+    preparar_loja(_mesclar(CONFIG_JOB, roteiro.get("loja") or {}), roteiro.get("recados"))
     # Envio proativo só sai de loja "no ar" (P7). No banco temporário da bancada, só.
     _sql("INSERT OR REPLACE INTO estado_lojas (loja_id, estado, no_ar_em, alterado_por) "
          "VALUES (?, 'no_ar', CURRENT_TIMESTAMP, 'Bancada')", (LOJA_ID,))
@@ -1046,6 +1082,18 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
             await _rodar_job("pos-venda", valor)
         elif chave == "avancar_h":
             relogio += timedelta(hours=valor)
+        elif chave == "vendedor_assume":
+            # M2: o vendedor assume a conversa (como pela aba Atender); o Léo fica em silêncio.
+            if not handoffs_abertos(lead_id):
+                _sql("INSERT INTO handoffs (lead_id, loja_id, motivo, resumo, estado) "
+                     "VALUES (?, ?, 'Bancada: vendedor assumiu', '-', 'aguardando_humano')", (lead_id, LOJA_ID))
+            _sql("UPDATE handoffs SET estado = 'humano_assumiu', vendedor = 'Vendedor Bancada' "
+                 "WHERE loja_id = ? AND lead_id = ?", (LOJA_ID, lead_id))
+        elif chave == "mudar_config":
+            atual = json.loads(_ler("SELECT config FROM lojas WHERE id = ?", (LOJA_ID,))[0]["config"] or "{}")
+            _sql("UPDATE lojas SET config = ? WHERE id = ?",
+                 (json.dumps(_mesclar(atual, valor), ensure_ascii=False), LOJA_ID))
+            lojas.limpar_cache()
         elif chave == "vender_carro":
             _sql("UPDATE estoque SET status = 'vendido' WHERE loja_id = ? AND id = ?",
                  (LOJA_ID, _id_do_carro(valor)))
@@ -1433,7 +1481,7 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
 
     res = ResultadoRoteiro(roteiro=roteiro)
     apontar_banco_temporario()
-    montar_loja_ficticia(roteiro.get("loja"), roteiro.get("recados"))
+    preparar_loja(roteiro.get("loja"), roteiro.get("recados"))
     lead_id = roteiro["remetente"] or f"bancada-{_slug(roteiro['nome'])}"
     gravador = GrafoGravador(grafo)
     _limpar_memoria(grafo, lead_id)
@@ -1567,7 +1615,8 @@ async def rodar(roteiros: list[dict], grafo, teto: float | None = None, leitor=N
                 continue
             try:
                 executor = rodar_roteiro_job if roteiro.get("passos") else rodar_roteiro
-                with base_ficticia(roteiro.get("conhecimento")):
+                base = roteiro.get("conhecimento") or (_politicas_demo() if _LOJA_DEMO else None)
+                with base_ficticia(base):
                     rodada.resultados.append(await executor(roteiro, grafo, rodada))
             except EnvioRealBloqueado as erro:
                 rodada.abortada = str(erro)
@@ -1674,7 +1723,11 @@ def main(argv=None) -> int:
             pass
     parser = argparse.ArgumentParser(description="Bancada de testes do Léo (Gemini real).")
     parser.add_argument("--roteiro", help="nome do roteiro (ou do arquivo, sem .yaml)")
+    parser.add_argument("--loja-demo", action="store_true",
+                        help="M2: roda os roteiros demo_*.yaml contra a loja de demonstração")
     args = parser.parse_args(argv)
+    global _LOJA_DEMO
+    _LOJA_DEMO = bool(args.loja_demo)
 
     from dotenv import load_dotenv
     load_dotenv(RAIZ / ".env")
@@ -1684,7 +1737,7 @@ def main(argv=None) -> int:
         return 2
 
     try:
-        roteiros = carregar_roteiros(so=args.roteiro)
+        roteiros = carregar_roteiros(so=args.roteiro, demo=_LOJA_DEMO)
     except RoteiroInvalido as erro:
         print(f"Roteiro com problema: {erro}. Nada foi gasto.")
         return 2

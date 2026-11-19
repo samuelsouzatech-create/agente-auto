@@ -1,4 +1,4 @@
-"""
+r"""
 Relatório do MODO SOMBRA (L9): o que o Léo teria respondido, num dia, numa loja.
 
 Uso (não gasta IA; só lê o banco):

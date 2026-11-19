@@ -79,7 +79,8 @@ def test_le_yaml_com_todos_os_campos(tmp_path):
                         "handoff_ate_fala": None, "motivo_contem": [], "vira_lead": None,
                         "toques": None, "envios_pos_venda": None, "textos_diferentes": None,
                         "envios_no_horario": None, "fotos": None, "fotos_de": None, "respostas": None,
-                        "trocas": None, "envios": None, "sugestoes_sombra": None}
+                        "trocas": None, "envios": None, "sugestoes_sombra": None,
+                        "silencio_no_fim": None}
     assert r["pendente"] == "L1"
     assert rb.carregar_roteiros(tmp_path, so="x")[0]["nome"] == "x"
 

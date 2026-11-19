@@ -161,3 +161,9 @@ ACOES_RELEVANTES.update({
 ACOES_RELEVANTES.update({
     "desativar_recado": "app.recados.desativar_recado",
 })
+
+
+# M2 (Demo): reiniciar a loja de demonstração (só loja marcada como demo).
+ACOES_RELEVANTES.update({
+    "reiniciar_demo": "app.demo.reiniciar_demo",
+})

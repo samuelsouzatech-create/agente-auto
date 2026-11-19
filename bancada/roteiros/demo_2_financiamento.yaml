@@ -1,0 +1,8 @@
+nome: demo_financiamento
+# Demo (min 3-4): o Léo simula o financiamento e não promete aprovação.
+falas:
+  - quanto fica a parcela do Corolla em 48 vezes com 30 mil de entrada?
+deve:
+  tools: [simular_financiamento]
+  contem: ["estimativa|aproximad"]
+nao_pode: [preco_inventado, credito]

@@ -552,3 +552,27 @@ CENARIOS.update({
         lambda s: _recados.desativar_recado(1, s["id"]),
         "SELECT COUNT(*) FROM recados WHERE ativo = 0"),
 })
+
+
+# ------------------------------------------------------------ M2: reiniciar a loja demo
+import tempfile as _tempfile
+from pathlib import Path as _Path
+
+from app import demo as _demo
+
+_FOTOS_DEMO = _Path(_tempfile.mkdtemp())
+
+
+def _prep_demo():
+    from app.ator import como_sistema
+    with como_sistema("Teste", "job"):      # a demo nasce na loja 1, sem histórico
+        _demo.criar_loja_demo(loja_id=1, indexar=False, com_historico=False, pasta_fotos=_FOTOS_DEMO)
+    return {"id": 1}
+
+
+CENARIOS.update({
+    "reiniciar_demo": (
+        _prep_demo,
+        lambda s: _demo.reiniciar_demo(s["id"], indexar=False, pasta_fotos=_FOTOS_DEMO),
+        "SELECT COUNT(*) FROM vendas WHERE loja_id = 1"),
+})

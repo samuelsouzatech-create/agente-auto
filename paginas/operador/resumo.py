@@ -161,3 +161,22 @@ if situacao["estado"] == NO_AR:
 else:
     _checklist()
     _botao_no_ar()
+
+# M2 (Demo, D3): só aparece na loja marcada como demo. Apaga e recria o estado inicial dela.
+if loja.get("demo"):
+    from app.demo import LojaNaoEDemo, reiniciar_demo
+
+    st.divider()
+    st.subheader("Loja de demonstração")
+    st.caption("Volta a loja de demonstração ao estado inicial: apaga as conversas, chamados e vendas "
+               "feitos durante a demonstração e recria o histórico. Só vale para esta loja.")
+    confirmar = st.checkbox("Entendi: as conversas desta demonstração serão apagadas.", key=f"demo_conf_{loja.id}")
+    if st.button("Reiniciar demo", disabled=not confirmar, key=f"demo_reiniciar_{loja.id}"):
+        try:
+            with st.spinner("Recriando a loja de demonstração..."):
+                reiniciar_demo(loja.id)
+        except LojaNaoEDemo:
+            st.error("Esta loja não é de demonstração. Nada foi apagado.")
+        else:
+            avisar("Demo reiniciada: a loja voltou ao estado inicial.")
+            st.rerun()

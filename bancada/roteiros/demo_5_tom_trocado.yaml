@@ -1,0 +1,12 @@
+nome: demo_tom_trocado
+# Demo (min 6-8): o tom é trocado na configuração e a mesma pergunta é repetida.
+conversa:
+  - cliente: oi
+  - leo: Oi! Aqui é o Léo, da Recife Seminovos Demo. Como posso ajudar?
+passos:
+  - cliente: que horas vocês abrem no sábado?
+  - mudar_config: {tom: "formal: trate o cliente por senhor ou senhora, sem gírias"}
+  - cliente: que horas vocês abrem no sábado?
+deve:
+  contem: ["08:00|8h|8:00|oito"]
+nao_pode: [preco_inventado]

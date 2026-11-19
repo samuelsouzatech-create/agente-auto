@@ -28,3 +28,6 @@ logs/
 
 # Foto de terceiros usada só na bancada (L5b): nunca vai para o Git
 bancada/imagens/carro_teste.jpg
+
+# Fotos ilustrativas da loja demo (geradas por app/demo.py; nunca vão para o Git)
+demo_fotos/

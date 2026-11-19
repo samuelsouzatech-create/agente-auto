@@ -321,3 +321,9 @@ ROTULOS.update({
 ROTULOS.update({
     "desativar_recado": "Desativou recado",
 })
+
+
+# M2 (Demo).
+ROTULOS.update({
+    "reiniciar_demo": "Reiniciou a loja de demonstração",
+})

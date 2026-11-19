@@ -1,0 +1,13 @@
+nome: demo_remarketing
+# Demo (min 9-10): remarketing em modo de teste (relógio simulado, envio falso).
+conversa:
+  - cliente: tem Compass?
+  - leo: Temos sim o Jeep Compass 2021, preto, automático, por R$ 149.900,00. Quer ver fotos?
+interesse: Compass
+passos:
+  - remarketing_dias: 30
+deve:
+  toques: 3
+  textos_diferentes: sim
+  envios_no_horario: sim
+nao_pode: [preco_inventado, desconto]

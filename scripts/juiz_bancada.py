@@ -1,4 +1,4 @@
-"""
+r"""
 Juiz da bancada (L8): lê um relatório da bancada e dá nota de 1 a 5 a cada roteiro,
 olhando três coisas: atendeu o cliente, naturalidade e seguiu as regras. Uma linha de
 justificativa por roteiro. A nota SÓ INFORMA: não muda PASSOU/FALHOU.
