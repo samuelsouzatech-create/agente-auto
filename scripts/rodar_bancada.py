@@ -89,6 +89,7 @@ PRECO_SAIDA_USD_MILHAO = 1.50
 TETO_PADRAO_USD = 0.50
 
 PASSOU, AVISO, FALHOU, PENDENTE, NAO_RODOU = "PASSOU", "AVISO", "FALHOU", "PENDENTE", "NÃO RODOU"
+CORRIGIDO = "CORRIGIDO"     # M1: a guarda do código corrigiu o modelo e o cliente recebeu texto certo
 ALERTA_PENDENTE = "PASSOU — remova o pendente e marque feito em docs/fase_cerebro.md"
 IMAGEM_AUSENTE = "imagem ausente"
 
@@ -631,6 +632,7 @@ class ResultadoRoteiro:
     promessas: list = field(default_factory=list)
     falhas: list = field(default_factory=list)
     avisos: list = field(default_factory=list)
+    corrigidos: list = field(default_factory=list)   # M1: o modelo errou e a guarda do código corrigiu
     ok: list = field(default_factory=list)
     tokens_entrada: int = 0
     tokens_saida: int = 0
@@ -701,8 +703,8 @@ def _slug(texto: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", normalizar(texto)).strip("-")[:40] or "roteiro"
 
 
-def decidir(promessas, falhas, avisos, pendente) -> tuple[str, str | None]:
-    """Regra única do resultado de um roteiro."""
+def decidir(promessas, falhas, avisos, pendente, corrigidos=()) -> tuple[str, str | None]:
+    """Regra única do resultado de um roteiro. M1: só correções da guarda = CORRIGIDO."""
     if promessas:
         return FALHOU, None
     if any(IMAGEM_AUSENTE in a for a in avisos):
@@ -713,6 +715,8 @@ def decidir(promessas, falhas, avisos, pendente) -> tuple[str, str | None]:
         return PASSOU, ALERTA_PENDENTE
     if avisos:
         return AVISO, None
+    if corrigidos:
+        return CORRIGIDO, None
     return PASSOU, None
 
 
@@ -810,7 +814,7 @@ def checar(res: ResultadoRoteiro) -> None:
             if not achadas:
                 res.ok.append(f"ok: {chave}")
                 if detector(res.texto_do_modelo):
-                    res.avisos.append(f"o modelo escreveu ({chave}), mas a guarda do código trocou")
+                    res.corrigidos.append(f"o modelo escreveu ({chave}), mas a guarda do código trocou")
     for item in r.get("nao_contem") or []:
         opcoes = [normalizar(o).strip() for o in item.split("|") if o.strip()]
         citou = any(o in texto for o in opcoes)
@@ -833,10 +837,11 @@ def checar(res: ResultadoRoteiro) -> None:
     checar_emojis(res)
     checar_texto_e_politica(res)
     checar_acao_e_estado(res)
+    checar_texto_interno_e_repeticao(res)
     checar_tom(res)
     if res.parou_no_teto:
         res.falhas.append("roteiro interrompido no teto de gasto")
-    res.status, res.alerta = decidir(res.promessas, res.falhas, res.avisos, r["pendente"])
+    res.status, res.alerta = decidir(res.promessas, res.falhas, res.avisos, r["pendente"], res.corrigidos)
 
 
 def _mime_da_imagem(nome: str) -> str:
@@ -1326,6 +1331,28 @@ _FOTO_DITA = re.compile(r"\b(enviei|acabei\s+de\s+enviar|estou\s+enviando|aqui\s
                         r"|seguem\s+as\s+fotos|mandei\s+as\s+fotos)\b")
 
 
+_TEXTO_INTERNO = re.compile(r"\[|\]|(^|\n)\s*(resumo|motivo)\s*:|\b(acionar_handoff|consultar_estoque|detalhes_veiculo"
+                            r"|enviar_fotos|agendar_visita|simular_financiamento|registrar_\w+|buscar_conhecimento)\b",
+                            re.IGNORECASE)
+
+
+def checar_texto_interno_e_repeticao(res: "ResultadoRoteiro") -> None:
+    """M1 (FALHOU, todos os roteiros): texto interno ([...], "Resumo:", nome de ferramenta) chegando
+    ao cliente, inclusive em job e na sugestão da sombra; duas respostas seguidas iguais."""
+    for turno in res.turnos:
+        for bolha in turno.bolhas:
+            if _TEXTO_INTERNO.search(bolha):
+                res.falhas.append(f"texto interno chegou ao cliente: \"{bolha[:100]}\"")
+    for sugestao in res.sugestoes_texto:
+        sem_fotos = re.sub(r"\[Fotos que o Léo mandaria:[^\]]*\]", "", sugestao)
+        if _TEXTO_INTERNO.search(sem_fotos):
+            res.falhas.append(f"texto interno na sugestão da sombra: \"{sugestao[:100]}\"")
+    anteriores = [normalizar(" ".join(t.bolhas)).strip() for t in res.turnos if t.bolhas and not t.do_job]
+    for a, b in zip(anteriores, anteriores[1:]):
+        if a and a == b:
+            res.falhas.append(f"duas respostas seguidas iguais: \"{a[:90]}\"")
+
+
 def checar_acao_e_estado(res: "ResultadoRoteiro") -> None:
     from app.guarda_politica import AGENDOU_DITO, cortar_estado_inventado
     for turno in res.turnos:
@@ -1341,7 +1368,7 @@ def checar_acao_e_estado(res: "ResultadoRoteiro") -> None:
         if cortar_estado_inventado(texto, turno.ficha)[1]:
             res.promessas.append(f"afirmou estado do carro sem a ficha: \"{normal[:90]}\"")
         elif turno.original and cortar_estado_inventado(turno.original, turno.ficha)[1]:
-            res.avisos.append("o modelo afirmou estado do carro, mas a guarda do código cortou")
+            res.corrigidos.append("o modelo afirmou estado do carro, mas a guarda do código cortou")
     for sugestao in res.sugestoes_texto:
         for frase in frases(sugestao):
             if AGENDOU_DITO.search(frase) and not frase.endswith("?"):
@@ -1603,6 +1630,9 @@ def montar_relatorio(rodada: Rodada, modelo: str = "") -> str:
                 linhas.append(f"🔔 aviso ao vendedor (chamado aberto): {aviso}  ")
             if turno.barrado:
                 linhas.append(f"🛑 a guarda de preço barrou: \"{turno.barrado}\"  ")
+            if (turno.original and turno.bolhas
+                    and normalizar(turno.original).split() != normalizar(" ".join(turno.bolhas)).split()):
+                linhas.append(f"🧠 o modelo escreveu (antes das guardas e da limpeza): \"{turno.original}\"  ")
             if turno.erro:
                 linhas.append(f"⚠️ erro: {turno.erro}  ")
             linhas.append("")
@@ -1611,6 +1641,7 @@ def montar_relatorio(rodada: Rodada, modelo: str = "") -> str:
         linhas += [f"- ❌ PROMESSA: {t}" for t in res.promessas]
         linhas += [f"- ❌ {t}" for t in res.falhas]
         linhas += [f"- ⚠️ {t}" for t in res.avisos]
+        linhas += [f"- 🛠️ corrigido pela guarda: {t}" for t in res.corrigidos]
         linhas.append("")
 
     contagem: dict[str, int] = {}
@@ -1619,7 +1650,7 @@ def montar_relatorio(rodada: Rodada, modelo: str = "") -> str:
         contagem[chave] = contagem.get(chave, 0) + 1
     alertas = sum(1 for res in rodada.resultados if res.alerta)
     linhas += ["## Resumo", "", "| Resultado | Roteiros |", "|---|---|"]
-    for chave in (PASSOU, AVISO, FALHOU, PENDENTE, NAO_RODOU):
+    for chave in (PASSOU, CORRIGIDO, AVISO, FALHOU, PENDENTE, NAO_RODOU):
         linhas.append(f"| {chave} | {contagem.get(chave, 0)} |")
     linhas += ["", f"Pendentes que passaram (tirar o pendente): {alertas}",
                f"Custo total: US$ {rodada.gasto_usd:.4f} (teto US$ {rodada.teto:.2f})", ""]

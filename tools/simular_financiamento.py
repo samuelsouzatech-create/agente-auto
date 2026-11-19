@@ -29,7 +29,7 @@ def simular_financiamento(valor_carro: float, entrada: float, parcelas: int,
                           *, loja_id: Annotated[int, InjectedToolArg]) -> str:
     """Faz uma ESTIMATIVA de financiamento. Deixe claro ao cliente que é
     apenas uma simulação aproximada, e que as condições reais dependem de
-    análise de crédito feita por um vendedor.
+    análise de crédito do banco (um vendedor acompanha a análise com o cliente).
 
     Parâmetros:
     - valor_carro: preço do carro

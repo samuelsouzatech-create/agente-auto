@@ -51,6 +51,7 @@ from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da
                                  tirar_promessa_de_foto, pedido_da_equipe, trocar_frases_de_risco,
                                  trocar_politica_sem_base, cortar_estado_inventado,
                                  tirar_agendamento_falso, limpar_repeticoes, FRASE_CNH, FRASE_CONTATO,
+                                 FRASE_OFERTA, tirar_texto_interno,
                                  trocar_frases_proibidas)
 from banco import conectar
 from app.handoff import estado_do_handoff
@@ -288,6 +289,9 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
 
     do_turno = mensagens_do_turno(resultado)
     resposta = resposta_do_turno(do_turno, resultado["messages"][-1])   # L11: texto antes da tool também
+    resposta, interno = tirar_texto_interno(resposta)                    # M1: [..] e "Resumo:" nunca saem
+    if interno:
+        print(f"{rotulo} GUARDA: texto interno ([...], Resumo:, ferramenta) tirado da resposta.")
     resposta_inicial = resposta                                          # L12: para saber se guarda mexeu
     midias = extrair_midias(do_turno)
     handoff = _chamou_handoff(do_turno)
@@ -340,7 +344,8 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
             ferramentas.append("guarda_elogio")
 
     # L12: estado/qualidade de carro só se vier da ficha (o que as ferramentas devolveram).
-    resposta, trocou = cortar_estado_inventado(resposta, _fichas_do_turno(do_turno))
+    resposta, trocou = cortar_estado_inventado(resposta, _fichas_do_turno(do_turno),
+                                               substituir=not _comprou_na_loja(loja_id, lead_id))
     if trocou:
         print(f"{rotulo} GUARDA: estado do carro sem ficha cortado.")
         ferramentas.append("guarda_estado")
@@ -394,7 +399,12 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         ferramentas.append("guarda_emoji")
 
     # L12: sem repetir "a equipe vai falar", horário de retorno, frase quase igual; sem pergunta solta.
-    resposta = limpar_repeticoes(resposta, guarda_mexeu=resposta != resposta_inicial)
+    guarda_mexeu = resposta != resposta_inicial
+    resposta = limpar_repeticoes(resposta, guarda_mexeu=guarda_mexeu, pergunta=texto)
+    # M1: a guarda cortou a pergunta final? Termina com uma oferta simples (nunca em assunto sério).
+    if (guarda_mexeu and resposta_inicial.rstrip().endswith("?") and not resposta.rstrip().endswith("?")
+            and not handoff and not assunto_serio("", texto)):
+        resposta = f"{resposta} {FRASE_OFERTA}"
 
     robotico = parece_robotica(resposta)
     if robotico:
@@ -614,7 +624,7 @@ async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, graf
     # As que o Léo PEDIU (em sombra, as que gravam nem rodam).
     ferramentas = sorted({c["name"] for m in do_turno for c in (getattr(m, "tool_calls", None) or [])}
                          | set(ferramentas_usadas(do_turno)))
-    sugestao = resposta_do_turno(do_turno, resultado["messages"][-1])
+    sugestao = tirar_texto_interno(resposta_do_turno(do_turno, resultado["messages"][-1]))[0]   # M1
     if resposta_tem_preco_inventado(sugestao, resultado["messages"]):
         sugestao = MENSAGEM_SEGURA
     sugestao = trocar_frases_proibidas(sugestao)[0]
@@ -629,7 +639,7 @@ async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, graf
     fotos = extrair_midias(do_turno)
     if not fotos:
         sugestao = tirar_promessa_de_foto(sugestao)[0]
-    sugestao = limpar_repeticoes(sugestao)
+    sugestao = limpar_repeticoes(sugestao, pergunta=texto)
     if fotos:
         sugestao = f"{sugestao}\n[Fotos que o Léo mandaria: {', '.join(fotos)}]"
     sugestao = limitar_emojis(sugestao, 1 if tem_emoji(texto) else 0)[0]      # L10
