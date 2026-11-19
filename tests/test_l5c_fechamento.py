@@ -239,8 +239,9 @@ def test_entrada_sem_regra_nao_muda(texto):
 
 def test_prompt_proibe_regra_de_entrada():
     from app.core.montagem import pasta_do_segmento
-    assert "Entrada do financiamento: não afirme regra" in (
-        pasta_do_segmento("veiculos") / "prompt.md").read_text(encoding="utf-8")
+    texto = (pasta_do_segmento("veiculos") / "prompt.md").read_text(encoding="utf-8")
+    assert "Entrada do financiamento: consulte buscar_conhecimento" in texto       # L11: usa a base
+    assert "Nunca diga que não há mínimo ou valor fixo" in texto and '"sem entrada"' in texto
 
 
 # ---------------------------------------------------------------- 7. aceita_troca

@@ -22,6 +22,9 @@ item é marcado como **feito** aqui.
 | N3 — tom repetitivo: "Gostaria de...?" no fim de quase toda fala e "o pessoal da equipe vai falar com você por aqui" repetido | a definir | `conversa_longa` | em teste (L10: regra curta de prompt; 50/50 nas 3 rodadas de 18/11, sem AVISO de pergunta repetida) |
 | N4 — bancada: loja fictícia sem fotos (não testa envio de fotos); não há checagem de endereço inventado, contradição nem ação prometida sem tool | a definir | — | em teste (L7: fotos fictícias e checagem de fotos; L2: endereço; contradição e ação prometida sem tool ainda não) |
 | N5 — "qual o mais barato?" logo depois de falar de SUV respondeu o carro mais barato da loja, sem dizer que o Renegade era o único SUV | a definir | `suv_por_categoria` | em teste (L10: regra curta de prompt; ainda sem roteiro próprio) |
+| L10 — emoji para o cliente (0; 1 se ele usou; nunca em assunto sério), toques de remarketing diferentes de verdade, jobs sem emoji no log | L10 | `cliente_usa_emoji`, `remarketing_3_toques`, `remarketing_carro_vendido` | feito (3/3 em 18/11, bloco L10) |
+| L11 — texto que o Léo escreve junto da ferramenta chega ao cliente; fato sobre a loja só da base ou do cadastro (pagamento/reserva, entrega, fotos, promoção, entrada) | L11 | `pede_pix_reserva`, `sinal_reserva`, `entrega_outra_cidade`, `entrada_minima`, `entrada_sem_base`, `fotos_modulo_desligado` | feito (3/3 em 18/11, bloco L11: 51 roteiros sem FALHOU; AVISO "chamado só diz que a equipe vai falar" ainda amplo demais) |
+| Base de conhecimento de loja real (a de `conhecimento/*.txt` é da loja fictícia) | — | — | pendente (roteiro de perguntas em `docs/instalacao_loja.md`) |
 
 Roteiros sem bloco pendente (devem passar desde já): `preco_carro`, `desconto`,
 `financiamento_negativado`, `troca_com_km`, `sem_resposta_no_estoque`,

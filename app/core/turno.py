@@ -35,7 +35,7 @@ import time
 import traceback
 from dataclasses import dataclass, field
 
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.chaves import exigir_loja, thread_id
 from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
@@ -49,6 +49,7 @@ from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da
                                  promete_contato_da_equipe, resposta_tem_preco_inventado,
                                  tirar_elogio_da_descricao, tirar_elogio_do_estado,
                                  tirar_promessa_de_foto, pedido_da_equipe, trocar_frases_de_risco,
+                                 trocar_politica_sem_base,
                                  trocar_frases_proibidas)
 from banco import conectar
 from app.handoff import estado_do_handoff
@@ -285,7 +286,7 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         return ResultadoTurno(texto=MENSAGEM_ERRO, execucao_id=_id(registro))
 
     do_turno = mensagens_do_turno(resultado)
-    resposta = limpar_markdown(extrair_texto(resultado["messages"][-1].content))
+    resposta = resposta_do_turno(do_turno, resultado["messages"][-1])   # L11: texto antes da tool também
     midias = extrair_midias(do_turno)
     handoff = _chamou_handoff(do_turno)
     ferramentas = ferramentas_usadas(do_turno)
@@ -320,6 +321,8 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         print(f"{rotulo} GUARDA: regra de entrada trocada por 'depende da análise'.")
         ferramentas.append("guarda_entrada")
     resposta, riscos = trocar_frases_de_risco(resposta)      # L8: pix, reserva, entrega, preço...
+    resposta, politicas = trocar_politica_sem_base(resposta)  # L11: "não trabalhamos com..." sem base
+    riscos += [f"politica_{t}" for t in politicas]
     if riscos:
         print(f"{rotulo} GUARDA: frase de risco trocada ({', '.join(riscos)}).")
         ferramentas.append("guarda_risco")
@@ -583,18 +586,55 @@ async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, graf
     # As que o Léo PEDIU (em sombra, as que gravam nem rodam).
     ferramentas = sorted({c["name"] for m in do_turno for c in (getattr(m, "tool_calls", None) or [])}
                          | set(ferramentas_usadas(do_turno)))
-    sugestao = limpar_markdown(extrair_texto(resultado["messages"][-1].content))
+    sugestao = resposta_do_turno(do_turno, resultado["messages"][-1])
     if resposta_tem_preco_inventado(sugestao, resultado["messages"]):
         sugestao = MENSAGEM_SEGURA
     sugestao = trocar_frases_proibidas(sugestao)[0]
     sugestao = corrigir_regra_de_entrada(sugestao)[0]
     sugestao = trocar_frases_de_risco(sugestao)[0]
+    sugestao = trocar_politica_sem_base(sugestao)[0]                         # L11
     sugestao = limitar_emojis(sugestao, 1 if tem_emoji(texto) else 0)[0]      # L10
     sombra.gravar(loja_id, lead_id, canal, texto, sugestao, ferramentas)
     registrar_uso(loja_id, lead_id, canal, uso_das_mensagens(do_turno), tipo="sombra",
                   ferramentas=ferramentas, latencia_ms=_ms_desde(inicio))
     print(f"{rotulo} [SOMBRA] Sugestão guardada (nada enviado): {sugestao}")
     return ResultadoTurno(silenciado=True)
+
+
+def _frases_do_texto(texto: str) -> list[str]:
+    import re as _re
+    return [f for f in _re.split(r"(?<=[.!?])\s+", texto.strip()) if f.strip()]
+
+
+_NARRA_FERRAMENTA = re.compile(r"(?i)\b(sistema|registr\w*|anot\w*|cadastr\w*|ferrament\w*|acion\w*)\b")
+
+
+def resposta_do_turno(do_turno, ultima) -> str:
+    """L11: tudo o que o Léo ESCREVEU no turno, na ordem. Quando ele escreve e chama uma
+    ferramenta (ex.: acionar_handoff) no mesmo turno, o texto de antes da ferramenta também
+    vai para o cliente (antes, só a última mensagem saía e a resposta ao assunto se perdia).
+    Se a última parte já diz que a equipe vai falar com o cliente, as partes anteriores
+    perdem as frases que diziam o mesmo (sem repetir a promessa)."""
+    textos = []
+    for m in do_turno:
+        if isinstance(m, AIMessage):
+            t = limpar_markdown(extrair_texto(m.content)).strip()
+            if t:
+                textos.append(t)
+    if not textos:
+        return limpar_markdown(extrair_texto(ultima.content))
+    final = textos[-1]
+    partes = []
+    for t in textos[:-1]:
+        # S6 continua valendo: o Léo narrando a ferramenta ("vou registrar aqui no sistema")
+        # nunca vai para o cliente. Só a resposta ao assunto vai.
+        frases = [f for f in _frases_do_texto(t) if not _NARRA_FERRAMENTA.search(f)]
+        if promete_contato_da_equipe(final):
+            frases = [f for f in frases if not promete_contato_da_equipe(f)]
+        t = " ".join(frases).strip()
+        if t and t != final and t not in partes:
+            partes.append(t)
+    return "\n\n".join(partes + [final])
 
 
 def _quem_da_equipe(loja_id: int, canal: str, lead_id: str) -> dict | None:

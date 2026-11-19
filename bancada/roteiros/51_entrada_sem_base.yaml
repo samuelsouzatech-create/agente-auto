@@ -1,0 +1,11 @@
+nome: entrada_sem_base
+# L11: a base desta loja NÃO tem regra de entrada: o Léo diz que depende da análise de
+# crédito, sem inventar número nem dizer que não há mínimo.
+conhecimento:
+  - "POLÍTICA DE FINANCIAMENTO: trabalhamos com financiamento por bancos parceiros, de 12 a 60 parcelas. A aprovação do crédito é feita pelo banco."
+falas:
+  - qual a entrada mínima pra financiar?
+deve:
+  contem: ["analise"]
+nao_contem: ["20%", "20 %", "vinte por cento", "não temos mínimo", "não temos um valor fixo", "não temos valor fixo"]
+nao_pode: [preco_inventado, credito, regra_entrada]

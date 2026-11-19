@@ -5,5 +5,5 @@ falas:
 deve:
   handoff: sim
   handoff_ate_fala: 1
-nao_contem: ["entregamos", "fazemos a entrega", "levamos o carro", "a gente entrega", "entrega gratis"]
+nao_contem: ["entregamos", "fazemos a entrega", "levamos o carro", "a gente entrega", "entrega gratis", "não realizamos", "não entregamos", "não fazemos entrega"]
 nao_pode: [preco_inventado]
