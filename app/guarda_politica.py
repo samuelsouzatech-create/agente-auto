@@ -652,3 +652,116 @@ def motivo_com_marcas(motivo: str, *, pos_venda: bool, urgente: bool) -> str:
     if urgente and MARCA_URGENTE not in sem:
         corpo = f"{MARCA_URGENTE} — {corpo}"
     return f"{PREFIXO_POS_VENDA}{corpo}" if (pos_venda or tem_pv) else corpo
+
+
+# ======================================================================
+# L12: estado do carro, agendamento sem ferramenta e limpeza de repetição
+# ======================================================================
+# Frase que afirma estado/qualidade de carro do estoque. Só fica se o fato vier da ficha
+# (o que as ferramentas devolveram no turno); hoje a ficha não tem estado, então sai.
+ESTADO_AFIRMADO = re.compile(
+    r"\bbem\s+(conservad\w*|cuidad\w*)|\bconservadissim\w*|\bmuito\s+conservad\w*"
+    r"|\b(otimo|excelente|bom|perfeito|impecavel)\s+estado\b|\bestado\s+(impecavel|otimo|excelente|perfeito)\b"
+    r"|\bimpecave\w*|\brevisad[oa]s?\b|\b(unico|um\s+so)\s+dono\b|\bnunca\s+(bateu|foi\s+batid\w*)"
+    r"|\bsem\s+(batida\w*|detalhe\w*|nenhum\s+detalhe|arranh\w*)|\btodo\s+original\b"
+    r"|\b(excelente|otimo|belo|lindo)\s+carro\b|\bcarro\s+(excelente|impecavel|perfeito)\b|\bnovinho\b")
+FRASE_ESTADO = "O estado do carro o pessoal da equipe confirma, e você pode ver pessoalmente aqui na loja."
+
+
+def cortar_estado_inventado(resposta: str, ficha: str = "") -> tuple[str, bool]:
+    """Corta a frase que afirma estado/qualidade do carro sem estar na ficha do turno.
+    A primeira vira FRASE_ESTADO; pergunta e negação ficam."""
+    ficha_n = _sem_acento(ficha)
+    saida, trocou = [], False
+    for frase in _frases_originais(resposta):
+        f = _sem_acento(frase)
+        achado = ESTADO_AFIRMADO.search(f)
+        # "nunca bateu" é a própria afirmação; negação conta só fora do trecho achado.
+        resto = (f[:achado.start()] + " " + f[achado.end():]) if achado else f
+        if (not achado or f.rstrip().endswith("?") or _NEGA.search(resto)
+                or achado.group(0) in ficha_n):
+            saida.append(frase)
+            continue
+        if not trocou:
+            saida.append(FRASE_ESTADO)
+        trocou = True
+    return (" ".join(saida) if trocou else resposta), trocou
+
+
+# Disse que agendou, mas a ferramenta de agenda não gravou neste turno.
+AGENDOU_DITO = re.compile(r"\b(agendei|marquei|deixei\s+(agendad|marcad)\w*|(esta|ficou|fica)\s+(agendad|marcad)\w*"
+                          r"|agendad[oa]\s+(para|pra)|confirmad[oa]\s+(para|pra)\s+(o\s+|a\s+)?(sabado|domingo|segunda"
+                          r"|terca|quarta|quinta|sexta|amanha|hoje|dia))\b")
+FRASE_AGENDA = "Vou pedir para a equipe confirmar o horário."
+FRASE_CNH = "Para o test-drive, traga sua CNH válida."
+
+
+def tirar_agendamento_falso(resposta: str) -> tuple[str, bool]:
+    saida, trocou = [], False
+    for frase in _frases_originais(resposta):
+        f = _sem_acento(frase)
+        if AGENDOU_DITO.search(f) and not f.rstrip().endswith("?") and not _NEGA.search(f):
+            if not trocou:
+                saida.append(FRASE_AGENDA)
+            trocou = True
+        else:
+            saida.append(frase)
+    return (" ".join(saida) if trocou else resposta), trocou
+
+
+_CONTATO_FRASE = re.compile(
+    r"\b(equipe|pessoal|vendedor\w*|especialista\w*)\b[^.!?]{0,60}\b(vai|vao|ira|irao)\s+(te\s+|lhe\s+)?"
+    r"(falar|conversar|chamar|entrar\s+em\s+contato|retornar|responder)"
+    r"|\b(falar|conversar)\s+com\s+voce\s+por\s+aqui\b")
+_RETORNO = re.compile(r"\bretom\w+|\bvolta\w*\s+a\s+atender|\ba\s+partir\s+das?\s+\d|\b(abre|abrimos|reabre)\s+(amanha|hoje|na|no|segunda|terca|quarta|quinta|sexta|sabado|domingo)"
+                      r"|\b(amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b[^.!?]{0,40}\b\d{1,2}[:h]\d{2}")
+_PERGUNTA_SEM_OPCOES = re.compile(r"^(e\s+)?(o\s+que|qual|como)\s+(voce\s+)?(prefere|acha|escolhe|prefere\s+seguir"
+                                  r"|quer\s+fazer|vai\s+ser)\s*\??$|^(pode\s+ser|tudo\s+bem|combinado)\s*\?$")
+
+
+def limpar_repeticoes(texto: str, guarda_mexeu: bool = False) -> str:
+    """L12 (depois de juntar os textos e das guardas): "a equipe vai falar com você" no
+    máximo 1 vez; horário de retorno no máximo 1 vez (a frase que tem os dois fica);
+    frase igual ou quase igual sai; se uma guarda trocou frase, pergunta solta sem
+    opções ("O que prefere?") sai. Mantém os parágrafos."""
+    import difflib
+    original = str(texto or "")
+    # Estrutura: parágrafos (linha em branco) > linhas (lista "- item") > frases. As quebras ficam.
+    blocos = [[re.split(r"(?<=[.!?])\s+", linha.strip()) for linha in p.split("\n") if linha.strip()]
+              for p in re.split(r"\n\s*\n", original) if p.strip()]
+    paragrafos = [[f for linha in p for f in linha] for p in blocos]
+    todas = [(i, j, f, _sem_acento(f)) for i, p in enumerate(paragrafos) for j, f in enumerate(p)]
+    contato = [k for k, (_, _, _, n) in enumerate(todas) if _CONTATO_FRASE.search(n) or promete_contato_da_equipe(n)]
+    retorno = [k for k, (_, _, _, n) in enumerate(todas) if _RETORNO.search(n)]
+    fica_retorno = retorno[0] if retorno else None
+    fica_contato = (fica_retorno if fica_retorno in contato else (contato[0] if contato else None))
+    sai = {k for k in contato if k != fica_contato} | {k for k in retorno if k != fica_retorno}
+    sai.discard(fica_contato)
+    vistas = []
+    for k, (_, _, f, n) in enumerate(todas):
+        if k in sai:
+            continue
+        if any(difflib.SequenceMatcher(None, n, v).ratio() > 0.85 for v in vistas):
+            sai.add(k)
+            continue
+        if guarda_mexeu and _PERGUNTA_SEM_OPCOES.match(n.strip()):
+            sai.add(k)
+            continue
+        vistas.append(n)
+    if not sai:
+        return original                      # nada a tirar: o texto sai exatamente como veio
+    tirar = {(todas[k][0], todas[k][1]) for k in sai}
+    saida = []
+    for i, p in enumerate(blocos):
+        j, linhas = 0, []
+        for linha in p:
+            ficam = []
+            for f in linha:
+                if (i, j) not in tirar:
+                    ficam.append(f)
+                j += 1
+            if ficam:
+                linhas.append(" ".join(ficam))
+        if linhas:
+            saida.append("\n".join(linhas))
+    return "\n\n".join(saida) if saida else original

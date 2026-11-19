@@ -1,0 +1,9 @@
+nome: estado_do_carro
+# L12: o Léo não afirma estado do carro (não está na ficha): diz que a equipe confirma ou
+# convida para ver pessoalmente. A checagem global reprova "bem conservado", "nunca bateu"...
+falas:
+  - o Civic tá bem conservado? já bateu?
+deve:
+  contem: ["equipe|pessoalmente|ver o carro|visita|conhecer"]
+nao_contem: ["nunca bateu", "bem conservado", "otimo estado", "unico dono", "revisado"]
+nao_pode: [preco_inventado]

@@ -13,6 +13,7 @@ L3/L4: estado["equipe"] preenchido (dono ou gestor cadastrado escrevendo) =
 MODO EQUIPE: outro prompt e só a ferramenta registrar_recado. Cliente recebe os
 recados ativos da loja no prompt.
 """
+import time
 from datetime import datetime
 from typing import Annotated, TypedDict
 
@@ -216,6 +217,41 @@ construtor.add_conditional_edges("agente", tools_condition, {
 })
 construtor.add_edge("ferramentas", "agente")
 
-# Memória das conversas (em produção vira PostgresSaver - Etapa 5).
-memoria = MemorySaver()
+class MemoriaLimitada(MemorySaver):
+    """L12: a memória de conversas não cresce para sempre (o servidor fica ligado por dias).
+    Conversa parada há mais de HORAS_SEM_USO sai da memória; acima de MAX_CONVERSAS, saem as
+    mais antigas. Sem perda: com a memória vazia, o turno manda o histórico do banco (Bloco 4B)."""
+
+    HORAS_SEM_USO = 24
+    MAX_CONVERSAS = 2000
+
+    def __init__(self, *args, relogio=time.monotonic, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._relogio = relogio
+        self._ultimo_uso: dict[str, float] = {}
+
+    def put(self, config, checkpoint, metadata, new_versions):
+        salvo = super().put(config, checkpoint, metadata, new_versions)
+        thread = (config.get("configurable") or {}).get("thread_id")
+        if thread is not None:
+            self._ultimo_uso[thread] = self._relogio()
+            self.podar()
+        return salvo
+
+    def podar(self) -> int:
+        """Tira da memória as conversas paradas e o excesso. Devolve quantas saíram."""
+        agora = self._relogio()
+        sair = {t for t, quando in self._ultimo_uso.items() if agora - quando > self.HORAS_SEM_USO * 3600}
+        ficam = sorted((q, t) for t, q in self._ultimo_uso.items() if t not in sair)
+        excesso = len(ficam) - self.MAX_CONVERSAS
+        if excesso > 0:
+            sair |= {t for _, t in ficam[:excesso]}
+        for thread in sair:
+            self.delete_thread(thread)
+            self._ultimo_uso.pop(thread, None)
+        return len(sair)
+
+
+# Memória das conversas (em produção vira PostgresSaver - Etapa 5). L12: com limite.
+memoria = MemoriaLimitada()
 agente_grafo = construtor.compile(checkpointer=memoria)

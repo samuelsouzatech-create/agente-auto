@@ -314,6 +314,8 @@ def test_turno_da_foto_do_carro_tira_o_elogio(duas_lojas):
     assert "bom estado" not in grafo.entradas[0]
 
 
-def test_elogio_so_sai_em_turno_de_foto_de_carro(duas_lojas):
+def test_estado_sem_ficha_sai_tambem_fora_de_foto(duas_lojas):
+    # L12: estado/qualidade do carro só se vier da ficha, em qualquer turno (antes: só na foto).
+    from app.guarda_politica import FRASE_ESTADO
     r = _turno(LOJA_A, "lead-sem-foto", "o renegade é bom?", GrafoFalso("O Renegade está em ótimo estado."))
-    assert r.texto == "O Renegade está em ótimo estado."
+    assert r.texto == FRASE_ESTADO
