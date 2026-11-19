@@ -209,3 +209,21 @@ def test_status_corrigido(bancada):
 def test_roteiro_52_com_as_palavras_novas(bancada):
     roteiros = {r["nome"]: r for r in bancada.carregar_roteiros()}
     assert "vistoria" in roteiros["estado_do_carro"]["nao_contem"]
+
+
+# ------------------------------------------------------------ L14: o grave das rodadas do L13
+
+def test_l14_garantia_de_verificacao_com_negacao_longe_sai():
+    # estado_do_carro, rodada_2026-11-19_183900 (texto real)
+    texto = ("Como sou um assistente virtual, não tenho acesso a detalhes de histórico de colisões, mas posso te "
+             "garantir que todos os nossos veículos passam por uma verificação.")
+    novo, trocou = cortar_estado_inventado(texto)
+    assert trocou and "garantir" not in novo and "verificação" not in novo
+
+
+@pytest.mark.parametrize("texto", [
+    "Não tenho a informação se é único dono.", "Ele não é revisado na concessionária, que eu saiba?",
+    "Não posso garantir que ele nunca bateu.",
+])
+def test_l14_negacao_perto_continua_protegendo(texto):
+    assert cortar_estado_inventado(texto) == (texto, False)

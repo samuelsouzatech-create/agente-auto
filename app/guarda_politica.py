@@ -678,6 +678,17 @@ ELOGIO_DE_CARRO = re.compile(r"\b(excelente|otimo|belo|lindo)\s+carro\b|\bcarro\
                              r"|\bnovinho\b|\bimpecave\w*|\bbem\s+(conservad\w*|cuidad\w*)|\bconservadissim\w*")
 
 
+_VIRADA = re.compile(r"\b(mas|porem|contudo|entretanto|so\s+que)\b")
+
+
+def _negacao_perto(frase_normal: str, inicio: int) -> bool:
+    antes = frase_normal[max(0, inicio - 40):inicio]
+    viradas = list(_VIRADA.finditer(antes))
+    if viradas:
+        antes = antes[viradas[-1].end():]
+    return bool(_NEGA.search(antes))
+
+
 def cortar_estado_inventado(resposta: str, ficha: str = "", substituir: bool = True) -> tuple[str, bool]:
     """Corta a frase que afirma estado/qualidade do carro sem estar na ficha do turno.
     A primeira vira FRASE_ESTADO; pergunta e negação ficam.
@@ -691,9 +702,10 @@ def cortar_estado_inventado(resposta: str, ficha: str = "", substituir: bool = T
         achado = ESTADO_AFIRMADO.search(f)
         if not achado and _PALAVRA_DE_CARRO.search(f):
             achado = ESTADO_VERIFICADO.search(f)
-        # "nunca bateu" é a própria afirmação; negação conta só fora do trecho achado.
-        resto = (f[:achado.start()] + " " + f[achado.end():]) if achado else f
-        if (not achado or f.rstrip().endswith("?") or _NEGA.search(resto)
+        # "nunca bateu" é a própria afirmação. L14: a negação só protege se estiver PERTO, antes do
+        # trecho (até 40 letras) e sem "mas/porém" no meio ("não tenho acesso..., mas posso te
+        # garantir que todos passam por verificação" é afirmação).
+        if (not achado or f.rstrip().endswith("?") or _negacao_perto(f, achado.start())
                 or achado.group(0) in ficha_n):
             saida.append(frase)
             continue

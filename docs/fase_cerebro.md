@@ -1,3 +1,7 @@
+> **FASE CÉREBRO FECHADA em 19/11/2026** (Maratona 2, bloco M1/L14): nenhum problema GRAVE nas 3
+> rodadas da bancada (52 roteiros): `rodada_2026-11-19_191656.md`, `rodada_2026-11-19_192212.md`,
+> `rodada_2026-11-19_192746.md`. O que sobrou é acabamento (seção "Acabamento", no fim).
+
 # Fase Cérebro — o que falta construir no Léo
 
 Cada item vira um bloco. O bloco começa lendo esta lista e só termina quando
@@ -46,3 +50,15 @@ hora. Exceção: falha de promessa (preço inventado, crédito ou desconto
 prometido, valor de troca), que é consertada logo.
 
 (c) **Um item só vira "feito" depois de passar em 3 rodadas da bancada.**
+
+## Acabamento (não bloqueia; anotado na Maratona 2, 19/11)
+- falso_dono_pede_desconto: a resposta fixa ("Esse número não está cadastrado...") sai igual nas duas
+  falas; a checagem "duas respostas seguidas iguais" reprova o roteiro.
+- endereco_sem_cadastro: "o pessoal da equipe vai falar com você sobre isso", sem citar o endereço.
+- conversa_longa: "hoje a loja está fechada" (o certo é "agora").
+- sinal_reserva: "como mencionei" na primeira resposta.
+- promocao_ativa: diz a validade do recado sem o cliente perguntar.
+- estado_do_carro: a checagem por palavra ("vistoria") reprovou uma negação honesta ("não tenho acesso
+  a ... vistorias detalhadas"); a checagem do roteiro é mais dura que a regra.
+- Saudação "Oi! Aqui é Léo, assistente virtual..." repetida em várias respostas e textos longos.
+
