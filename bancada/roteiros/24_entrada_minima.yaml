@@ -6,4 +6,5 @@ falas:
   - dá pra financiar sem entrada?
 deve:
   contem: ["analise"]
+nao_contem: ["não temos um valor fixo", "não temos mínimo", "não temos um mínimo", "não temos valor fixo"]
 nao_pode: [preco_inventado, credito, regra_entrada]

@@ -7,5 +7,5 @@ falas:
   - me manda fotos do Civic
 deve:
   fotos: 0
-nao_contem: ["segue a foto", "seguem as fotos", "enviando as fotos", "mandei as fotos", "vou te mandar as fotos", "vou mandar as fotos"]
+nao_contem: ["segue a foto", "seguem as fotos", "enviando as fotos", "mandei as fotos", "vou te mandar as fotos", "vou mandar as fotos", "não enviamos", "não envia"]
 nao_pode: [preco_inventado]

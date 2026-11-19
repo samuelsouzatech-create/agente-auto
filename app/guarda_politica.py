@@ -430,15 +430,64 @@ def corrigir_regra_de_entrada(resposta: str) -> tuple[str, bool]:
     """Frase que fala de entrada e afirma regra (sem dizer que depende da análise)
     vira "O valor da entrada depende da análise de crédito, feita por um vendedor." """
     saida, trocou = [], False
+    falando_de_entrada = False
     for frase in _frases_originais(resposta):
         f = _sem_acento(frase)
-        if _ENTRADA.search(f) and _REGRA_ENTRADA.search(f) and not _RESSALVA_ENTRADA.search(f):
+        fala_de_entrada = bool(_ENTRADA.search(f))
+        regra = fala_de_entrada and _REGRA_ENTRADA.search(f) and not _RESSALVA_ENTRADA.search(f)
+        # L11: "não temos mínimo / valor fixo" (contradiz a base) troca SEMPRE, com ou sem ressalva,
+        # quando a frase (ou a anterior) fala de entrada.
+        nega_regra = (fala_de_entrada or falando_de_entrada) and _NAO_HA_REGRA_ENTRADA.search(f)
+        if regra or nega_regra:
             if not trocou:
                 saida.append(FRASE_ENTRADA)
             trocou = True
         else:
             saida.append(frase)
+        falando_de_entrada = fala_de_entrada
     return (" ".join(saida) if trocou else resposta), trocou
+
+
+_NAO_HA_REGRA_ENTRADA = re.compile(
+    r"\bnao\s+(temos|ha|existe|tem)\s+(um\s+|uma\s+)?(valor\s+(fixo|minimo|obrigatorio)|minimo|regra"
+    r"|porcentagem\s+minima|entrada\s+minima|percentual\s+minimo)")
+
+
+# L11: fato sobre a loja só se estiver na base ou no cadastro. Frase que AFIRMA política
+# ("não trabalhamos com", "não fazemos", "nossa política") sobre estes temas vira a frase segura.
+_POLITICA_AFIRMADA = re.compile(
+    r"\b(nao|nunca)\s+(trabalhamos|fazemos|realizamos|aceitamos|entregamos|enviamos|envia|mandamos|manda"
+    r"|oferecemos|disponibilizamos|temos\s+(servico|politica|esse\s+servico))\b"
+    r"|\bnossas?\s+politicas?\b|\bpolitica\s+da\s+loja\b")
+FRASE_PAGAMENTO_EXPLICA = "Sobre pagamento, sinal e reserva, o pessoal da equipe explica como funciona."
+FRASE_ENTREGA_CONFIRMA = "Vou confirmar com a equipe se fazemos entrega."
+FRASE_FOTO_AGORA = "Não consigo enviar fotos por aqui agora."
+FRASE_PROMOCAO = "No momento não tenho promoção para te passar por aqui."
+TEMAS_DE_POLITICA = [
+    ("pagamento", re.compile(r"\bpix\b|\breserv\w*|\bsinal\b|\bpagament\w*|\bboleto\b|\btransferencia\b|\bdeposit\w*"),
+     FRASE_PAGAMENTO_EXPLICA),
+    ("entrega", re.compile(r"\bentreg\w*|\boutras?\s+cidades?\b|\bfrete\b|\blevar\s+o\s+carro\b"), FRASE_ENTREGA_CONFIRMA),
+    ("fotos", re.compile(r"\bfotos?\b"), FRASE_FOTO_AGORA),
+    ("promocao", re.compile(r"\bpromoc\w*|\bfeirao\b|\bcampanha\w*"), FRASE_PROMOCAO),
+]
+
+
+def trocar_politica_sem_base(resposta: str) -> tuple[str, list[str]]:
+    """L11: troca a frase que afirma política da loja sobre pagamento/reserva, entrega,
+    fotos ou promoção (o Léo não tem esse fato na base). Devolve (resposta, temas trocados)."""
+    saida, trocados, usadas = [], [], set()
+    for frase in _frases_originais(resposta):
+        f = _sem_acento(frase)
+        tema = next(((nome, segura) for nome, p, segura in TEMAS_DE_POLITICA if p.search(f)), None)
+        if tema is None or not _POLITICA_AFIRMADA.search(f):
+            saida.append(frase)
+            continue
+        nome, segura = tema
+        trocados.append(nome)
+        if segura not in usadas:
+            saida.append(segura)
+            usadas.add(segura)
+    return (" ".join(saida) if trocados else resposta), trocados
 
 
 def tirar_elogio_do_estado(resposta: str) -> tuple[str, bool]:

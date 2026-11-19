@@ -48,6 +48,7 @@ from app.guarda_politica import (  # noqa: E402
     numeros_do_cliente, resposta_tem_preco_inventado, valores_em_reais,
 )
 from app.recados import termos_da_condicao  # noqa: E402
+from app.core.turno import resposta_do_turno  # noqa: E402
 from app.guarda_politica import FRASES_PROIBIDAS, ELOGIO_DO_ESTADO  # noqa: E402
 from app.naturalidade import parece_robotica  # noqa: E402
 from app.utils import extrair_texto, mensagens_do_turno  # noqa: E402
@@ -94,7 +95,8 @@ IMAGEM_AUSENTE = "imagem ausente"
 CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente", "loja",
                   "recados", "nao_contem", "imagem_texto", "legenda",
                   "canal", "conversa", "interesse", "venda", "passos",      # L6: roteiros de job
-                  "rajada"}                                                 # L7: mensagens seguidas
+                  "rajada",                                                 # L7: mensagens seguidas
+                  "conhecimento"}                                           # L11: base própria do roteiro
 CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead",
                "toques", "envios_pos_venda", "textos_diferentes", "envios_no_horario",   # L6
                "fotos", "fotos_de", "respostas",                                          # L7
@@ -220,7 +222,40 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         "interesse": str(dados["interesse"]).strip() if dados.get("interesse") else None,
         "venda": dict(dados["venda"]) if isinstance(dados.get("venda"), dict) else None,
         "rajada": [m.strip() for m in rajada] if rajada else None,
+        "conhecimento": _validar_conhecimento(dados.get("conhecimento"), origem),
     }
+
+
+def _validar_conhecimento(conhecimento, origem: str):
+    """L11: base de conhecimento própria do roteiro (lista de textos). Sem o campo: a base de sempre."""
+    if conhecimento is None:
+        return None
+    if not isinstance(conhecimento, list) or not all(isinstance(t, str) and t.strip() for t in conhecimento):
+        raise RoteiroInvalido(f"{origem}: 'conhecimento' é uma lista de textos (a base da loja neste roteiro)")
+    return [t.strip() for t in conhecimento]
+
+
+@contextmanager
+def base_ficticia(textos):
+    """L11: durante o roteiro, buscar_conhecimento responde só com estes textos (nada de
+    Chroma, nada da base real). Sem textos: não muda nada."""
+    if not textos:
+        yield
+        return
+    import importlib
+    bc = importlib.import_module("tools.buscar_conhecimento")   # o pacote exporta a tool com o mesmo nome
+    from langchain_core.documents import Document
+
+    class BaseFalsa:
+        def similarity_search(self, pergunta, k=3, filter=None):
+            return [Document(page_content=t, metadata={"loja_id": LOJA_ID}) for t in textos[:k]]
+
+    original = bc._get_banco_conhecimento
+    bc._get_banco_conhecimento = lambda: BaseFalsa()
+    try:
+        yield
+    finally:
+        bc._get_banco_conhecimento = original
 
 
 def _inteiro_positivo(valor, origem: str):
@@ -584,6 +619,7 @@ class Turno:
     silenciado: bool = False
     foto_lida: dict | None = None   # L5b: {"tipo", "descricao"} da foto deste turno
     do_job: bool = False            # L6: mensagem mandada por um job (não é fala do cliente)
+    antes_da_tool: list = field(default_factory=list)   # L11: texto que o modelo escreveu junto da tool
 
 
 @dataclass
@@ -792,6 +828,7 @@ def checar(res: ResultadoRoteiro) -> None:
             f"carros de troca registrados: {res.trocas_gravadas} (esperado {r['deve']['trocas']})")
     checar_sombra(res)
     checar_emojis(res)
+    checar_texto_e_politica(res)
     checar_tom(res)
     if res.parou_no_teto:
         res.falhas.append("roteiro interrompido no teto de gasto")
@@ -1037,7 +1074,8 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
                 res.tokens_saida += saida
                 rodada.tokens_entrada += entrada
                 rodada.tokens_saida += saida
-                original = extrair_texto(gravador.ultimo["messages"][-1].content)
+                original = resposta_do_turno(do_turno, gravador.ultimo["messages"][-1])   # L11
+                turno.antes_da_tool = textos_antes_da_tool(do_turno)
                 turno.original = original
                 if resposta_tem_preco_inventado(original, gravador.ultimo["messages"]):
                     turno.barrado = original
@@ -1193,6 +1231,43 @@ def toques_parecidos(textos: list[str]) -> list[str]:
     return problemas
 
 
+def textos_antes_da_tool(do_turno) -> list[str]:
+    """L11: o que o modelo escreveu na mesma mensagem em que chamou uma ferramenta."""
+    textos = []
+    for m in do_turno:
+        if m.__class__.__name__ == "AIMessage" and getattr(m, "tool_calls", None):
+            t = extrair_texto(m.content).strip()
+            if len(t) > 20:
+                textos.append(t)
+    return textos
+
+
+_POLITICA_NA_RESPOSTA = re.compile(r"\bnao\s+(trabalhamos|fazemos|realizamos)\b|\bnossas?\s+politicas?\b")
+_SO_CONTATO = re.compile(r"\b(equipe|pessoal|vendedor\w*)\b|\b(horario|amanha|retoma\w*|fechad\w*|abre|abrimos)\b"
+                         r"|\d{1,2}[:h]\d{2}|^(oi|ola|aqui e|bom dia|boa tarde|boa noite)\b")
+
+
+def checar_texto_e_politica(res: "ResultadoRoteiro") -> None:
+    """L11:
+    - FALHOU se o texto que o Léo escreveu junto da ferramenta não chegou ao cliente;
+    - AVISO se a resposta com chamado só diz que a equipe vai falar (não responde o assunto);
+    - AVISO "afirmação de política: conferir na base" ("não trabalhamos com", "nossa política")."""
+    for turno in res.turnos:
+        if turno.do_job or not turno.bolhas:
+            continue
+        enviado = normalizar(" ".join(turno.bolhas))
+        for texto in turno.antes_da_tool:
+            pedacos = [f for f in frases(texto) if len(f) > 15]
+            if pedacos and not any(f in enviado for f in pedacos):
+                res.falhas.append(f"o texto antes da ferramenta não chegou ao cliente: \"{texto[:90]}\"")
+        if turno.avisos_vendedor and "?" in turno.fala:
+            sobra = [f for f in frases(" ".join(turno.bolhas)) if not _SO_CONTATO.search(f)]
+            if not sobra:
+                res.avisos.append(f"chamado aberto, mas a resposta só diz que a equipe vai falar: \"{turno.fala[:60]}\"")
+    achadas = [f for f in frases(res.texto_do_leo) if _POLITICA_NA_RESPOSTA.search(f)]
+    res.avisos.extend(f"afirmação de política: conferir na base: \"{f[:100]}\"" for f in achadas)
+
+
 def checar_emojis(res: "ResultadoRoteiro") -> None:
     """L10: checagem GLOBAL. Sem emoji se o cliente não usou; no máximo 1 por resposta;
     mensagem de job (remarketing/pós-venda): nenhum."""
@@ -1280,7 +1355,8 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
             res.tokens_saida += saida
             rodada.tokens_entrada += entrada
             rodada.tokens_saida += saida
-            original = extrair_texto(gravador.ultimo["messages"][-1].content)
+            original = resposta_do_turno(do_turno, gravador.ultimo["messages"][-1])   # L11
+            turno.antes_da_tool = textos_antes_da_tool(do_turno)
             turno.original = original
             if resposta_tem_preco_inventado(original, gravador.ultimo["messages"]):
                 turno.barrado = original
@@ -1377,7 +1453,8 @@ async def rodar(roteiros: list[dict], grafo, teto: float | None = None, leitor=N
                 continue
             try:
                 executor = rodar_roteiro_job if roteiro.get("passos") else rodar_roteiro
-                rodada.resultados.append(await executor(roteiro, grafo, rodada))
+                with base_ficticia(roteiro.get("conhecimento")):
+                    rodada.resultados.append(await executor(roteiro, grafo, rodada))
             except EnvioRealBloqueado as erro:
                 rodada.abortada = str(erro)
                 break
