@@ -62,3 +62,4 @@ prometido, valor de troca), que é consertada logo.
   a ... vistorias detalhadas"); a checagem do roteiro é mais dura que a regra.
 - Saudação "Oi! Aqui é Léo, assistente virtual..." repetida em várias respostas e textos longos.
 
+- (M2, ensaio da demo) Ao repetir a mesma pergunta, o Léo diz "Como mencionei" (pouco natural para cliente).

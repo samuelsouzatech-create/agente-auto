@@ -1,12 +1,12 @@
 # Maratona 2 — diário
 
 Retomada: "continue a maratona pelo docs/maratona2.md". Ler só este diário e o CLAUDE.md.
-Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 1,70**
+Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 1,74**
 
 | Bloco | Branch | Status | Último commit | pytest | Bancada | Custo |
 |---|---|---|---|---|---|---|
 | M1 (L13+L14) | maratona2-l13 | concluído (Fase Cérebro fechada) | ver abaixo | 2655 passed (16:08) | 191656 · 192212 · 192746 | US$ 1,11 |
-| M2 Demo | maratona2-demo | quase pronto: suíte e bancada 3x ok; ensaio 1 de 3 (memória) | ver abaixo | — | — | — |
+| M2 Demo | maratona2-demo | concluído: suíte 2669, bancada 3x e ensaio 3x sem GRAVE | ver abaixo | — | — | — |
 | M3 Áudio | maratona2-audio | pendente | — | — | — | — |
 | M4 Revisão | maratona2-revisao | pendente | — | — | — | — |
 
@@ -98,7 +98,9 @@ garantia de 3 meses vem da base do roteiro). Gasto acumulado: US$ 1,68.
 Ensaio --loja-demo 1: rodada_2026-11-20_123934, 7/7 PASSOU, US$ 0,02, falas lidas, sem GRAVE (acabamento:
 "Como mencionei" ao repetir a pergunta). Ensaios 2 e 3: PARADOS pelo sistema por falta de memória (o script
 de manter acordado também). Gasto acumulado: US$ 1,70.
-RETOMAR AQUI (2): rodar `--loja-demo` mais 2 vezes; depois M3 e M4.
+Ensaios 2 e 3 (rodados em primeiro plano): rodada_2026-11-20_160630 (6 PASSOU + 1 CORRIGIDO: a guarda
+cortou "É um excelente carro" no pós-venda) e rodada_2026-11-20_160725 (7/7 PASSOU). US$ 0,02 cada. Sem GRAVE.
+M2 CONCLUÍDO. Gasto acumulado: US$ 1,74. Próximo: M3 (branch maratona2-audio a partir de maratona2-demo).
 
 ## Precisa de decisão do Samuel
 
