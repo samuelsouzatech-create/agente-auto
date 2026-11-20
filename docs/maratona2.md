@@ -1,12 +1,12 @@
 # Maratona 2 — diário
 
 Retomada: "continue a maratona pelo docs/maratona2.md". Ler só este diário e o CLAUDE.md.
-Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 1,11**
+Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 1,70**
 
 | Bloco | Branch | Status | Último commit | pytest | Bancada | Custo |
 |---|---|---|---|---|---|---|
 | M1 (L13+L14) | maratona2-l13 | concluído (Fase Cérebro fechada) | ver abaixo | 2655 passed (16:08) | 191656 · 192212 · 192746 | US$ 1,11 |
-| M2 Demo | maratona2-demo | PAUSADO (memória): código pronto, falta suíte e bancada | ver abaixo | — | — | — |
+| M2 Demo | maratona2-demo | quase pronto: suíte e bancada 3x ok; ensaio 1 de 3 (memória) | ver abaixo | — | — | — |
 | M3 Áudio | maratona2-audio | pendente | — | — | — | — |
 | M4 Revisão | maratona2-revisao | pendente | — | — | — | — |
 
@@ -89,6 +89,16 @@ maratona2-demo-incompleto (suíte completa e bancada do M2 ainda NÃO rodaram).
 RETOMAR AQUI: fechar programas, religar o script de manter acordado, rodar a suíte completa do M2
 (logs/m2_demo_pytest.txt), depois bancada 3x + ensaio --loja-demo 3x, commit e push da
 maratona2-demo; depois M3 e M4.
+RETOMADO em 20/11: o Samuel autorizou encerrar Chrome/Edge/Teams em segundo plano (memória 1,0 -> 2,0 GB).
+Suíte M2 (2 metades, todos os testes): `1137 passed, 86 deselected (7:53)` + `1532 passed, 6 deselected
+(10:02)` = 2669 passed, 92 deselected. Próximo: bancada 3x (rodando) -> ensaio --loja-demo 3x -> commit.
+Bancada M2: rodada_2026-11-20_122534 / 123206 / 123800 (US$ 0,19 + 0,19 + 0,19 = 0,57). Único FALHOU:
+falso_dono_pede_desconto (resposta fixa repetida; já é acabamento conhecido). Sem GRAVE (falas lidas;
+garantia de 3 meses vem da base do roteiro). Gasto acumulado: US$ 1,68.
+Ensaio --loja-demo 1: rodada_2026-11-20_123934, 7/7 PASSOU, US$ 0,02, falas lidas, sem GRAVE (acabamento:
+"Como mencionei" ao repetir a pergunta). Ensaios 2 e 3: PARADOS pelo sistema por falta de memória (o script
+de manter acordado também). Gasto acumulado: US$ 1,70.
+RETOMAR AQUI (2): rodar `--loja-demo` mais 2 vezes; depois M3 e M4.
 
 ## Precisa de decisão do Samuel
 
