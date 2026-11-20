@@ -6,9 +6,9 @@ Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até ago
 | Bloco | Branch | Status | Último commit | pytest | Bancada | Custo |
 |---|---|---|---|---|---|---|
 | M1 (L13+L14) | maratona2-l13 | concluído (Fase Cérebro fechada) | ver abaixo | 2655 passed (16:08) | 191656 · 192212 · 192746 | US$ 1,11 |
-| M2 Demo | maratona2-demo | concluído: suíte 2669, bancada 3x e ensaio 3x sem GRAVE | ver abaixo | — | — | — |
-| M3 Áudio | maratona2-audio | concluído: suíte 2676, bancada 3x sem GRAVE (inaudível falha: decisão) | — | — | — | — |
-| M4 Revisão | maratona2-revisao | pendente | — | — | — | — |
+| M2 Demo | maratona2-demo | concluído | 6eac245 | 2669 passed | 122534 · 123206 · 123800; demo 123934 · 160630 · 160725 | US$ 0,63 |
+| M3 Áudio | maratona2-audio | concluído (inaudível falha: decisão) | 1405a08 | 2676 passed | 202202 · 203003 · 203749 | US$ 0,60 |
+| M4 Revisão | maratona2-revisao | concluído (só relatório) | ver git | — | — | US$ 0 |
 
 ## M1 — L13
 PASSO 0:
@@ -128,6 +128,12 @@ apoio emocional) e o Léo responde ao que não foi dito ("Fico feliz que tenha d
 GRAVE (sem preço/promessa) e o conserto está fora do escopo do M3: ver "Precisa de decisão". falso_dono: acabamento
 conhecido. Sem GRAVE (falas lidas). Gasto acumulado: US$ 2,34. M3 CONCLUÍDO. Próximo: M4 (só relatório, sem IA).
 
+## M4 — Revisão geral (branch maratona2-revisao, a partir de maratona2-audio)
+
+Só relatório, nada consertado: docs/revisao_geral.md com 31 achados (segurança/privacidade, guardas,
+várias lojas e servidor ligado, código morto/duplicado, testes, dependências) e as 10 primeiras a
+consertar antes de uma loja real entrar em modo sombra. Sem IA (US$ 0).
+
 ## Precisa de decisão do Samuel
 - (M3) Áudio só com ruído: a transcrição inventa uma frase e o Léo responde a ela. Proposta: pedir à
   transcrição que devolva só "[inaudível]" quando não houver fala clara e tratar isso como áudio não
@@ -139,3 +145,30 @@ conhecido. Sem GRAVE (falas lidas). Gasto acumulado: US$ 2,34. M3 CONCLUÍDO. Pr
 - falso_dono: resposta fixa igual nas 2 falas; endereco_sem_cadastro genérico; "hoje a loja está fechada";
   "como mencionei" na 1ª resposta; validade do recado sem perguntar; checagem "vistoria" dura demais;
   saudação repetida e textos longos.
+
+
+## Relatório final da Maratona 2 (20/11/2026)
+
+1. **Branches** (todas enviadas, nenhum merge, main intocada): `maratona2-l13` (M1) -> `maratona2-demo` (M2)
+   -> `maratona2-audio` (M3) -> `maratona2-revisao` (M4), em cadeia. As `-incompleto` são cópias antigas de
+   quando a memória parou o trabalho; podem ser apagadas.
+2. **Suíte offline:** M1 2655 passed; M2 2669 passed; M3 2676 passed (rodada em partes por falta de memória;
+   todos os testes rodaram). M4 não mexe em código.
+3. **Gemini:** US$ 2,34 de US$ 3,00 (M1 1,11; M2 0,63; M3 0,60 com ~0,01 de voz sintética). Relatórios
+   completos em logs/bancada/ (nomes na tabela acima).
+4. **Resolvido:**
+   - Fase Cérebro FECHADA (L13 + L14: 3 rodadas sem GRAVE).
+   - Demo v0: loja fictícia com histórico, simulador com cara de WhatsApp e "O vendedor recebeu", botão e
+     script de reiniciar (só loja demo), ensaio de 10 min na bancada (3x sem GRAVE), docs/demo.md.
+   - Áudio na bancada pelo mesmo caminho dos canais, com custo no relatório.
+   - Revisão geral: docs/revisao_geral.md (31 achados e as 10 primeiras antes do modo sombra).
+5. **Sobrou / duvidoso:**
+   - audio_inaudivel falha: a transcrição inventa fala no chiado (não consertado: fora do escopo do M3).
+   - falso_dono_pede_desconto falha em toda rodada por resposta fixa repetida (acabamento).
+   - Acabamentos novos anotados em docs/fase_cerebro.md ("Como mencionei", "a loja está fechada" sem pergunta).
+   - O computador de 8 GB não aguenta a suíte inteira de uma vez com o Claude Code aberto: abrir com
+     `$env:CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1; claude`.
+6. **Perguntas para decidir:** ver "Precisa de decisão do Samuel" (áudio inaudível, limite de tamanho do
+   áudio, privacidade do áudio) e as 10 primeiras de docs/revisao_geral.md. Achado #1 da revisão é do
+   próprio M2 (criar_loja_demo com loja_id explícito): vale um conserto pequeno antes de usar a demo num
+   banco que tenha loja real.
