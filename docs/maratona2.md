@@ -1,13 +1,13 @@
 # Maratona 2 — diário
 
 Retomada: "continue a maratona pelo docs/maratona2.md". Ler só este diário e o CLAUDE.md.
-Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 1,74**
+Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 1,75**
 
 | Bloco | Branch | Status | Último commit | pytest | Bancada | Custo |
 |---|---|---|---|---|---|---|
 | M1 (L13+L14) | maratona2-l13 | concluído (Fase Cérebro fechada) | ver abaixo | 2655 passed (16:08) | 191656 · 192212 · 192746 | US$ 1,11 |
 | M2 Demo | maratona2-demo | concluído: suíte 2669, bancada 3x e ensaio 3x sem GRAVE | ver abaixo | — | — | — |
-| M3 Áudio | maratona2-audio | pendente | — | — | — | — |
+| M3 Áudio | maratona2-audio | PAUSADO (memória): código pronto; falta suíte partes 2-3 e bancada | — | — | — | — |
 | M4 Revisão | maratona2-revisao | pendente | — | — | — | — |
 
 ## M1 — L13
@@ -101,6 +101,25 @@ de manter acordado também). Gasto acumulado: US$ 1,70.
 Ensaios 2 e 3 (rodados em primeiro plano): rodada_2026-11-20_160630 (6 PASSOU + 1 CORRIGIDO: a guarda
 cortou "É um excelente carro" no pós-venda) e rodada_2026-11-20_160725 (7/7 PASSOU). US$ 0,02 cada. Sem GRAVE.
 M2 CONCLUÍDO. Gasto acumulado: US$ 1,74. Próximo: M3 (branch maratona2-audio a partir de maratona2-demo).
+
+## M3 — Áudio na bancada (branch maratona2-audio, a partir de maratona2-demo)
+
+PASSO 0:
+- Recebe/transcreve: WhatsApp baixa pelo id (receber_audio.transcrever_audio); Telegram baixa os bytes;
+  os dois chamam transcrever_bytes_com_uso (Gemini, MODELO_LLM) e o texto entra em executar_turno como texto.
+- Guarda: o áudio NÃO é gravado (bytes só na memória); fica gravada a TRANSCRIÇÃO como mensagem do cliente.
+- Custo: registrar_uso(tipo="transcricao") nos canais; a bancada não tinha esse custo (não havia áudio).
+- Vazio/erro: transcrição vazia ou falha -> resposta fixa "Não consegui entender o áudio..." (sem IA).
+  Longo: NÃO há limite de duração/tamanho (anotado para a revisão). Inaudível: se o Gemini devolver
+  texto (ex.: "[inaudível]"), ele vai para o Léo como se fosse fala do cliente (a bancada vai mostrar).
+Feito: transcrever_do_cliente (app/api/receber_audio.py) = caminho único (transcreve + custo); o Telegram
+passou a usar. Bancada: campo `audio:` (custo do áudio no relatório; arquivo faltando = AVISO "áudio ausente").
+scripts/gerar_audios_bancada.py gerou 4 áudios (3 voz Gemini TTS + 1 ruído) em bancada/audios/ (fora do git;
+LEIA.md explica). Roteiros 80-83 (audio_*). tests/test_m3_audio.py (7). Próximo: suíte -> bancada 3x -> commit.
+Suíte M3 (3 partes, em primeiro plano): parte 1 `706 passed`; parte 2 `2 failed, 916 passed` (contagem fixa de
+52 roteiros em test_l11 e test_l12 -> 56; consertado, os 2 arquivos passam: 62). Ao rodar a parte 2 de novo, o
+sistema PAROU por falta de memória. Parte 3 não rodou. Bancada do M3 não rodou. Gasto: US$ 1,74 + ~0,01 (TTS) = 1,75.
+RETOMAR AQUI (3): suíte M3 partes 2 e 3 (logs/m3_parte01 e m3_parte02) -> bancada 3x -> commit feat(audio) -> M4.
 
 ## Precisa de decisão do Samuel
 

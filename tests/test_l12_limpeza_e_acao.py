@@ -292,4 +292,4 @@ def test_bancada_falha_estado_sem_ficha(bancada, monkeypatch):
 
 def test_roteiro_52(bancada):
     roteiros = {r["nome"]: r for r in bancada.carregar_roteiros()}
-    assert len(roteiros) == 52 and "nunca bateu" in roteiros["estado_do_carro"]["nao_contem"]
+    assert len(roteiros) == 56 and "nunca bateu" in roteiros["estado_do_carro"]["nao_contem"]

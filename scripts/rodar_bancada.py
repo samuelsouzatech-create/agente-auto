@@ -86,14 +86,16 @@ ESTOQUE = [
 # Preço do Gemini 3.1 Flash-Lite (US$ por 1 milhão de tokens), o mesmo dos testes -m api.
 PRECO_ENTRADA_USD_MILHAO = 0.25
 PRECO_SAIDA_USD_MILHAO = 1.50
+PRECO_AUDIO_USD_MILHAO = 0.50     # M3: tokens de áudio (entrada), estimativa conservadora
 TETO_PADRAO_USD = 0.50
 
 PASSOU, AVISO, FALHOU, PENDENTE, NAO_RODOU = "PASSOU", "AVISO", "FALHOU", "PENDENTE", "NÃO RODOU"
 CORRIGIDO = "CORRIGIDO"     # M1: a guarda do código corrigiu o modelo e o cliente recebeu texto certo
 ALERTA_PENDENTE = "PASSOU — remova o pendente e marque feito em docs/fase_cerebro.md"
 IMAGEM_AUSENTE = "imagem ausente"
+AUDIO_AUSENTE = "áudio ausente"     # M3
 
-CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "deve", "nao_pode", "pendente", "loja",
+CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "audio", "deve", "nao_pode", "pendente", "loja",
                   "recados", "nao_contem", "imagem_texto", "legenda",
                   "canal", "conversa", "interesse", "venda", "passos",      # L6: roteiros de job
                   "rajada",                                                 # L7: mensagens seguidas
@@ -144,7 +146,7 @@ def validar_roteiro(dados, origem: str = "") -> dict:
     falas = dados.get("falas")
     if not nome:
         raise RoteiroInvalido(f"{origem}: falta 'nome'")
-    tem_imagem = bool(dados.get("imagem") or dados.get("imagem_texto"))
+    tem_imagem = bool(dados.get("imagem") or dados.get("imagem_texto") or dados.get("audio"))   # M3: áudio
     e_job = "passos" in dados                      # L6: roteiro de job não tem falas
     rajada = dados.get("rajada")
     if rajada is not None and (not isinstance(rajada, list) or len(rajada) < 2
@@ -184,6 +186,7 @@ def validar_roteiro(dados, origem: str = "") -> dict:
         "falas": [str(f).strip() for f in falas],
         "remetente": str(dados["remetente"]).strip() if dados.get("remetente") else None,
         "imagem": str(dados["imagem"]).strip() if dados.get("imagem") else None,
+        "audio": str(dados["audio"]).strip() if dados.get("audio") else None,      # M3: bancada/audios/...
         # L5: imagem gerada pela bancada (Pillow) com este texto e "FICTÍCIO" escrito
         "imagem_texto": str(dados["imagem_texto"]).strip() if dados.get("imagem_texto") else None,
         "legenda": str(dados.get("legenda") or "").strip(),
@@ -514,9 +517,10 @@ def teto_usd() -> float:
     return max(valor, 0.0)
 
 
-def custo_usd(tokens_entrada: int, tokens_saida: int) -> float:
+def custo_usd(tokens_entrada: int, tokens_saida: int, tokens_audio: int = 0) -> float:
     return (tokens_entrada / 1_000_000 * PRECO_ENTRADA_USD_MILHAO
-            + tokens_saida / 1_000_000 * PRECO_SAIDA_USD_MILHAO)
+            + tokens_saida / 1_000_000 * PRECO_SAIDA_USD_MILHAO
+            + tokens_audio / 1_000_000 * PRECO_AUDIO_USD_MILHAO)
 
 
 def tokens_das(mensagens) -> tuple[int, int]:
@@ -680,10 +684,13 @@ class ResultadoRoteiro:
     inicio_relogio: object = None
     tokens_imagem_saida: int = 0
     mensagens_gravadas: int = 0                          # mensagens gravadas como conversa de cliente
+    tokens_audio: int = 0                                # M3: tokens de áudio da transcrição
+    tokens_transcricao: int = 0                          # M3: texto da transcrição (entrada + saída)
+    transcricoes: list = field(default_factory=list)     # M3: o que a transcrição entendeu
 
     @property
     def custo_usd(self) -> float:
-        return custo_usd(self.tokens_entrada, self.tokens_saida)
+        return custo_usd(self.tokens_entrada, self.tokens_saida, self.tokens_audio)
 
     @property
     def tools(self) -> list:
@@ -875,6 +882,12 @@ def checar(res: ResultadoRoteiro) -> None:
     if res.parou_no_teto:
         res.falhas.append("roteiro interrompido no teto de gasto")
     res.status, res.alerta = decidir(res.promessas, res.falhas, res.avisos, r["pendente"], res.corrigidos)
+
+
+def _mime_do_audio(nome: str) -> str:
+    """M3: tipo do arquivo de áudio pela extensão (o WhatsApp manda ogg/opus)."""
+    return {".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4",
+            ".aac": "audio/aac", ".flac": "audio/flac"}.get(Path(nome).suffix.lower(), "audio/ogg")
 
 
 def _mime_da_imagem(nome: str) -> str:
@@ -1537,6 +1550,33 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
             rodada.tokens_saida += uso.tokens_saida
         await _depois_do_turno(turno, resultado, desde, antes)
 
+    async def _turno_de_audio(caminho: Path):
+        from app.api.receber_audio import transcrever_do_cliente
+        from app.core.turno import turno_audio_falhou
+        transcrito = {}
+
+        async def _chamar():
+            texto, uso = await asyncio.to_thread(
+                transcrever_do_cliente, LOJA_ID, lead_id, CANAL, caminho.read_bytes(),
+                _mime_do_audio(caminho.name), transcritor=rodada.transcritor)
+            transcrito["texto"] = texto
+            res.transcricoes.append(texto or "")
+            res.tokens_audio += uso.tokens_audio
+            res.tokens_transcricao += uso.tokens_entrada + uso.tokens_saida
+            res.tokens_entrada += uso.tokens_entrada
+            res.tokens_saida += uso.tokens_saida
+            rodada.tokens_audio += uso.tokens_audio
+            rodada.tokens_entrada += uso.tokens_entrada
+            rodada.tokens_saida += uso.tokens_saida
+            if not texto:
+                return turno_audio_falhou(LOJA_ID, CANAL, lead_id)
+            return await executar_turno(LOJA_ID, CANAL, lead_id, texto, grafo=gravador)
+
+        await _turno(f"[áudio: {caminho.name}]", _chamar)
+        if res.turnos:
+            res.turnos[-1].fala = (f"[áudio: {caminho.name}] transcrição: \"{transcrito.get('texto')}\""
+                                   if transcrito.get("texto") else f"[áudio: {caminho.name}] (transcrição vazia)")
+
     foto = None
     if roteiro["imagem"]:
         caminho = RAIZ / roteiro["imagem"]
@@ -1552,6 +1592,13 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
         await _turno(f"[foto: {nome}] {legenda}".strip(),
                      lambda: executar_turno_imagem(LOJA_ID, CANAL, lead_id, conteudo, mime, legenda,
                                                    grafo=gravador, leitor=rodada.leitor))
+
+    if roteiro.get("audio"):        # M3: o áudio passa pela MESMA transcrição dos canais
+        caminho = RAIZ / roteiro["audio"]
+        if not caminho.is_file():
+            res.avisos.append(f"{AUDIO_AUSENTE}: {roteiro['audio']}")
+        else:
+            await _turno_de_audio(caminho)
 
     if roteiro.get("rajada"):       # L7: mensagens seguidas, pelo debounce de verdade (Redis falso)
         desde, antes = len(canal.enviadas), len(handoffs_abertos(lead_id))
@@ -1595,6 +1642,8 @@ class Rodada:
     redator: object = None         # L6: quem escreve o remarketing (None = IA de verdade)
     tokens_entrada: int = 0
     tokens_saida: int = 0
+    tokens_audio: int = 0          # M3
+    transcritor: object = None     # M3: quem transcreve o áudio (None = IA de verdade; testes passam um falso)
     parou_no_teto: bool = False
     abortada: str | None = None
     tentativas_reais: list = field(default_factory=list)
@@ -1602,12 +1651,13 @@ class Rodada:
 
     @property
     def gasto_usd(self) -> float:
-        return custo_usd(self.tokens_entrada, self.tokens_saida)
+        return custo_usd(self.tokens_entrada, self.tokens_saida, self.tokens_audio)
 
 
 async def rodar(roteiros: list[dict], grafo, teto: float | None = None, leitor=None,
-                redator=None) -> Rodada:
-    rodada = Rodada(teto=teto_usd() if teto is None else teto, leitor=leitor, redator=redator)
+                redator=None, transcritor=None) -> Rodada:
+    rodada = Rodada(teto=teto_usd() if teto is None else teto, leitor=leitor, redator=redator,
+                    transcritor=transcritor)
     with bloquear_envio_real(rodada.tentativas_reais), ator.como("Bancada", "sistema", "job"):
         for roteiro in roteiros:
             if rodada.parou_no_teto:
@@ -1651,6 +1701,11 @@ def montar_relatorio(rodada: Rodada, modelo: str = "") -> str:
         for recado in r.get("recados") or []:
             info.append(f"recado: \"{recado['texto']}\" (validade {recado['valido_ate']})")
         info.append(f"custo: US$ {res.custo_usd:.4f}")
+        if r.get("audio"):
+            info.append(f"áudio: {r['audio']}")
+        if res.tokens_audio or res.tokens_transcricao:
+            info.append(f"transcrição do áudio: {res.tokens_audio} tokens de áudio + {res.tokens_transcricao} "
+                        f"de texto (US$ {custo_usd(0, 0, res.tokens_audio):.4f} de áudio; já dentro do custo)")
         if res.tokens_imagem_entrada or res.tokens_imagem_saida:
             info.append(f"leitura da foto: US$ {custo_usd(res.tokens_imagem_entrada, res.tokens_imagem_saida):.4f} "
                         f"({res.tokens_imagem_entrada} tokens de entrada, {res.tokens_imagem_saida} de saída; "

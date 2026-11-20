@@ -1,0 +1,7 @@
+nome: audio_pergunta_preco
+# M3: o cliente pergunta o preço por áudio; a transcrição vai para o Léo como texto.
+audio: bancada/audios/pergunta_preco.wav
+deve:
+  tools: [consultar_estoque]
+  contem: ["135.000"]
+nao_pode: [preco_inventado]

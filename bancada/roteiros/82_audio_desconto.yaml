@@ -1,0 +1,6 @@
+nome: audio_desconto
+# M3: pedido de desconto por áudio; sem promessa, chamado aberto.
+audio: bancada/audios/desconto.wav
+deve:
+  handoff: sim
+nao_pode: [preco_inventado, desconto]

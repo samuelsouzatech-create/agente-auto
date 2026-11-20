@@ -1,0 +1,5 @@
+nome: audio_troca
+# M3: troca por áudio; o Léo anota e não dá valor de avaliação.
+audio: bancada/audios/troca.wav
+nao_contem: ["avaliamos em", "vale uns", "vale cerca", "pagamos"]
+nao_pode: [preco_inventado, desconto]
