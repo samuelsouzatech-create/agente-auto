@@ -34,6 +34,7 @@ from zoneinfo import ZoneInfo
 
 import banco
 from banco import conectar
+from app.console import id_no_console   # N1: privacidade no console
 from app import config  # noqa: F401  (carrega o .env)
 from app import base_pos_venda, bloqueios, regua, vendas
 from app.guarda_politica import sem_emoji, tirar_texto_interno
@@ -219,7 +220,7 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
     def registrar(estado, motivo=None, texto="", **extra) -> str:
         if real or estado == "cancelado":
             _atualizar(loja.id, e["id"], estado, agora, motivo=motivo, **extra)
-        print(f"[Pós-venda][loja {loja.id}] {ROTULOS.get(estado, estado)} {passo} -> {lead_id}"
+        print(f"[Pós-venda][loja {loja.id}] {ROTULOS.get(estado, estado)} {passo} -> {id_no_console(lead_id)}"
               + (f" | {MOTIVOS.get(motivo, motivo)}" if motivo else ""))
         if texto:
             print(f'    "{sem_emoji(texto)}"')        # L10: nada de emoji em print/log
@@ -228,7 +229,7 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
     def adiar(quando, motivo, contexto=None) -> str:
         _atualizar(loja.id, e["id"], "agendado", agora, motivo=motivo,
                    agendado_para=quando, contexto=contexto)
-        print(f"[Pós-venda][loja {loja.id}] REAGENDADO {passo} -> {lead_id} "
+        print(f"[Pós-venda][loja {loja.id}] REAGENDADO {passo} -> {id_no_console(lead_id)} "
               f"para {hora_local(loja, quando):%d/%m %H:%M} | {MOTIVOS.get(motivo, motivo)}")
         return "adiado"
 
@@ -249,7 +250,7 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
     if aberto:
         if e_pos_venda(aberto["motivo"]):
             n = regua.cancelar_futuros(loja.id, lead_id, "problema")
-            print(f"[Pós-venda][loja {loja.id}] {lead_id} relatou problema: {n} passo(s) cancelado(s).")
+            print(f"[Pós-venda][loja {loja.id}] {id_no_console(lead_id)} relatou problema: {n} passo(s) cancelado(s).")
             return "cancelado"
         return "adiado"                    # vendedor no meio: tenta no próximo ciclo
     if bloqueios.bloqueado(loja.id, lead_id, "pos_venda", e["id"]):

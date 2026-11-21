@@ -24,6 +24,7 @@ S4: também "para de mandar mensagem" (sem "me"), "pare de me mandar isso",
 """
 from __future__ import annotations
 
+from app.console import id_no_console   # N1: privacidade no console
 import re
 import unicodedata
 
@@ -114,7 +115,7 @@ def registrar_se_pediu_parada(loja_id: int, lead_id: str, texto: str, canal: str
         registrar_situacao(loja_id, lead_id, "nao_contatar",
                            motivo=f'Pedido claro na conversa: "{trecho}" (checagem fixa)',
                            canal=canal)
-        print(f"[Parada][loja {loja_id}] Lead {lead_id} pediu para não ser procurado ({trecho}). Registrado.")
+        print(f"[Parada][loja {loja_id}] Lead {id_no_console(lead_id, canal)} pediu para não ser procurado ({trecho}). Registrado.")
         return True
     except Exception as erro:
         print(f"[Parada][loja {loja_id}] ERRO ao registrar pedido de parada: {erro!r}")

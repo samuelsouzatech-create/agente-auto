@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.chaves import exigir_loja, thread_id
+from app.console import id_no_console, texto_no_console   # N1: privacidade no console
 from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
 from app.estado_loja import pode_responder
 from app.formatacao import limpar_markdown
@@ -162,7 +163,7 @@ def porta_fechada(loja_id, canal: str, lead_id) -> bool:
             return False
     except Exception as erro:
         print(f"[Turno][loja {loja_id}] Não consegui ler o estado da loja ({erro!r}). Porta fechada.")
-    print(f"{_rotulo(canal, loja_id)} Loja em teste: {lead_id} não é número de teste. "
+    print(f"{_rotulo(canal, loja_id)} Loja em teste: {id_no_console(lead_id, canal)} não é número de teste. "
           f"Mensagem ignorada, nada gravado.")
     _anotar_recusa(loja_id, canal, str(lead_id))
     return True
@@ -213,7 +214,7 @@ async def aguardar_vez(loja_id: int, lead_id: str, texto: str):
         return None, None
     token = await adquirir_lock_esperando(lead_id, loja_id=loja_id)
     if token is None:
-        print(f"[Turno][loja {loja_id}] Lead {lead_id}: lock ocupado tempo demais. Desistindo.")
+        print(f"[Turno][loja {loja_id}] Lead {id_no_console(lead_id)}: lock ocupado tempo demais. Desistindo.")
         return None, None
     return texto_juntado, token
 
@@ -233,7 +234,7 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     if em_sombra(loja_id):          # L9: gera a resposta, NÃO envia nem grava atendimento
         return await _turno_sombra(loja_id, canal, lead_id, texto, grafo, inicio)
     rotulo = _rotulo(canal, loja_id)
-    print(f"\n{rotulo} Cliente {lead_id} disse: {texto}")
+    print(f"\n{rotulo} Cliente {id_no_console(lead_id, canal)} disse: {texto_no_console(texto, canal)}")
 
     configuracao = {"configurable": {"thread_id": thread_id(loja_id, canal, lead_id)}}
     perdidas = _o_que_aconteceu_fora(loja_id, lead_id)
@@ -246,13 +247,13 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     registrar_se_pediu_parada(loja_id, lead_id, texto, canal)
 
     if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
-        print(f"{rotulo} Lead {lead_id} está com um vendedor humano. Léo em silêncio.")
+        print(f"{rotulo} Lead {id_no_console(lead_id, canal)} está com um vendedor humano. Léo em silêncio.")
         return ResultadoTurno(silenciado=True)
 
     # L5b: número fora da equipe dizendo ser dono/gestor/da loja: resposta fixa, sem IA.
     # L5c: depois que disparou, toda fala do lead (24 h, ou até o vendedor assumir) também.
     if diz_ser_da_equipe(texto) or falso_dono_ativo(loja_id, lead_id):
-        print(f"{rotulo} GUARDA: {lead_id} diz ser da equipe, mas não está cadastrado. Resposta fixa.")
+        print(f"{rotulo} GUARDA: {id_no_console(lead_id, canal)} diz ser da equipe, mas não está cadastrado. Resposta fixa.")
         marcar_falso_dono(loja_id, lead_id, texto)
         salvar_mensagem(lead_id, "leo", MENSAGEM_FALSO_DONO, canal=canal, loja_id=loja_id)
         return ResultadoTurno(texto=MENSAGEM_FALSO_DONO, handoff_aberto=True)
@@ -300,14 +301,14 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     # Ponto 9: o vendedor pode ter assumido enquanto a IA pensava. A IA já foi
     # paga (o custo é registrado), mas nada é enviado nem gravado como fala do Léo.
     if estado_do_handoff(lead_id, loja_id) == "humano_assumiu":
-        print(f"{rotulo} Vendedor assumiu durante a resposta. Resposta descartada: {resposta}")
+        print(f"{rotulo} Vendedor assumiu durante a resposta. Resposta descartada: {texto_no_console(resposta, canal)}")
         registro = registrar_uso(loja_id, lead_id, canal, uso_das_mensagens(do_turno),
                                  ferramentas=ferramentas, latencia_ms=_ms_desde(inicio))
         return ResultadoTurno(silenciado=True, execucao_id=_id(registro))
 
     if resposta_tem_preco_inventado(resposta, resultado["messages"]):
         print(f"{rotulo} GUARDA: preço inventado detectado. Acionando handoff.")
-        print(f"{rotulo} Resposta barrada: {resposta}")
+        print(f"{rotulo} Resposta barrada: {texto_no_console(resposta, canal)}")
         acionar_handoff.func(
             motivo="Guarda de política: valor em R$ sem origem em tool.",
             resumo=f"Resposta barrada do Léo: {resposta}",
@@ -410,7 +411,7 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     if robotico:
         print(f"{rotulo} ALERTA de naturalidade: a resposta tem \"{robotico}\". Revise o prompt.")
 
-    print(f"{rotulo} Léo responde: {resposta}")
+    print(f"{rotulo} Léo responde: {texto_no_console(resposta, canal)}")
     if midias:
         print(f"{rotulo} Enviando {len(midias)} foto(s).")
 
@@ -608,7 +609,7 @@ async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, graf
     (sem mensagem na conversa, sem chamado, troca, visita ou lead). Só a sugestão fica.
     As guardas que só mexem no TEXTO valem, para a sugestão ser o que ele mandaria."""
     rotulo = _rotulo(canal, loja_id)
-    print(f"\n{rotulo} [SOMBRA] Cliente {lead_id} disse: {texto}")
+    print(f"\n{rotulo} [SOMBRA] Cliente {id_no_console(lead_id, canal)} disse: {texto_no_console(texto, canal)}")
     try:
         resultado = await asyncio.to_thread(
             grafo.invoke,
@@ -726,7 +727,7 @@ async def _turno_da_equipe(loja_id: int, canal: str, lead_id: str, texto: str,
     de gravar sai da ferramenta (repete recado e validade). Sem recado gravado e
     com número na resposta: resposta fixa (o Léo não inventa número do dia)."""
     rotulo = _rotulo(canal, loja_id)
-    print(f"\n{rotulo} {membro['nome']} ({membro['papel']}, equipe) disse: {texto}")
+    print(f"\n{rotulo} {membro['nome']} ({membro['papel']}, equipe) disse: {texto_no_console(texto, canal)}")
     if not pode_deixar_recado(membro):
         return ResultadoTurno(texto=MENSAGEM_SO_DONO)
     try:
@@ -753,7 +754,7 @@ async def _turno_da_equipe(loja_id: int, canal: str, lead_id: str, texto: str,
         resposta = limpar_markdown(extrair_texto(resultado["messages"][-1].content))
         if not resposta.strip() or (not tentou and _TEM_NUMERO.search(resposta)):
             resposta = MENSAGEM_SO_RECADOS
-    print(f"{rotulo} Léo responde à equipe: {resposta}")
+    print(f"{rotulo} Léo responde à equipe: {texto_no_console(resposta, canal)}")
     registro = registrar_uso(loja_id, None, canal, uso_das_mensagens(do_turno), tipo="equipe",
                              ferramentas=ferramentas_usadas(do_turno), latencia_ms=_ms_desde(inicio))
     return ResultadoTurno(texto=resposta, custo=_custo(registro), execucao_id=_id(registro))
@@ -895,7 +896,7 @@ async def executar_turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: 
     rotulo = _rotulo(canal, loja_id)
     leitura = imagens.ajustar_pela_legenda((leitor or imagens.ler_imagem)(imagem, mime), legenda)
     registrar_uso(loja_id, lead_id, canal, leitura.uso, tipo="imagem", ferramentas=["leitura_imagem"])
-    print(f"{rotulo} Cliente {lead_id} mandou foto: {leitura.tipo if leitura.ok else 'não lida'}")
+    print(f"{rotulo} Cliente {id_no_console(lead_id, canal)} mandou foto: {leitura.tipo if leitura.ok else 'não lida'}")
     if not leitura.ok:
         _anotar_falha_da_foto(loja_id, lead_id, canal, leitura)
     if leitura.ok and leitura.tipo == imagens.CARRO:     # L5c: sem julgamento de estado

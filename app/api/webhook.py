@@ -25,6 +25,7 @@ from app.core.turno import (
 )
 from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
 from app.api.receber_audio import transcrever_audio, pegar_uso_da_transcricao
+from app.console import id_no_console, texto_no_console   # N1
 from app.api.receber_imagem import baixar_imagem_whatsapp
 from app.redis_lock import adquirir_lock_esperando
 from app.custos import registrar_uso
@@ -58,6 +59,18 @@ async def sinalizar_leitura(loja_id: int, lead_id: str) -> None:
         await canal_whatsapp.marcar_lida(id_mensagem, digitando=True, loja_id=loja_id)
 
 
+def avisar_configuracao() -> list[str]:
+    """N1: o que falta configurar para o webhook do WhatsApp aceitar algo (avisa ao ligar)."""
+    faltando = [nome for nome, valor in (("WHATSAPP_VERIFY_TOKEN", WHATSAPP_VERIFY_TOKEN),
+                                         ("WHATSAPP_APP_SECRET", WHATSAPP_APP_SECRET)) if not valor]
+    for nome in faltando:
+        print(f"[WhatsApp] AVISO: {nome} não está no .env. O webhook vai recusar (falha fechada).")
+    return faltando
+
+
+avisar_configuracao()      # ao ligar o servidor (o módulo é carregado uma vez)
+
+
 @app.get("/")
 def raiz():
     return {"status": "ok", "mensagem": "Servidor do Léo está no ar 🚗"}
@@ -69,7 +82,9 @@ def verificar_webhook(
     hub_verify_token: str = Query(default="", alias="hub.verify_token"),
     hub_challenge: str = Query(default="", alias="hub.challenge"),
 ):
-    if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
+    # N1: sem token configurado, nunca aceita (falha fechada); comparação em tempo constante.
+    if (hub_mode == "subscribe" and WHATSAPP_VERIFY_TOKEN
+            and hmac.compare_digest(hub_verify_token, WHATSAPP_VERIFY_TOKEN)):
         return Response(content=hub_challenge, media_type="text/plain")
     return Response(content="Token de verificação inválido", status_code=403)
 
@@ -107,7 +122,7 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
         # P7c: loja em teste e não é número de teste: nem transcreve (custo).
         if porta_fechada(loja_id, CANAL, numero):
             return
-        print(f"[WhatsApp][loja {loja_id}] Cliente {numero} mandou um áudio. Transcrevendo...")
+        print(f"[WhatsApp][loja {loja_id}] Cliente {id_no_console(numero, CANAL)} mandou um áudio. Transcrevendo...")
         texto = await transcrever_audio(id_audio, loja_id=loja_id)
         uso_audio = pegar_uso_da_transcricao(id_audio)
         if uso_audio is not None and not uso_audio.vazio:
@@ -118,7 +133,7 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
             if aviso.texto:
                 await enviar_resposta_humanizada(numero, aviso.texto, loja_id=loja_id)
             return
-        print(f"[WhatsApp][loja {loja_id}] Áudio transcrito: {texto}")
+        print(f"[WhatsApp][loja {loja_id}] Áudio transcrito: {texto_no_console(texto, CANAL)}")
 
     texto_juntado, token = await aguardar_vez(loja_id, numero, texto)
     if texto_juntado is None:

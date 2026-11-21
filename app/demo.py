@@ -203,8 +203,9 @@ def criar_loja_demo(*, loja_id: int | None = None, agora: datetime | None = None
         alvo = loja_id or id_da_loja_demo()
         if alvo is not None:
             existe = conexao.execute("SELECT config FROM lojas WHERE id = ?", (alvo,)).fetchone()
-            if existe is not None and loja_id is None and not json.loads(existe["config"] or "{}").get("demo"):
-                raise LojaNaoEDemo(f"a loja {alvo} não está marcada como demo")
+            # M3/N1 (revisão #1): mesmo com loja_id explícito, só recria loja que não existe ou que já é demo.
+            if existe is not None and not (json.loads(existe["config"] or "{}") or {}).get("demo"):
+                raise LojaNaoEDemo(f"a loja {alvo} não está marcada como demo; nada foi apagado")
         config = json.dumps(CONFIG_DEMO, ensure_ascii=False)
         if alvo is None:
             alvo = conexao.execute("INSERT INTO lojas (nome, segmento, config) VALUES (?, 'veiculos', ?)",
@@ -216,8 +217,6 @@ def criar_loja_demo(*, loja_id: int | None = None, agora: datetime | None = None
             conexao.execute("INSERT INTO lojas (id, nome, segmento, config) VALUES (?, ?, 'veiculos', ?)",
                             (alvo, NOME_DEMO, config))
         _apagar_dados(conexao, alvo)
-        conexao.execute("INSERT OR REPLACE INTO estado_lojas (loja_id, estado, no_ar_em, alterado_por) "
-                        "VALUES (?, 'no_ar', ?, 'Demo')", (alvo, para_banco(agora)))
         conexao.execute("DELETE FROM canais WHERE loja_id = ?", (alvo,))     # só o simulador (sem canal real)
         for nome, papel in EQUIPE_DEMO:
             conexao.execute("INSERT INTO usuarios (loja_id, nome, papel) VALUES (?, ?, ?)", (alvo, nome, papel))
@@ -233,6 +232,7 @@ def criar_loja_demo(*, loja_id: int | None = None, agora: datetime | None = None
         conexao.close()
     from app import lojas
     lojas.limpar_cache()
+    _no_ar(alvo, agora)
     if com_historico:
         _historico(alvo, agora, pasta_fotos)
     if indexar:
@@ -242,6 +242,15 @@ def criar_loja_demo(*, loja_id: int | None = None, agora: datetime | None = None
         except Exception as erro:            # sem rede/chave: a base fica no banco; reindexar depois
             print(f"[Demo] Aviso: não consegui indexar a base agora ({type(erro).__name__}).")
     return alvo
+
+
+def _no_ar(loja_id: int, agora: datetime) -> None:
+    """N1 (revisão #24): a demo entra no ar pelo caminho de sempre (colocar_no_ar), que grava no
+    Registro. Quem age é o script da demo, com papel de operador. Já no ar: nada muda."""
+    from app.ator import como
+    from app.estado_loja import colocar_no_ar
+    with como("Demo (script)", "operador", "job", None):
+        colocar_no_ar(loja_id, agora)
 
 
 def reiniciar_demo(loja_id: int, *, agora: datetime | None = None, indexar: bool = True,

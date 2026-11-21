@@ -43,6 +43,7 @@ from zoneinfo import ZoneInfo
 
 import banco
 from banco import conectar
+from app.console import id_no_console   # N1: privacidade no console
 from app import config  # noqa: F401  (carrega o .env)
 from app.aviso_limite import avisar_limite
 from app.chaves import exigir_loja
@@ -462,7 +463,7 @@ def _registrar(loja: Loja, d: Decisao, agora: datetime, estado: str, *, real: bo
                   execucao_id=execucao_id)
     rotulo = {"enviado": "ENVIADO", "simulado": "SIMULADO (nada saiu)",
               "falhou": "FALHOU", "bloqueado": "BLOQUEADO"}[estado]
-    print(f"[Remarketing][loja {loja.id}] {rotulo} toque {d.toque} -> {d.lead_id} ({d.canal})"
+    print(f"[Remarketing][loja {loja.id}] {rotulo} toque {d.toque} -> {id_no_console(d.lead_id, d.canal)} ({d.canal})"
           + (f" | {MOTIVOS.get(motivo, motivo)}" if motivo else ""))
     if texto and estado in ("simulado", "enviado"):
         print(f'    "{sem_emoji(texto)}"')
@@ -600,7 +601,7 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
                 estado = processar_lead(loja, decisao, agora, real=real,
                                         redator=redator, enviador=enviador)
             except Exception as erro:
-                print(f"[Remarketing][loja {loja_id}] Erro com {decisao.lead_id}: {sem_emoji(repr(erro))}")
+                print(f"[Remarketing][loja {loja_id}] Erro com {id_no_console(decisao.lead_id, decisao.canal)}: {sem_emoji(repr(erro))}")
                 estado = "erro"
             totais[estado] += 1
             if estado != "pulado":       # pulado não ocupa vaga da rodada
@@ -642,7 +643,7 @@ def main(argv=None) -> int:
             print("  (nenhum lead com conversa no WhatsApp ou Telegram)")
         for d in lista:
             extra = f" (próximo: {d.proximo_em:%d/%m %H:%M} UTC)" if d.proximo_em and not d.elegivel else ""
-            print(f"  {d.lead_id} ({d.canal}): {d.rotulo}{extra}")
+            print(f"  {id_no_console(d.lead_id, d.canal)} ({d.canal}): {d.rotulo}{extra}")
 
     print()
     totais = rodar_remarketing(agora, envio_real=False, lojas=ids, pausa_s=0)

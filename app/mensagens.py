@@ -9,6 +9,7 @@ conversou enquanto ele estava em silêncio.
 direcao: 'cliente' (recebida), 'leo' (assistente) ou 'vendedor' (painel).
 """
 from banco import conectar
+from app.console import id_no_console   # N1: privacidade no console
 
 DIRECOES = ("cliente", "leo", "vendedor")
 LIMITE_CONTEXTO = 20
@@ -28,7 +29,7 @@ def salvar_mensagem(lead_id: str, direcao: str, conteudo: str,
         conexao.commit()
         conexao.close()
     except Exception as erro:
-        print(f"[Mensagens] ERRO ao salvar mensagem de {lead_id}: {erro!r}")
+        print(f"[Mensagens] ERRO ao salvar mensagem de {id_no_console(lead_id, canal)}: {erro!r}")
 
 
 def historico_do_lead(lead_id: str, loja_id: int) -> list:
