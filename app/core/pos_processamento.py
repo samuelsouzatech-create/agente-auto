@@ -212,7 +212,8 @@ def fragmentos(c: Contexto) -> None:
     fechada = t.reabertura_agora(c.loja_id) is not None
     if c.resposta == c.resposta_inicial and not fechada:
         return                                   # sem corte e loja aberta: nada a limpar
-    novo, trocou = t.tirar_fragmentos(c.resposta, c.texto, loja_fechada=fechada)
+    novo, trocou = t.tirar_fragmentos(c.resposta, c.texto, loja_fechada=fechada,
+                                      original=c.resposta_inicial)      # N5c: só sobra de corte sai
     if trocou and novo.strip():
         c.resposta = novo
         c.avisar("GUARDA: pedaço solto ou 'só um instante' tirado da resposta.")

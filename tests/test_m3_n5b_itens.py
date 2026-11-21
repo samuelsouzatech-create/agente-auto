@@ -204,3 +204,28 @@ def test_entrega_so_com_carro_ou_cidade(fala, abre):
     from app.core.turno import motivo_do_chamado_pelo_codigo
     motivo = motivo_do_chamado_pelo_codigo(fala, "Ok.", "sim")
     assert (motivo is not None and motivo[0] == "Cliente pediu entrega do carro.") is abre
+
+
+# ------------------------------------------------------------ N5c: com a loja fechada, nada bom some
+
+@pytest.mark.parametrize("resposta", [
+    "Temos o Civic 2019!\n\n- Automático\n- 48 mil km",
+    "Legal! Me conta o ano e a quilometragem.",
+    "Parabéns pela compra, Carla! Fico à disposição.",
+    "Boa pergunta! O Civic 2019 está disponível.",
+])
+def test_loja_fechada_mantem_lista_e_frases_do_modelo(monkeypatch, resposta):
+    from app import relogio
+    from app.core.turno import executar_turno
+    _loja_com_horario(1)
+    monkeypatch.setattr(relogio, "agora_utc", lambda: DOMINGO_1500)          # loja FECHADA
+    r = asyncio.run(executar_turno(1, "simulador", "c-fech", "oi", grafo=Grafo(resposta)))
+    assert r.texto == resposta
+
+
+def test_so_sai_o_pedaco_que_sobrou_de_um_corte():
+    modelo = "Ficamos na Domingos Ferreira, 1000, Boa Viagem. Legal!"
+    depois_do_corte = "Domingos Ferreira, 1000, Boa Viagem. Legal!"       # uma guarda cortou o começo
+    assert tirar_fragmentos(depois_do_corte, "oi", original=modelo) == ("Legal!", True)
+    assert tirar_fragmentos("Legal! Fico à disposição.", "oi", loja_fechada=True,
+                            original="Legal! Fico à disposição.") == ("Legal! Fico à disposição.", False)

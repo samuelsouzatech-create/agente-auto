@@ -257,3 +257,13 @@ Feito (N5b):
 Suíte N5b (3 partes): `729 passed, 86 deselected` + `935 passed` (1ª vez 1 falha: a descrição da foto com
 "modelo não identificado" passava de 200 letras; agora corta no fim) + `1132 passed, 6 deselected` = 2796 passed.
 Sem bancada (sem crédito). NÃO houve merge.
+
+## N5c — conserto achado no merge do N5 na main (21/11/2026)
+
+No merge do N5, a suíte na main falhou em 4 testes (test_etapa1_bloco4, test_l5b_consertos, test_l2_loja,
+test_s6_consertos): com a LOJA FECHADA (sábado à noite), a guarda de fragmentos (item 9) apagava linhas boas
+do próprio modelo ("- Automático", "Legal!", "Fico à disposição.", "Boa pergunta!"). Na branch tinha passado
+porque a suíte rodou com a loja aberta. O merge NÃO foi enviado (main local voltou para origin/main).
+Conserto: pedaço sem verbo só sai se NÃO estava no texto do modelo como frase inteira (sobra de corte); item de
+lista nunca sai; "Só um instante" com a loja fechada continua saindo. Testes novos com relógio fixo de loja
+fechada (domingo 15:00) para isso não depender da hora.

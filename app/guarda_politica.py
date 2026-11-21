@@ -1151,17 +1151,32 @@ def _e_fragmento(frase: str, pergunta: str) -> bool:
     return not _PARECE_VERBO.search(f) or (len(palavras) < 4 and bool(re.search(r"\d", f)))
 
 
-def tirar_fragmentos(resposta: str, pergunta: str = "", loja_fechada: bool = False) -> tuple[str, bool]:
+_ITEM_DE_LISTA = re.compile(r"^\s*([-*•]|\d+[.)])\s+")
+
+
+def tirar_fragmentos(resposta: str, pergunta: str = "", loja_fechada: bool = False,
+                     original: str | None = None) -> tuple[str, bool]:
     """Depois dos cortes das guardas: pedaço solto sem verbo (ex.: "Domingos Ferreira, 1000, Boa Viagem.")
-    sai; nome do carro e assunto da pergunta ficam. Loja fechada: nunca "Só um instante"/"já te aviso"."""
+    sai; nome do carro e assunto da pergunta ficam. Loja fechada: nunca "Só um instante"/"já te aviso".
+    N5c: com `original` (o que o modelo escreveu), só sai o pedaço que NÃO estava lá como frase inteira
+    (sobra de corte); frase do próprio modelo ("Legal!", "Fico à disposição.") e item de lista nunca saem."""
+    do_modelo = None
+    if original is not None:
+        do_modelo = {_sem_acento(f).strip(" .!?") for l in str(original).split("\n") for f in _frases_originais(l)}
     linhas, mudou = [], False
     for linha in str(resposta or "").split("\n"):
         if not linha.strip():
             linhas.append(linha)
             continue
-        frases = _frases_originais(linha)
-        ficam = [fr for fr in frases if not _e_fragmento(fr, pergunta)
-                 and not (loja_fechada and _JA_JA_FECHADO.search(_sem_acento(fr)))]
+        if _ITEM_DE_LISTA.match(linha):
+            frases = [linha]
+            ficam = [linha] if not (loja_fechada and _JA_JA_FECHADO.search(_sem_acento(linha))) else []
+        else:
+            frases = _frases_originais(linha)
+            ficam = [fr for fr in frases
+                     if not (_e_fragmento(fr, pergunta)
+                             and (do_modelo is None or _sem_acento(fr).strip(" .!?") not in do_modelo))
+                     and not (loja_fechada and _JA_JA_FECHADO.search(_sem_acento(fr)))]
         if len(ficam) != len(frases):
             mudou = True
         if ficam:
