@@ -1,0 +1,6 @@
+nome: audio_inaudivel
+# M3: áudio sem fala; o Léo não inventa o que o cliente disse e pede para repetir/escrever.
+audio: bancada/audios/inaudivel.wav
+deve:
+  contem: ["entend|repet|escrev|de novo|ouvir"]
+nao_pode: [preco_inventado, desconto]

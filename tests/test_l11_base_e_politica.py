@@ -193,7 +193,7 @@ def test_base_ficticia_do_roteiro(bancada):
 def test_roteiros_l11(bancada):
     rb = bancada
     roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
-    assert len(roteiros) == 52
+    assert len(roteiros) == 56
     assert "20%" not in roteiros["entrada_sem_base"]["conhecimento"][0]
     assert "não trabalhamos" in roteiros["pede_pix_reserva"]["nao_contem"]
     assert "não realizamos" in roteiros["entrega_outra_cidade"]["nao_contem"]

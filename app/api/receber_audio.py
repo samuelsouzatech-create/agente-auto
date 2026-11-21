@@ -8,13 +8,16 @@ inclusive a leitura dos tokens (uso_da_resposta).
 - transcrever_bytes_com_uso(bytes, mime)  -> (texto, Uso)
 - transcrever_bytes(bytes, mime)          -> texto (compatibilidade)
 - transcrever_audio(id_audio, loja_id=..) -> texto (WhatsApp, token DA LOJA)
+- transcrever_do_cliente(loja_id, lead_id, canal, bytes, mime) -> (texto, Uso), já com o custo
+  registrado (Telegram e bancada). O áudio NÃO é guardado: só a transcrição vira mensagem.
 """
 import httpx
 from google import genai
 
 from app.config import WHATSAPP_API_VERSION, GOOGLE_API_KEY, MODELO_LLM
 from app.credenciais import SemCredencial, credencial_whatsapp
-from app.custos import Uso
+from app.chaves import exigir_loja
+from app.custos import Uso, registrar_uso
 
 # Uso de cada transcrição do WhatsApp, guardado pelo id do áudio até o
 # webhook pegar (pegar_uso_da_transcricao) e registrar o custo.
@@ -62,6 +65,17 @@ def transcrever_bytes_com_uso(bytes_audio: bytes, mime: str = "audio/ogg") -> tu
 def transcrever_bytes(bytes_audio: bytes, mime: str = "audio/ogg") -> str | None:
     """Compatibilidade: só o texto."""
     return transcrever_bytes_com_uso(bytes_audio, mime)[0]
+
+
+def transcrever_do_cliente(loja_id: int, lead_id: str, canal: str, bytes_audio: bytes,
+                           mime: str = "audio/ogg", *, transcritor=None) -> tuple[str | None, Uso]:
+    """M3: caminho único do áudio que já está em bytes: transcreve e registra o custo
+    (tipo "transcricao"). transcritor: só testes (padrão: a IA de verdade)."""
+    loja_id = exigir_loja(loja_id)
+    texto, uso = (transcritor or transcrever_bytes_com_uso)(bytes_audio, mime)
+    if uso is not None and not uso.vazio:
+        registrar_uso(loja_id, lead_id, canal, uso, tipo="transcricao", ferramentas=["transcricao_audio"])
+    return texto, uso or Uso()
 
 
 def pegar_uso_da_transcricao(id_audio: str) -> Uso | None:

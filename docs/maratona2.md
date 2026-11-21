@@ -1,13 +1,13 @@
 # Maratona 2 — diário
 
 Retomada: "continue a maratona pelo docs/maratona2.md". Ler só este diário e o CLAUDE.md.
-Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 1,74**
+Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 2,34**
 
 | Bloco | Branch | Status | Último commit | pytest | Bancada | Custo |
 |---|---|---|---|---|---|---|
 | M1 (L13+L14) | maratona2-l13 | concluído (Fase Cérebro fechada) | ver abaixo | 2655 passed (16:08) | 191656 · 192212 · 192746 | US$ 1,11 |
 | M2 Demo | maratona2-demo | concluído: suíte 2669, bancada 3x e ensaio 3x sem GRAVE | ver abaixo | — | — | — |
-| M3 Áudio | maratona2-audio | pendente | — | — | — | — |
+| M3 Áudio | maratona2-audio | concluído: suíte 2676, bancada 3x sem GRAVE (inaudível falha: decisão) | — | — | — | — |
 | M4 Revisão | maratona2-revisao | pendente | — | — | — | — |
 
 ## M1 — L13
@@ -102,7 +102,38 @@ Ensaios 2 e 3 (rodados em primeiro plano): rodada_2026-11-20_160630 (6 PASSOU + 
 cortou "É um excelente carro" no pós-venda) e rodada_2026-11-20_160725 (7/7 PASSOU). US$ 0,02 cada. Sem GRAVE.
 M2 CONCLUÍDO. Gasto acumulado: US$ 1,74. Próximo: M3 (branch maratona2-audio a partir de maratona2-demo).
 
+## M3 — Áudio na bancada (branch maratona2-audio, a partir de maratona2-demo)
+
+PASSO 0:
+- Recebe/transcreve: WhatsApp baixa pelo id (receber_audio.transcrever_audio); Telegram baixa os bytes;
+  os dois chamam transcrever_bytes_com_uso (Gemini, MODELO_LLM) e o texto entra em executar_turno como texto.
+- Guarda: o áudio NÃO é gravado (bytes só na memória); fica gravada a TRANSCRIÇÃO como mensagem do cliente.
+- Custo: registrar_uso(tipo="transcricao") nos canais; a bancada não tinha esse custo (não havia áudio).
+- Vazio/erro: transcrição vazia ou falha -> resposta fixa "Não consegui entender o áudio..." (sem IA).
+  Longo: NÃO há limite de duração/tamanho (anotado para a revisão). Inaudível: se o Gemini devolver
+  texto (ex.: "[inaudível]"), ele vai para o Léo como se fosse fala do cliente (a bancada vai mostrar).
+Feito: transcrever_do_cliente (app/api/receber_audio.py) = caminho único (transcreve + custo); o Telegram
+passou a usar. Bancada: campo `audio:` (custo do áudio no relatório; arquivo faltando = AVISO "áudio ausente").
+scripts/gerar_audios_bancada.py gerou 4 áudios (3 voz Gemini TTS + 1 ruído) em bancada/audios/ (fora do git;
+LEIA.md explica). Roteiros 80-83 (audio_*). tests/test_m3_audio.py (7). Próximo: suíte -> bancada 3x -> commit.
+Suíte M3 (3 partes, em primeiro plano): parte 1 `706 passed`; parte 2 `2 failed, 916 passed` (contagem fixa de
+52 roteiros em test_l11 e test_l12 -> 56; consertado, os 2 arquivos passam: 62). Ao rodar a parte 2 de novo, o
+sistema PAROU por falta de memória. Parte 3 não rodou. Bancada do M3 não rodou. Gasto: US$ 1,74 + ~0,01 (TTS) = 1,75.
+Retomado com CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1 (3,2 GB livres). Suíte M3 completa: parte 1 `706 passed`,
+parte 2 `918 passed`, parte 3 `1052 passed, 6 deselected` = 2676 passed.
+Bancada M3: rodada_2026-11-20_202202 / 203003 / 203749 (US$ 0,19 + 0,20 + 0,20 = 0,59). audio_pergunta_preco,
+audio_troca e audio_desconto PASSOU 3x (transcrição fiel; custo do áudio ~US$ 0,0001 por áudio no relatório).
+audio_inaudivel FALHOU 3x: o Gemini INVENTA fala no chiado ("Certo, eu vou.", "A partir de agora.", uma frase de
+apoio emocional) e o Léo responde ao que não foi dito ("Fico feliz que tenha decidido vir nos visitar!"). Não é
+GRAVE (sem preço/promessa) e o conserto está fora do escopo do M3: ver "Precisa de decisão". falso_dono: acabamento
+conhecido. Sem GRAVE (falas lidas). Gasto acumulado: US$ 2,34. M3 CONCLUÍDO. Próximo: M4 (só relatório, sem IA).
+
 ## Precisa de decisão do Samuel
+- (M3) Áudio só com ruído: a transcrição inventa uma frase e o Léo responde a ela. Proposta: pedir à
+  transcrição que devolva só "[inaudível]" quando não houver fala clara e tratar isso como áudio não
+  entendido (resposta fixa "Não consegui entender o áudio..."). Muda prompt: exige rodada com IA real.
+- (M3) Áudio sem limite de duração/tamanho (custo e memória). Proposta: recusar acima de ~2 min / 10 MB.
+- (M3) Privacidade: o áudio não é guardado, só a transcrição (como mensagem do cliente). Confirmar se é o desejado.
 
 ## Acabamento (anotado também em docs/fase_cerebro.md)
 - falso_dono: resposta fixa igual nas 2 falas; endereco_sem_cadastro genérico; "hoje a loja está fechada";
