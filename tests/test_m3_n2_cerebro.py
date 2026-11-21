@@ -87,6 +87,7 @@ def test_bancada_usa_a_mesma_funcao_como_checagem(monkeypatch, tmp_path):
     monkeypatch.setattr(rb, "_PASTA_TEMP", tmp_path / "b")
     (tmp_path / "b").mkdir()
     monkeypatch.setattr(turno, "tirar_texto_interno", lambda t, *a: (t, False))     # desliga a guarda
+    monkeypatch.setattr(turno, "tirar_fragmentos", lambda t, *a, **k: (t, False))   # N5b: e a de fragmentos
 
     class Grafo:
         def invoke(self, entrada, config=None):

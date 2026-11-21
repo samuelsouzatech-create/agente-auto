@@ -409,6 +409,13 @@ _PERGUNTA_TROCA = re.compile(r"\b(aceita\w*|pega\w*|recebe\w*|trabalha\w*\s+com)
                              r"|\bdar\b[^.!?]{0,30}\bna\s+troca\b|\b(da|daria)\s+pra\s+trocar\b|\btroca\s+(o|a|meu|minha)\b")
 
 
+# N5: palavra de tempo em promessa de contato ("logo vai falar", "em breve", "já já"): sai. A equipe
+# fala quando puder; o Léo não promete prazo. Só mexe em frase que promete contato.
+_PALAVRA_DE_TEMPO = re.compile(
+    r"\s*\b(logo\s+mais|logo|ja\s+ja|em\s+breve|daqui\s+a\s+pouco|em\s+instantes|rapidinho|"
+    r"o\s+quanto\s+antes|o\s+mais\s+rapido\s+possivel|em\s+poucos\s+minutos)\b", re.IGNORECASE)
+
+
 # N4 (revisão #10): aplicado com @_mantem_linhas onde cada guarda é definida.
 def _mantem_linhas(guarda):
     """A guarda roda linha por linha: lista ("- item") e parágrafos não viram uma linha só.
@@ -445,6 +452,33 @@ def _frases_originais(texto: str) -> list[str]:
     return [f for f in re.split(r"(?<=[.!?])\s+|\n+", str(texto or "")) if f.strip()]
 
 
+# N5: o assunto de uma frase trocada pela guarda ("... sobre o IPVA") vai junto para a frase nova.
+_ASSUNTOS_CONHECIDOS = (
+    (r"\bipva\b", "o IPVA"), (r"\bleil\w*", "o leilão"), (r"\blaudo\w*", "o laudo"),
+    (r"\bhistoric\w*", "o histórico do carro"), (r"\bdocument\w*", "a documentação"),
+    (r"\bdebito\w*|\bmultas?\b", "os débitos"), (r"\bsinistr\w*", "o histórico do carro"),
+    (r"\bgarantia\b", "a garantia"), (r"\bfinanciament\w*|\bparcel\w*", "o financiamento"),
+    (r"\btroca\b", "a troca"), (r"\bvistori\w*|\binspec\w*", "a vistoria"),
+)
+
+
+def assunto_da_frase(frase: str) -> str:
+    """"o IPVA", "o histórico do carro"... ou "" quando a frase não tem um assunto conhecido."""
+    normal = _sem_acento(frase)
+    for padrao, nome in _ASSUNTOS_CONHECIDOS:
+        if re.search(padrao, normal):
+            return nome
+    return ""
+
+
+def com_assunto(frase_nova: str, original: str) -> str:
+    """Põe "sobre <assunto>" no fim da frase nova, se a original tinha um assunto conhecido."""
+    assunto = assunto_da_frase(original)
+    if not assunto or assunto_da_frase(frase_nova) == assunto:
+        return frase_nova
+    return f"{frase_nova.rstrip('.')} sobre {assunto}."
+
+
 @_mantem_linhas
 def trocar_frases_proibidas(resposta: str) -> tuple[str, bool]:
     """Frase com "já está acompanhando", "acompanhando a conversa" ou "já passei"
@@ -453,7 +487,7 @@ def trocar_frases_proibidas(resposta: str) -> tuple[str, bool]:
     for frase in _frases_originais(resposta):
         if FRASES_PROIBIDAS.search(_sem_acento(frase)):
             if not trocou:
-                saida.append(FRASE_CONTATO)
+                saida.append(com_assunto(FRASE_CONTATO, frase))        # N5: mantém o assunto
             trocou = True
         else:
             saida.append(frase)
@@ -493,6 +527,9 @@ _NAO_HA_REGRA_ENTRADA = re.compile(
 _POLITICA_AFIRMADA = re.compile(
     r"\b(nao|nunca)\s+(trabalhamos|fazemos|realizamos|aceitamos|entregamos|enviamos|envia|mandamos|manda"
     r"|oferecemos|disponibilizamos|temos\s+(servico|politica|esse\s+servico))\b"
+    # N5b: "a gente não...", "não trabalha", "não faz", "não aceita", "não prevê" (a loja, sem base)
+    r"|\ba\s+gente\s+(nao|nunca)\b|\b(nao|nunca)\s+(trabalha|faz|aceita|preve|prevemos|realiza|oferece"
+    r"|permite|permitimos|libera|liberamos|segura|seguramos)\b"
     r"|\bnossas?\s+politicas?\b|\bpolitica\s+da\s+loja\b"
     r"|\bnao\s+(temos|ha|existe|tem)\s+(nenhuma\s+|uma\s+)?(promoc\w*|campanha\w*)")
 FRASE_PAGAMENTO_EXPLICA = "Sobre pagamento, sinal e reserva, o pessoal da equipe explica como funciona."
@@ -538,16 +575,37 @@ def tirar_elogio_do_estado(resposta: str) -> tuple[str, bool]:
     return (" ".join(ficam) if ficam else FRASE_FOTO_CARRO), True
 
 
+# N5b (item 10): palavras de estado que também saem da descrição da foto.
+_ESTADO_NA_DESCRICAO = re.compile(r"\bconservacao\b|\bboas?\s+condic\w*|\bconservad\w*|\bbrilhant\w*"
+                                  r"|\bcuidad\w*|\bzerad\w*|\bimpecave\w*|\btinindo\b|\bnovinho\b")
+
+
 def tirar_elogio_da_descricao(descricao: str) -> str:
-    """Descrição da foto do carro sem julgamento de estado ("bom estado", "bem conservado")."""
+    """Descrição da foto do carro sem julgamento de estado ("bom estado", "bem conservado",
+    "boas condições", "brilhante"). Só as palavras de estado saem; modelo, cor e riscos ficam."""
     texto = str(descricao or "")
     sem = _sem_acento(texto)
-    partes = [p.strip() for p in re.split(r",|\be\b", texto)]
-    if not ELOGIO_DO_ESTADO.search(sem) and not re.search(r"\bconservacao\b", sem):
+    if not ELOGIO_DO_ESTADO.search(sem) and not _ESTADO_NA_DESCRICAO.search(sem):
         return texto
-    limpas = [p for p in partes if p and not ELOGIO_DO_ESTADO.search(_sem_acento(p))
-              and not re.search(r"\bconservacao\b", _sem_acento(p))]
-    return ", ".join(limpas).strip(" ,.")
+    trechos = [(m.start(), m.end()) for r in (ELOGIO_DO_ESTADO, _ESTADO_NA_DESCRICAO) for m in r.finditer(sem)]
+    trechos.sort()
+    saida, pos = [], 0
+    for ini, fim_ in trechos:                  # sem acento e original têm o mesmo tamanho
+        if ini >= pos:
+            saida.append(texto[pos:ini])
+            pos = fim_
+    saida.append(texto[pos:])
+    novo = "".join(saida)
+    # sobras: "em ," / "e ," / "muito ," / "de conservação" sem nada
+    anterior = None
+    while anterior != novo:                    # "em excelente estado de conservação" -> "em  de " -> ""
+        anterior = novo
+        novo = re.sub(r"\s*\b(em|e|com|muito|bem|de|num|em um|em uma)\s*(?=[,;.]|$)", "", novo,
+                      flags=re.IGNORECASE).rstrip()
+    novo = re.sub(r"\s*,\s*(,\s*)+", ", ", novo)
+    novo = re.sub(r"\s+([,;.])", r"\1", novo)
+    novo = re.sub(r"\s{2,}", " ", novo).strip(" ,.;")
+    return novo
 
 
 def pergunta_se_aceita_troca(texto: str) -> bool:
@@ -596,6 +654,9 @@ def tirar_promessa_de_foto(resposta: str) -> tuple[str, bool]:
 # ======================================================================
 # L8: pedidos do cliente que só a equipe resolve (chamado pelo CÓDIGO) e frases de risco
 # ======================================================================
+_CIDADES = (r"recife|olinda|paulista|jaboatao|caruaru|petrolina|garanhuns|igarassu|camaragibe|cabo"
+            r"|vitoria\s+de\s+santo\s+antao|gravata|sao\s+lourenco|goiana|carpina|serra\s+talhada|arcoverde"
+            r"|joao\s+pessoa|campina\s+grande|maceio|natal|fortaleza|salvador|aracaju|teresina|sao\s+luis")
 PEDIDOS_DA_EQUIPE = [
     ("Cliente pediu para falar com uma pessoa.",
      r"\b(falar|conversar|atendid\w*)\s+(com|por)\s+(uma?\s+|o\s+|a\s+)?(pessoa|humano|atendente|gente"
@@ -603,8 +664,11 @@ PEDIDOS_DA_EQUIPE = [
     ("Cliente quer pagar, mandar sinal ou reservar o carro.",
      r"\bpix\b|\bboleto\b|\bsinal\b|\breserv\w*|\bsegurar\s+o\s+carro\b|\bconta\s+(pra|para)\s+(deposit|transfer)\w*"
      r"|\bdeposit\w*\b|\btransferir\s+o\s+dinheiro\b"),
+    # N5b: "entreg*" só conta junto de carro/veículo ou de cidade ("entregar o melhor serviço" não).
     ("Cliente pediu entrega do carro.",
-     r"\bentreg(a|ar|am|ue|uem|ariam)\b|\blevar\s+o\s+carro\s+(ate|pra|para)\b|\bfrete\b|\boutra\s+cidade\b"),
+     r"\bentreg\w*\b[^.!?]{0,40}\b(carros?|veiculos?|moto|caminhonete|picape|suv|cidade|" + _CIDADES + r")\b"
+     r"|\b(carros?|veiculos?)\b[^.!?]{0,40}\bentreg\w*"
+     r"|\blevar\s+o\s+carro\s+(ate|pra|para)\b|\bfrete\b|\boutra\s+cidade\b"),
     ("Cliente citou preço de outra loja/anúncio.",
      r"\bolx\b|\bwebmotors\b|\bmercado\s+livre\b|\bicarros\b|\boutra\s+loja\b|\bconcorrent\w*"
      r"|\b(vi|achei|tem)\b[^.!?]{0,25}\bpor\s+(r\$\s*)?\d"),
@@ -710,6 +774,14 @@ ESTADO_AFIRMADO = re.compile(
     r"|\bsem\s+(batida\w*|detalhe\w*|nenhum\s+detalhe|arranh\w*)|\btodo\s+original\b"
     r"|\b(excelente|otimo|belo|lindo)\s+carro\b|\bcarro\s+(excelente|impecavel|perfeito)\b|\bnovinho\b")
 FRASE_ESTADO = "O estado do carro o pessoal da equipe confirma, e você pode ver pessoalmente aqui na loja."
+
+
+def _estado_com_assunto(original: str) -> str:
+    """N5: se a frase cortada falava de histórico/leilão/laudo/IPVA, a equipe confirma ESSE assunto."""
+    assunto = assunto_da_frase(original)
+    if not assunto or assunto == "a vistoria":
+        return FRASE_ESTADO
+    return f"O pessoal da equipe confirma {assunto} com você, e você pode ver o carro pessoalmente aqui na loja."
 ESTADO_VERIFICADO = re.compile(r"\b(verificac\w*|vistori\w*|inspec\w*|revis(ao|oes|ad\w*)|garant(ir|o|imos)\s+que)")
 _PALAVRA_DE_CARRO = re.compile(r"\b(carros?|veiculos?|estoque|seminov\w*|modelo|civic|corolla|onix|gol|hb20|renegade)\b")
 ELOGIO_DE_CARRO = re.compile(r"\b(excelente|otimo|belo|lindo)\s+carro\b|\bcarro\s+(excelente|impecavel|perfeito)\b"
@@ -749,7 +821,7 @@ def cortar_estado_inventado(resposta: str, ficha: str = "", substituir: bool = T
             saida.append(frase)
             continue
         if not trocou and substituir and not ELOGIO_DE_CARRO.search(f):
-            saida.append(FRASE_ESTADO)
+            saida.append(_estado_com_assunto(frase))                  # N5: mantém o assunto
         trocou = True
     if trocou and not saida:
         return "", True
@@ -884,22 +956,39 @@ def _palavras(texto: str) -> set[str]:
 
 
 def repete_texto_interno(trecho: str, internos=()) -> bool:
-    """A linha repete o motivo/resumo passado ao acionar_handoff (60% ou mais das palavras iguais)."""
+    """A LINHA repete o motivo/resumo passado ao acionar_handoff: 60% ou mais das palavras iguais,
+    contando sobre a MAIOR das duas listas (N5: frase curta que só cita o carro não conta)."""
     palavras = _palavras(trecho)
     if len(palavras) < 4:
         return False
     for interno in internos or ():
         base = _palavras(interno)
-        if base and len(palavras & base) / len(palavras) >= 0.6:
+        if base and len(palavras & base) / max(len(palavras), len(base)) >= 0.6:
             return True
     return False
+
+
+# N5: frase que descreve o que uma ferramenta FEZ neste turno nunca sai como "texto interno".
+_ACAO_FEITA = {
+    "enviar_fotos": re.compile(r"\bfotos?\b"),
+    "agendar_visita": re.compile(r"\b(agend\w*|visita\w*|test.?drive|marcad\w*|anotad\w*)\b"),
+    "registrar_troca": re.compile(r"\b(troca|avalia\w*)\b"),
+    "registrar_interesse": re.compile(r"\b(anot\w*|registr\w*|interesse)\b"),
+    "registrar_lead": re.compile(r"\b(anot\w*|registr\w*)\b"),
+    "registrar_recado": re.compile(r"\b(recado|anot\w*)\b"),
+}
+
+
+def descreve_acao_feita(trecho: str, feitas=()) -> bool:
+    normal = _sem_acento(trecho)
+    return any(_ACAO_FEITA[f].search(normal) for f in feitas or () if f in _ACAO_FEITA)
 
 
 def e_rotulo_interno(trecho: str) -> bool:
     return bool(_ROTULO_INTERNO.match(_sem_acento(trecho)) or _SEPARADOR.match(trecho))
 
 
-def tirar_texto_interno(texto: str, internos=()) -> tuple[str, bool]:
+def tirar_texto_interno(texto: str, internos=(), feitas=()) -> tuple[str, bool]:
     """Nada entre colchetes, nenhuma linha/frase com rótulo interno ("Motivo...:", "Resumo:", "Nota:",
     "handoff", "chamado", "ferramenta", "Observação"), nenhum separador "---", nenhum nome de ferramenta
     e nenhuma linha que repita o motivo/resumo do chamado (internos) chega ao cliente.
@@ -909,13 +998,14 @@ def tirar_texto_interno(texto: str, internos=()) -> tuple[str, bool]:
     tirou = novo != original
     linhas = []
     for linha in novo.split("\n"):
-        if linha.strip() and (_SEPARADOR.match(linha) or repete_texto_interno(linha, internos)):
+        if linha.strip() and (_SEPARADOR.match(linha) or (repete_texto_interno(linha, internos)
+                                                          and not descreve_acao_feita(linha, feitas))):
             tirou = True
             continue
         # Linha com rótulo: sai a FRASE com o rótulo (e as que repetem o chamado); o resto da linha fica.
         frases = _frases_originais(linha)
-        ficam = [f for f in frases if not e_rotulo_interno(f) and not _FERRAMENTAS_NOMES.search(f)
-                 and not repete_texto_interno(f, internos)]
+        # N5: por FRASE só saem rótulo e nome de ferramenta; a regra dos 60% vale só para a linha inteira.
+        ficam = [f for f in frases if not e_rotulo_interno(f) and not _FERRAMENTAS_NOMES.search(f)]
         if len(ficam) != len(frases):
             tirou = True
         if ficam or not linha.strip():
@@ -969,3 +1059,128 @@ def toca_a_pergunta(frase_normal: str, pergunta: str) -> bool:
 
 
 FRASE_OFERTA = "Quer a ficha completa ou agendar uma visita?"
+
+
+@_mantem_linhas
+def tirar_palavra_de_tempo(resposta: str) -> tuple[str, bool]:
+    """N5: em frase que promete contato da equipe, tira "logo", "logo mais", "em breve", "já já"...
+    ("O pessoal da equipe logo vai falar com você" -> "O pessoal da equipe vai falar com você").
+    Frase que não promete contato (ex.: "fotos logo abaixo") fica como está."""
+    saida, mudou = [], False
+    for frase in _frases_originais(resposta):
+        normal = _sem_acento(frase)
+        promete = bool(_CONTATO_FRASE.search(normal) or promete_contato_da_equipe(normal)
+                       or re.search(r"\b(entra\w*\s+em\s+contato|retorn\w*|fal\w*\s+com\s+voce|te\s+respond\w*)\b", normal))
+        if promete and _PALAVRA_DE_TEMPO.search(normal):
+            # tira a palavra no texto original (com acento), pela mesma posição no texto sem acento
+            nova, pos = [], 0
+            for m in _PALAVRA_DE_TEMPO.finditer(normal):
+                nova.append(frase[pos:m.start()])
+                pos = m.end()
+            nova.append(frase[pos:])
+            frase = re.sub(r"\s{2,}", " ", "".join(nova)).replace(" ,", ",").replace(" .", ".").strip()
+            frase = frase[:1].upper() + frase[1:]
+            mudou = True
+        saida.append(frase)
+    return (" ".join(saida) if mudou else resposta), mudou
+
+
+# ======================================================================
+# N5b (itens 8 e 9): dia/hora de reabertura e fragmentos depois de cortes
+# ======================================================================
+_DIAS_DA_SEMANA = ("segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo")
+_FALA_DE_REABRIR = re.compile(r"\b(abre|abrimos|abriremos|abrir|reabre|reabrimos|retom\w*|volt\w*\s+a\s+atender"
+                              r"|a\s+partir\s+d[ae]s?|atendimento\s+(volta|retorna))\b")
+_HORA = re.compile(r"\b(\d{1,2})\s*(?::\s*(\d{2})|h\s*(\d{2})?)(?!\d)")
+
+
+def _horas_citadas(normal: str) -> list[str]:
+    return [f"{int(h):02d}:{(m or m2 or '00')}" for h, m, m2 in _HORA.findall(normal)]
+
+
+def corrigir_reabertura(resposta: str, reabre: dict | None) -> tuple[str, bool]:
+    """Loja fechada (reabre = relogio.reabertura): frase que diz QUANDO a loja reabre com dia da semana,
+    "hoje"/"amanhã" ou hora diferente da próxima abertura calculada vira a frase de horário do código.
+    Frase que lista o horário ("das 08:00 às 18:00") fica."""
+    if not reabre:
+        return resposta, False
+    certa = f"A loja está fechada agora; abre {reabre['quando']}."
+    saida, trocou = [], False
+    for frase in _frases_originais(resposta):
+        f = _sem_acento(frase)
+        horas = _horas_citadas(f)
+        if not _FALA_DE_REABRIR.search(f) or len(horas) >= 2:          # 2 horas = lista do horário
+            saida.append(frase)
+            continue
+        dias = {i for i, d in enumerate(_DIAS_DA_SEMANA) if re.search(rf"\b{d}\b", f)}
+        errado = bool(dias - {reabre["dia"]})
+        errado |= bool(re.search(r"\bamanha\b", f)) and reabre["relativo"] != "amanha"
+        errado |= bool(re.search(r"\bhoje\b", f)) and reabre["relativo"] != "hoje"
+        errado |= bool(horas) and horas[0] != reabre["hora"]
+        if not errado:
+            saida.append(frase)
+            continue
+        if not trocou:
+            saida.append(certa)
+        trocou = True
+    return (" ".join(saida) if trocou else resposta), trocou
+
+
+# Promessa de resposta imediata com a loja fechada (ninguém responde agora).
+_JA_JA_FECHADO = re.compile(r"\b(so\s+um\s+instante|um\s+instante|ja\s+te\s+aviso|ja\s+te\s+retorno|ja\s+volto"
+                            r"|aguarde\s+(so\s+)?um\s+(pouco|momento|minuto)|so\s+um\s+(momento|minuto))\b")
+_PARECE_VERBO = re.compile(
+    r"\b(e|era|sao|esta|estao|estava|tem|temos|tinha|foi|foram|vai|vou|vao|pode|posso|podemos|ha|fica|ficam"
+    r"|ficou|fez|faz|faco|fazemos|quer|quero|sei|tenho|da|dao|ve|vem|custa|custam|sai|saem|aceita|aceitamos"
+    r"|abre|abrimos|fecha|chega|chegou|passa|segue|seguem|precisa|precisam|gostaria|deseja|prefere|consigo"
+    r"|consegue|mando|manda|mandei|enviei|envio|agendo|anoto|anotei|confirmo|confirma|ajudo|ajuda|explica"
+    r"|atende|atendemos|trabalha|trabalhamos|oferece|oferecemos|financia|financiamos|garanto|acho|vejo|veja"
+    r"|aviso|avisa|retorno|retorna|volto|volta|falo|fala|chamo|chama|respondo|responde|mostro|mostra)\b"
+    r"|\b\w{2,}(ar|er|ir|amos|emos|imos|aram|eram|iram|ando|endo|indo|ou|ei|aria|eria|iria|arei|erei|irei)\b")
+_INTERJEICOES = re.compile(r"^(oi|ola|ola!|bom dia|boa tarde|boa noite|obrigad\w*|claro|perfeito|otimo|certo|"
+                           r"entendi|sim|nao|beleza|show|combinado|tudo bem|que bom|imagina|de nada)\b")
+
+
+def _e_fragmento(frase: str, pergunta: str) -> bool:
+    f = _sem_acento(frase).strip(" .!?")
+    if not f or frase.strip().endswith("?") or _INTERJEICOES.match(f):
+        return False
+    if _PALAVRA_DE_CARRO.search(f) or toca_a_pergunta(f, pergunta):
+        return False                       # nome do carro e assunto ficam
+    palavras = re.findall(r"[a-z0-9]+", f)
+    return not _PARECE_VERBO.search(f) or (len(palavras) < 4 and bool(re.search(r"\d", f)))
+
+
+_ITEM_DE_LISTA = re.compile(r"^\s*([-*•]|\d+[.)])\s+")
+
+
+def tirar_fragmentos(resposta: str, pergunta: str = "", loja_fechada: bool = False,
+                     original: str | None = None) -> tuple[str, bool]:
+    """Depois dos cortes das guardas: pedaço solto sem verbo (ex.: "Domingos Ferreira, 1000, Boa Viagem.")
+    sai; nome do carro e assunto da pergunta ficam. Loja fechada: nunca "Só um instante"/"já te aviso".
+    N5c: com `original` (o que o modelo escreveu), só sai o pedaço que NÃO estava lá como frase inteira
+    (sobra de corte); frase do próprio modelo ("Legal!", "Fico à disposição.") e item de lista nunca saem."""
+    do_modelo = None
+    if original is not None:
+        do_modelo = {_sem_acento(f).strip(" .!?") for l in str(original).split("\n") for f in _frases_originais(l)}
+    linhas, mudou = [], False
+    for linha in str(resposta or "").split("\n"):
+        if not linha.strip():
+            linhas.append(linha)
+            continue
+        if _ITEM_DE_LISTA.match(linha):
+            frases = [linha]
+            ficam = [linha] if not (loja_fechada and _JA_JA_FECHADO.search(_sem_acento(linha))) else []
+        else:
+            frases = _frases_originais(linha)
+            ficam = [fr for fr in frases
+                     if not (_e_fragmento(fr, pergunta)
+                             and (do_modelo is None or _sem_acento(fr).strip(" .!?") not in do_modelo))
+                     and not (loja_fechada and _JA_JA_FECHADO.search(_sem_acento(fr)))]
+        if len(ficam) != len(frases):
+            mudou = True
+        if ficam:
+            linhas.append(" ".join(ficam) if len(ficam) != len(frases) else linha)
+    if not mudou:
+        return resposta, False
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(linhas)).strip(), True

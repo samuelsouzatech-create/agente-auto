@@ -17,11 +17,16 @@ Depois que a IA responde, o texto passa por estes passos, NESTA ordem (cada um �
     12. aviso_de_chamado        chamado do código e a resposta não avisa o cliente
     13. falso_dono              número fora da equipe dizendo ser da loja
     14. emoji                   limite de emoji
-    15. repeticoes              contato/horário/frase repetidos; pergunta solta
-    16. frase_de_oferta         a guarda tirou a pergunta e não sobrou nenhuma nem ação gravada
+    15. palavra_de_tempo        "logo", "em breve", "já já" saem da promessa de contato (N5)
+    16. dia_de_reabertura       loja fechada: dia/hora de reabertura errados -> horário calculado (N5b)
+    17. fragmentos              pedaço solto sem verbo depois de cortes; "só um instante" fechada (N5b)
+    18. repeticoes              contato/horário/frase repetidos; pergunta solta
+    19. frase_de_oferta         a guarda tirou a pergunta e não sobrou nenhuma nem ação gravada
 
 Mudar a ordem muda o comportamento: um passo novo entra AQUI, com nome, no lugar certo.
 Os passos buscam as guardas pelo módulo app.core.turno (os testes trocam funções por lá).
+N5: a SOMBRA usa esta mesma lista (Contexto.sombra=True): o texto passa pelos mesmos passos; o que
+grava algo (chamado, pós-venda, falso dono) não roda, e o aviso de chamado sai como sairia de verdade.
 """
 from __future__ import annotations
 
@@ -51,6 +56,7 @@ class Contexto:
     resposta_inicial: str = ""
     abriu_pelo_codigo: bool = False
     guarda_mexeu: bool = False
+    sombra: bool = False       # N5: modo sombra: o texto passa pelos MESMOS passos, mas nada é gravado
     log: list = field(default_factory=list)
 
     def avisar(self, mensagem: str) -> None:
@@ -59,7 +65,7 @@ class Contexto:
 
 def texto_interno(c: Contexto) -> None:
     t = _t()
-    c.resposta, interno = t.tirar_texto_interno(c.resposta, t.internos_do_turno(c.do_turno))
+    c.resposta, interno = t.tirar_texto_interno(c.resposta, t.internos_do_turno(c.do_turno), list(c.ferramentas))
     if interno:
         c.avisar("GUARDA: texto interno ([...], Resumo:, ferramenta) tirado da resposta.")
     c.resposta_inicial = c.resposta                      # L12: para saber se alguma guarda mexeu
@@ -71,6 +77,9 @@ def preco_inventado(c: Contexto) -> None:
         return
     c.avisar("GUARDA: preço inventado detectado. Acionando handoff.")
     c.avisar(f"Resposta barrada: {t.texto_no_console(c.resposta, c.canal)}")
+    if c.sombra:                                # N5: na sombra nada é gravado (sem chamado)
+        c.resposta, c.midias, c.handoff = t.MENSAGEM_SEGURA, c.midias, True
+        return
     t.acionar_handoff.func(motivo="Guarda de política: valor em R$ sem origem em tool.",
                            resumo=f"Resposta barrada do Léo: {c.resposta}", lead_id=c.lead_id, loja_id=c.loja_id)
     c.resposta, c.midias, c.handoff = t.MENSAGEM_SEGURA, [], True
@@ -147,6 +156,9 @@ def chamado_pelo_codigo(c: Contexto) -> None:
         return
     motivo, nome_guarda = motivo_guarda
     c.avisar(f"GUARDA: {motivo} Abrindo chamado.")
+    if c.sombra:                                # N5: na sombra o texto fica igual ao real, sem abrir chamado
+        c.handoff = c.abriu_pelo_codigo = True
+        return
     t.acionar_handoff.func(motivo=f'{motivo} Pergunta do cliente: "{t.pergunta_curta(c.texto)}"',
                            resumo=f"Resposta do Léo: {c.resposta}", lead_id=c.lead_id, loja_id=c.loja_id)
     c.handoff = True
@@ -155,6 +167,8 @@ def chamado_pelo_codigo(c: Contexto) -> None:
 
 
 def pos_venda_e_urgencia(c: Contexto) -> None:
+    if c.sombra:                                # grava o chamado: não roda na sombra
+        return
     if _t().marcar_pos_venda_e_urgencia(c.loja_id, c.lead_id, c.texto):
         c.handoff = True
         c.ferramentas.append("guarda_pos_venda")
@@ -169,6 +183,8 @@ def aviso_de_chamado(c: Contexto) -> None:
 
 
 def falso_dono(c: Contexto) -> None:
+    if c.sombra:                                # grava o chamado: não roda na sombra
+        return
     if _t().marcar_falso_dono(c.loja_id, c.lead_id, c.texto):
         c.handoff = True
         c.ferramentas.append("guarda_falso_dono")
@@ -179,6 +195,37 @@ def emoji(c: Contexto) -> None:
     c.resposta, tirados = t.limitar_emojis(c.resposta, t.limite_de_emojis(c.loja_id, c.lead_id, c.texto, c.handoff))
     if tirados:
         c.ferramentas.append("guarda_emoji")
+
+
+def dia_de_reabertura(c: Contexto) -> None:
+    """N5b: com a loja fechada, dia/hora de reabertura errados viram a frase de horário do código."""
+    t = _t()
+    c.resposta, trocou = t.corrigir_reabertura(c.resposta, t.reabertura_agora(c.loja_id))
+    if trocou:
+        c.avisar("GUARDA: dia/hora de reabertura trocados pelo horário calculado.")
+        c.ferramentas.append("guarda_reabertura")
+
+
+def fragmentos(c: Contexto) -> None:
+    """N5b: depois de cortes, pedaço solto sem verbo sai; loja fechada: sem "Só um instante"."""
+    t = _t()
+    fechada = t.reabertura_agora(c.loja_id) is not None
+    if c.resposta == c.resposta_inicial and not fechada:
+        return                                   # sem corte e loja aberta: nada a limpar
+    novo, trocou = t.tirar_fragmentos(c.resposta, c.texto, loja_fechada=fechada,
+                                      original=c.resposta_inicial)      # N5c: só sobra de corte sai
+    if trocou and novo.strip():
+        c.resposta = novo
+        c.avisar("GUARDA: pedaço solto ou 'só um instante' tirado da resposta.")
+        c.ferramentas.append("guarda_fragmento")
+
+
+def palavra_de_tempo(c: Contexto) -> None:
+    """N5: promessa de contato sem prazo ("logo", "em breve", "já já" saem)."""
+    c.resposta, trocou = _t().tirar_palavra_de_tempo(c.resposta)
+    if trocou:
+        c.avisar("GUARDA: palavra de tempo tirada da promessa de contato.")
+        c.ferramentas.append("guarda_tempo")
 
 
 def repeticoes(c: Contexto) -> None:
@@ -208,6 +255,9 @@ PASSOS = (
     aviso_de_chamado,
     falso_dono,
     emoji,
+    palavra_de_tempo,
+    dia_de_reabertura,
+    fragmentos,
     repeticoes,
     frase_de_oferta,
 )

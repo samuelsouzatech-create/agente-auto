@@ -79,6 +79,21 @@ _DINHEIRO = re.compile(r"r\$\s*[\d.,]+(\s*mil)?|\b\d+([.,]\d+)?\s*(mil|k)\b(?!\s
 _TELEFONE = re.compile(r"\(\d{2}\)\s*9?\d{4}[-\s]?\d{4}|(?<!\d)9\d{4}-\d{4}(?!\d)")
 
 
+# N5b: marca ou modelo na descrição = modelo identificado.
+_TEM_MODELO = re.compile(
+    r"\b(chevrolet|gm|fiat|volkswagen|vw|ford|toyota|honda|hyundai|renault|nissan|jeep|peugeot|citroen|mitsubishi"
+    r"|kia|chery|caoa|byd|bmw|audi|mercedes|volvo|suzuki|ram|onix|prisma|cruze|tracker|spin|s10|celta|corsa|uno|mobi"
+    r"|argo|cronos|palio|strada|toro|pulse|fastback|gol|polo|virtus|voyage|fox|saveiro|t-cross|nivus|jetta|amarok"
+    r"|ka|fiesta|ecosport|ranger|corolla|etios|yaris|hilux|sw4|civic|city|fit|hr-v|hrv|wr-v|hb20|hb20s|creta|tucson"
+    r"|kwid|sandero|logan|duster|captur|kicks|versa|march|frontier|renegade|compass|commander|208|2008|c3|l200"
+    r"|outlander|sportage|tiggo)\b")
+
+
+def _sem_acento_img(texto: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", str(texto or "").lower()) if unicodedata.category(c) != "Mn")
+
+
 def limpar_descricao(texto: str) -> str:
     """Tira valor, telefone e número de documento; corta em 200 letras."""
     texto = " ".join(str(texto or "").split())
@@ -105,6 +120,12 @@ def interpretar(resposta_ia: str, uso: Uso | None = None) -> LeituraImagem:
     if tipo != DOCUMENTO and _NUMERO_DE_DOCUMENTO.search(bruta) and tipo != ANUNCIO:
         tipo = DOCUMENTO          # descrição com número de documento: trata como documento
     descricao = "" if tipo == DOCUMENTO else limpar_descricao(bruta)
+    if tipo == CARRO:                     # N5b (item 10): estado sai; sem modelo, diz que não identificou
+        from app.guarda_politica import tirar_elogio_da_descricao
+        descricao = tirar_elogio_da_descricao(descricao)
+        if not _TEM_MODELO.search(_sem_acento_img(descricao)):
+            descricao = f"modelo não identificado, {descricao}" if descricao else "modelo não identificado"
+        descricao = descricao[:MAX_DESCRICAO].rstrip()          # o limite de 200 letras vale no fim
     return LeituraImagem(ok=True, tipo=tipo, descricao=descricao,
                          tem_pessoa=bool(dados.get("tem_pessoa")), uso=uso)
 

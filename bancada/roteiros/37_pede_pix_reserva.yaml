@@ -5,5 +5,5 @@ falas:
 deve:
   handoff: sim
   handoff_ate_fala: 1
-nao_contem: ["chave pix", "agencia", "conta corrente", "cnpj", "reservei", "esta reservado", "fica reservado", "não trabalhamos", "não fazemos", "não aceitamos"]
+nao_contem: ["chave pix", "agencia", "conta corrente", "cnpj", "reservei", "esta reservado", "fica reservado", "não trabalhamos", "não fazemos", "não aceitamos", "a gente não", "não trabalha", "não faz", "não aceita", "não prevê", "nossa política não"]   # N5b
 nao_pode: [preco_inventado, desconto]

@@ -53,6 +53,7 @@ from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da
                                  tirar_promessa_de_foto, pedido_da_equipe, trocar_frases_de_risco,
                                  trocar_politica_sem_base, cortar_estado_inventado,
                                  tirar_agendamento_falso, limpar_repeticoes, FRASE_CNH, FRASE_CONTATO,
+                                 tirar_palavra_de_tempo, corrigir_reabertura, tirar_fragmentos,
                                  FRASE_OFERTA, tirar_texto_interno,
                                  trocar_frases_proibidas)
 from banco import conectar
@@ -123,6 +124,17 @@ class ResultadoTurno:
 # N2: ferramentas que gravam algo (depois delas a frase de oferta fixa não entra).
 FERRAMENTAS_QUE_GRAVAM = frozenset({"agendar_visita", "registrar_interesse", "registrar_lead", "registrar_recado",
                                     "registrar_troca", "acionar_handoff"})
+
+
+def reabertura_agora(loja_id: int):
+    """N5b: None com a loja aberta; senão a próxima abertura (app/relogio.py, a fonte única de horário)."""
+    from app.lojas import carregar_loja
+    from app.relogio import agora_utc, reabertura
+    try:
+        return reabertura(carregar_loja(loja_id), agora_utc())
+    except Exception:
+        _logger("turno").exception("Não consegui calcular a reabertura da loja.")
+        return None
 
 
 def precisa_da_frase_de_oferta(guarda_mexeu: bool, resposta_inicial: str, resposta: str, handoff: bool,
@@ -571,26 +583,17 @@ async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, graf
     # As que o Léo PEDIU (em sombra, as que gravam nem rodam).
     ferramentas = sorted({c["name"] for m in do_turno for c in (getattr(m, "tool_calls", None) or [])}
                          | set(ferramentas_usadas(do_turno)))
-    sugestao = tirar_texto_interno(resposta_do_turno(do_turno, resultado["messages"][-1]),
-                                   internos_do_turno(do_turno))[0]                     # M1/N2
-    if resposta_tem_preco_inventado(sugestao, resultado["messages"]):
-        sugestao = MENSAGEM_SEGURA
-    sugestao = trocar_frases_proibidas(sugestao)[0]
-    sugestao = corrigir_regra_de_entrada(sugestao)[0]
-    sugestao = trocar_frases_de_risco(sugestao)[0]
-    sugestao = trocar_politica_sem_base(sugestao)[0]                         # L11
-    # L12: estado só da ficha; "agendei" só se gravou (em sombra a agenda nunca grava);
-    # fotos: ficam guardadas com a sugestão (o vendedor manda) ou a sugestão não diz que mandou.
-    sugestao = cortar_estado_inventado(sugestao, _fichas_do_turno(do_turno))[0]
-    if _agenda_do_turno(do_turno) is None:
-        sugestao = tirar_agendamento_falso(sugestao)[0]
+    # N5: a sugestão passa pela MESMA lista do turno normal (app/core/pos_processamento.py);
+    # o que grava algo (chamado, pós-venda, falso dono) não roda na sombra.
     fotos = extrair_midias(do_turno)
-    if not fotos:
-        sugestao = tirar_promessa_de_foto(sugestao)[0]
-    sugestao = limpar_repeticoes(sugestao, pergunta=texto)
-    if fotos:
+    contexto = pos_processar(Contexto(
+        loja_id=loja_id, canal=canal, lead_id=lead_id, texto=texto, do_turno=do_turno,
+        mensagens=resultado["messages"], rotulo=f"{rotulo} [SOMBRA]",
+        resposta=resposta_do_turno(do_turno, resultado["messages"][-1]), midias=list(fotos),
+        handoff=_chamou_handoff(do_turno), ferramentas=list(ferramentas_usadas(do_turno)), sombra=True))
+    sugestao = contexto.resposta
+    if fotos and contexto.midias:
         sugestao = f"{sugestao}\n[Fotos que o Léo mandaria: {', '.join(fotos)}]"
-    sugestao = limitar_emojis(sugestao, 1 if tem_emoji(texto) else 0)[0]      # L10
     sombra.gravar(loja_id, lead_id, canal, texto, sugestao, ferramentas)
     registrar_uso(loja_id, lead_id, canal, uso_das_mensagens(do_turno), tipo="sombra",
                   ferramentas=ferramentas, latencia_ms=_ms_desde(inicio))
