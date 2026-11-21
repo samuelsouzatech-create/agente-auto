@@ -34,6 +34,7 @@ from tools import (
 )
 from tools.registrar_recado import registrar_recado
 from app.recados import camada_dos_recados
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
 
 RAIZ = Path(__file__).resolve().parents[2]
 PASTA_PROMPTS = RAIZ / "prompts"
@@ -202,6 +203,7 @@ def fuso_da_loja(loja) -> ZoneInfo:
     try:
         return ZoneInfo(valor_config(loja.config, "fuso", FUSO_PADRAO))
     except Exception:
+        _logger("montagem").exception("Fuso da loja inválido; usando o padrão.")
         return ZoneInfo(FUSO_PADRAO)
 
 
@@ -250,7 +252,7 @@ def _camada_da_loja(loja, agora=None) -> str:
                               "STATUS AGORA do jeito que está: ele já vem calculado. "
                               "Não faça conta de horário.")
             except Exception:
-                pass
+                _logger("montagem").exception("Não consegui montar o status de horário da loja.")
     return "\n".join(linhas)
 
 

@@ -38,6 +38,9 @@ from app.dedup import ja_processada
 from app.canais import resolver_loja
 from app.chaves import exigir_loja
 from app.logs import registrar_canal_desconhecido
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
+from app.recebidas import anotar as anotar_recebida, avisar_ao_ligar as avisar_sem_resposta   # N3
+_log = _logger("webhook")
 
 CANAL = "whatsapp"
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
@@ -66,11 +69,15 @@ def avisar_configuracao() -> list[str]:
     faltando = [nome for nome, valor in (("WHATSAPP_VERIFY_TOKEN", WHATSAPP_VERIFY_TOKEN),
                                          ("WHATSAPP_APP_SECRET", WHATSAPP_APP_SECRET)) if not valor]
     for nome in faltando:
-        print(f"[WhatsApp] AVISO: {nome} não está no .env. O webhook vai recusar (falha fechada).")
+        _log.error(f"[WhatsApp] AVISO: {nome} não está no .env. O webhook vai recusar (falha fechada).")
     return faltando
 
 
 avisar_configuracao()      # ao ligar o servidor (o módulo é carregado uma vez)
+try:
+    avisar_sem_resposta()  # N3: mensagens das últimas 24 h sem resposta (só lista; não responde)
+except Exception:
+    _log.exception("[WhatsApp] Não consegui listar as mensagens sem resposta ao ligar.")
 
 
 @app.get("/")
@@ -124,7 +131,7 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
         # P7c: loja em teste e não é número de teste: nem transcreve (custo).
         if porta_fechada(loja_id, CANAL, numero):
             return
-        print(f"[WhatsApp][loja {loja_id}] Cliente {id_no_console(numero, CANAL)} mandou um áudio. Transcrevendo...")
+        _log.info(f"[WhatsApp][loja {loja_id}] Cliente {id_no_console(numero, CANAL)} mandou um áudio. Transcrevendo...")
         try:
             texto = await transcrever_audio(id_audio, loja_id=loja_id)
         except MidiaGrandeDemais:                                         # N2
@@ -141,7 +148,7 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
             if aviso.texto:
                 await enviar_resposta_humanizada(numero, aviso.texto, loja_id=loja_id)
             return
-        print(f"[WhatsApp][loja {loja_id}] Áudio transcrito: {texto_no_console(texto, CANAL)}")
+        _log.info(f"[WhatsApp][loja {loja_id}] Áudio transcrito: {texto_no_console(texto, CANAL)}")
 
     texto_juntado, token = await aguardar_vez(loja_id, numero, texto)
     if texto_juntado is None:
@@ -213,12 +220,13 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
     corpo = await request.body()
 
     if not assinatura_valida(corpo, request.headers.get("X-Hub-Signature-256"), WHATSAPP_APP_SECRET):
-        print("[WhatsApp] Assinatura inválida no POST. Rejeitado (403).")
+        _log.warning("[WhatsApp] Assinatura inválida no POST. Rejeitado (403).")
         return Response(status_code=403)
 
     try:
         dados = json.loads(corpo)
     except Exception:
+        _log.exception("[WhatsApp] POST com corpo que não é JSON. Ignorado (200).")
         return Response(status_code=200)
 
     for entrada in canal_whatsapp.ler_webhook(dados):
@@ -227,10 +235,11 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
             registrar_canal_desconhecido(CANAL, entrada.id_canal)
             continue
         if await ja_processada(CANAL, entrada.id_externo):
-            print(f"[WhatsApp] Mensagem {entrada.id_externo} já processada. Ignorando duplicata.")
+            _log.info(f"[WhatsApp] Mensagem {entrada.id_externo} já processada. Ignorando duplicata.")
             continue
 
         _lembrar_ultima(loja_id, entrada.lead_id, entrada.id_externo)
+        anotar_recebida(loja_id, CANAL, entrada.lead_id, entrada.id_externo)   # N3: antes do 200
         if entrada.tipo == "texto":
             tarefas.add_task(processar_mensagem, entrada.lead_id, entrada.texto, None, loja_id)
         elif entrada.tipo == "audio":

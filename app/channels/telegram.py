@@ -5,6 +5,8 @@ from __future__ import annotations
 from app.console import id_no_console   # N1
 
 from app.channels.base import Canal, MensagemEntrada
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
+_log = _logger("canal_telegram")
 
 # Ordem importa: animation vem antes de document (o GIF também tem document).
 # L5b: "photo" saiu daqui: foto agora é lida (tipo "imagem").
@@ -68,7 +70,7 @@ class CanalTelegram(Canal):
             await self.bot.send_message(chat_id=lead_id, text=texto)
             return True
         except Exception as erro:
-            print(f"[Telegram] Erro ao enviar texto para {id_no_console(lead_id, 'telegram')}: {erro}")
+            _log.error(f"[Telegram] Erro ao enviar texto para {id_no_console(lead_id, 'telegram')}: {erro}")
             return False
 
     async def enviar_midia(self, lead_id: str, url: str) -> bool:
@@ -76,19 +78,19 @@ class CanalTelegram(Canal):
             await self.bot.send_photo(chat_id=lead_id, photo=url)
             return True
         except Exception as erro:
-            print(f"[Telegram] Erro ao enviar foto {url}: {erro}")
+            _log.error(f"[Telegram] Erro ao enviar foto {url}: {erro}")
             return False
 
     async def digitando(self, lead_id: str) -> None:
         try:
             await self.bot.send_chat_action(chat_id=lead_id, action="typing")
         except Exception:
-            pass
+            _log.exception("[Telegram] Não consegui mostrar o 'digitando...'.")
 
     async def baixar_midia(self, entrada: MensagemEntrada) -> bytes | None:
         try:
             arquivo = await self.bot.get_file(entrada.id_midia)
             return bytes(await arquivo.download_as_bytearray())
         except Exception as erro:
-            print(f"[Telegram] Erro ao baixar mídia: {erro}")
+            _log.error(f"[Telegram] Erro ao baixar mídia: {erro}")
             return None

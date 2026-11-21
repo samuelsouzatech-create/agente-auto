@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from banco import conectar
 from app.chaves import exigir_loja
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
 
 LIMITE_HISTORICO = 20
 LIMITE_CARACTERES = 500
@@ -37,6 +38,7 @@ def tem_memoria(grafo, configuracao) -> bool:
         valores = getattr(estado, "values", None) or {}
         return bool(valores.get("messages"))
     except Exception:
+        _logger("memoria_banco").exception("Não consegui ler a memória do grafo.")
         return True
 
 

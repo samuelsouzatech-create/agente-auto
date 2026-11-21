@@ -69,6 +69,7 @@ from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock_esperando
 from app.utils import extrair_texto, mensagens_do_turno
 from tools import acionar_handoff
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
 
 NOMES_CANAIS = {"whatsapp": "WhatsApp", "telegram": "Telegram",
                 "instagram": "Instagram", "simulador": "Simulador"}
@@ -589,6 +590,7 @@ def _aceita_troca(loja_id: int) -> str:
         from app.lojas import carregar_loja
         return str(carregar_loja(loja_id).get("aceita_troca") or "nao_informado")
     except Exception:
+        _logger("turno").exception("Não consegui ler 'aceita troca' da loja.")
         return "nao_informado"
 MOTIVO_VALOR_TROCA = "Cliente pediu valor da troca."
 MOTIVO_PROMESSA = "Léo disse ao cliente que a equipe vai confirmar ou falar com ele."

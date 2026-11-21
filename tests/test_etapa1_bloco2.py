@@ -203,7 +203,11 @@ def test_mesmo_lead_em_duas_lojas_vira_dois_registros(duas_lojas):
     assert [(l["loja_id"], l["nome"]) for l in linhas] == [(1, "Ana"), (LOJA_B, "Ana B")]
 
 
-def test_tools_de_escrita_gravam_a_loja_certa(duas_lojas):
+def test_tools_de_escrita_gravam_a_loja_certa(duas_lojas, monkeypatch):
+    # N3: relógio fixo numa quarta (13:00 UTC). Sem isso, no sábado "sábado 10h" fica ambíguo e o teste falha.
+    from datetime import datetime as _dt, timezone as _tz
+    from app import relogio as _relogio
+    monkeypatch.setattr(_relogio, "agora_utc", lambda: _dt(2026, 11, 18, 13, 0, tzinfo=_tz.utc))
     registrar_troca.invoke({"modelo": "Gol", "ano": 2015, "km": 90000, "estado": "bom",
                             "lead_id": "x", "loja_id": LOJA_B})
     agendar_visita.invoke({"nome_cliente": "Ana", "tipo": "visita", "data_hora": "sábado 10h",

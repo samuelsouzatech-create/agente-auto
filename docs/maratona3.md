@@ -1,7 +1,7 @@
 # Maratona 3 — diário
 
 Retomada: "continue a maratona pelo docs/maratona3.md". Ao retomar, ler só este diário e o CLAUDE.md.
-Teto Gemini: US$ 2,50 no total; parar a bancada ao passar de US$ 2,10. Gasto até agora: **US$ 0,79**.
+Teto Gemini: US$ 2,50 no total; parar a bancada ao passar de US$ 2,10. Gasto até agora: **US$ 0,99**.
 Ponto de partida: main c306a64 (merge da Maratona 2; suíte 2676 passed; tag agente-maratona2).
 Abrir o Claude Code com `$env:CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1; claude` (8 GB de memória).
 
@@ -9,8 +9,8 @@ Abrir o Claude Code com `$env:CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1; clau
 |-------|--------|----------|---------------|-------|---------|-------|
 | N1 Segurança | maratona3-n1 | concluído | ver git | 2688 passed | 233237 | US$ 0,20 |
 | N2 Cérebro | maratona3-n2 | concluído | ver git | 2721 passed | 001813 · 002349 · 002854 | US$ 0,59 |
-| N3 Servidor | maratona3-n3 | em andamento | — | — | — | — |
-| N4 Ordem das guardas | maratona3-n4 | pendente | — | — | — | — |
+| N3 Servidor | maratona3-n3 | concluído | ver git | 2730 passed | 010005 | US$ 0,20 |
+| N4 Ordem das guardas | maratona3-n4 | em andamento | — | — | — | — |
 
 ## N1 — Segurança e privacidade
 
@@ -67,6 +67,29 @@ nenhum GRAVE. Frase de oferta só 1x (fotos_modulo_desligado: guarda tirou a per
 FALHOU que sobrou: sem_resposta_no_estoque (r1 fala 3 sem "IPVA"; r2 fala 2 sem "leilão/histórico") -> o MODELO
 escreveu assim (nenhuma limpeza mexeu: não há "o modelo escreveu" nessas falas); estado_do_carro (r1, r2):
 "vistorias" dentro de negação (acabamento conhecido). Gasto acumulado: US$ 0,79. N2 CONCLUÍDO.
+
+## N3 — Servidor (branch maratona3-n3, a partir de maratona3-n2)
+
+PASSO 0:
+- #14: banco.conectar() abria sem WAL e sem busy_timeout explícito (o Python já esperava 5 s por padrão).
+- #15: NÃO era gravada antes do 200: o webhook só agendava (BackgroundTasks) e respondia 200; a mensagem só
+  entrava no banco dentro do turno. Se o servidor caísse nesse meio, sumia. Telegram: igual (gravada no turno).
+- #20: 152 print em app/ e 11 except que devolviam padrão sem registrar nada.
+Feito (sem migração):
+- conectar(): timeout=5, PRAGMA busy_timeout=5000 e journal_mode=WAL (*.db-wal/*.db-shm no .gitignore).
+- app/recebidas.py: caderno logs/recebidas.jsonl (loja, canal, cliente, id, hora; SEM o texto), anotado ANTES
+  do 200 (WhatsApp) e antes de processar (Telegram). Ao ligar, lista no log as das últimas 24 h sem resposta
+  (número mascarado); o painel do operador (Resumo) mostra a mesma lista. Ninguém responde sozinho.
+  Fica de fora: cliente com vendedor no comando e loja em teste com número que não é de teste.
+- app/log.py: logger "leo" -> tela (igual ao print) + logs/leo.log girando (5 MB x 5). Prints de webhook,
+  telegram, canal Telegram, envio/recebimento de áudio e foto do WhatsApp -> logger. 11 except que engoliam
+  erro -> logger.exception. turno.py (simulador/bancada) continua com print.
+- tests/test_m3_n3_servidor.py (9).
+Suíte N3 (3 partes): `725 passed, 86 deselected` (1ª vez 2 falhas: test_etapa1_bloco2 e test_comportamento_fluxos
+agendam "sábado 10h" SEM relógio fixo e falham aos sábados; falhavam também no código antes do N3; relógio fixado
+numa quarta nesses 2 testes) + `927 passed` + `1078 passed, 6 deselected` = 2730 passed.
+Bancada 1x: rodada_2026-11-21_010005 (US$ 0,20): só estado_do_carro FALHOU ("vistorias" em negação, acabamento).
+Falas lidas: sem texto interno, sem GRAVE. Gasto acumulado: US$ 0,99. N3 CONCLUÍDO.
 
 ## Precisa de decisão do Samuel
 - (N2) Roteiro 05: às vezes o MODELO responde sem repetir o assunto ("essa dúvida", "a documentação" no lugar
