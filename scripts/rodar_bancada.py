@@ -872,7 +872,7 @@ def checar(res: ResultadoRoteiro) -> None:
                     res.corrigidos.append(f"o modelo escreveu ({chave}), mas a guarda do código trocou")
     for item in r.get("nao_contem") or []:
         opcoes = [normalizar(o).strip() for o in item.split("|") if o.strip()]
-        citou = any(o in texto for o in opcoes)
+        citou = any(cita_afirmando(o, res.texto_do_leo) for o in opcoes)    # N5
         (res.falhas if citou else res.ok).append(
             f"resposta {'cita' if citou else 'não cita'} \"{item}\" (não podia)")
 
@@ -1419,6 +1419,28 @@ _TEXTO_INTERNO = re.compile(r"\[|\]|(^|\n)\s*(resumo|motivo)\s*:|\b(acionar_hand
                             re.IGNORECASE)
 
 
+# N5: estas palavras só reprovam em frase AFIRMATIVA ("o carro foi revisado"); dentro de frase
+# negativa ("não tenho informação sobre vistorias") não é afirmação de estado.
+SO_EM_AFIRMACAO = ("vistoria", "inspecao", "revisado", "revisada", "verificacao")
+_NEGACAO_NA_FRASE = re.compile(r"\b(nao|nem|sem|nenhum\w*|nunca\s+tive)\b")
+
+
+def cita_afirmando(opcao: str, texto: str) -> bool:
+    """A resposta cita `opcao` (já normalizada). Para as palavras de SO_EM_AFIRMACAO, só conta
+    quando a frase não tem negação ANTES da palavra."""
+    normal = normalizar(texto)
+    if opcao not in normal:
+        return False
+    if not any(opcao.startswith(p) for p in SO_EM_AFIRMACAO):
+        return True
+    for frase in frases(texto):
+        f = normalizar(frase)
+        pos = f.find(opcao)
+        if pos >= 0 and not _NEGACAO_NA_FRASE.search(f[:pos]):
+            return True
+    return False
+
+
 def checar_texto_interno_e_repeticao(res: "ResultadoRoteiro") -> None:
     """M1 (FALHOU, todos os roteiros): texto interno ([...], "Resumo:", nome de ferramenta) chegando
     ao cliente, inclusive em job e na sugestão da sombra; duas respostas seguidas iguais."""
@@ -1428,7 +1450,7 @@ def checar_texto_interno_e_repeticao(res: "ResultadoRoteiro") -> None:
     for turno in res.turnos:
         internos += turno.internos
         for bolha in turno.bolhas:
-            if tirar_texto_interno(bolha, internos)[1]:
+            if tirar_texto_interno(bolha, internos, turno.tools)[1]:      # N5: ação feita não conta
                 res.falhas.append(f"GRAVE: texto interno chegou ao cliente: \"{bolha[:100]}\"")
     for sugestao in res.sugestoes_texto:
         sem_fotos = re.sub(r"\[Fotos que o Léo mandaria:[^\]]*\]", "", sugestao)

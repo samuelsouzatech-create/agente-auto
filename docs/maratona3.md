@@ -166,3 +166,50 @@ loja_em_sombra 2x fora do projeto (US$ 0,02, os 2 PASSOU).
 6. **Decisões suas:** ver "Precisa de decisão do Samuel" acima. As mais urgentes: (a) pôr
    WHATSAPP_VERIFY_TOKEN no .env; (b) conserto pequeno da regra de 60% (pode apagar frase boa); (c) aceitar
    o N4 apesar do loja_em_sombra; (d) guardas que trocam a frase inteira perdem o assunto.
+
+## N5 — Último bloco da Fase Cérebro (branch maratona3-n5, a partir da main c23483f)
+
+Merge N1-N4 na main: suíte em 3 partes `729 passed, 86 deselected` + `952 passed` + `1052 passed, 6 deselected`
+(2733 passed); push da main e tag agente-maratona3. Teto deste bloco: US$ 0,80 (parar a bancada em US$ 0,70).
+PASSO 0:
+- .gitignore tem `logs/` (linha 27): `git check-ignore` confirma logs/recebidas.jsonl e logs/leo.log fora do Git.
+- Sombra (_turno_sombra) usava sua própria sequência: texto interno, preço, frases proibidas, entrada, risco,
+  política, estado, agendamento falso, promessa de foto, repetição, emoji. Ficavam de fora: elogio da foto,
+  CNH do test-drive, chamado pelo código, pós-venda/urgência, aviso de chamado, falso dono, frase de oferta.
+- NÃO existia guarda de palavra de tempo ("logo", "em breve", "já já"): só a regra no prompt. Vira passo novo.
+Feito:
+1. Regra dos 60%: conta sobre a MAIOR lista (linha ou motivo/resumo) e só apaga LINHA INTEIRA (por frase saem só
+   rótulo e nome de ferramenta). Linha que descreve ação que uma ferramenta fez neste turno (fotos, agenda,
+   troca, anotação) nunca sai. "Enviei as fotos do Honda Civic 2019 para você." + resumo com o carro: fica.
+2. Guardas que trocam a frase inteira (frase proibida, estado do carro) mantêm o assunto: "... sobre o IPVA",
+   "O pessoal da equipe confirma o histórico do carro com você...".
+3. Guarda NOVA de palavra de tempo (logo, logo mais, em breve, já já...), só em frase que promete contato;
+   passo 15 da lista. A sombra usa a MESMA lista (PASSOS) com Contexto.sombra=True: o que grava (chamado,
+   pós-venda, falso dono) não roda; o resto é igual ao turno normal.
+4. Prompt (prompts/base.md): "- Ao responder, cite o assunto da pergunta (ex.: IPVA, leilão, laudo)."
+5. Juiz: vistoria/inspeção/revisado/verificação em frase negativa não reprova; na afirmativa reprova.
+tests/test_m3_n5_fechamento.py (27); test_m3_n4_ordem ganhou o passo palavra_de_tempo.
+Suíte N5 (3 partes, de primeira): `729 passed, 86 deselected` + `897 passed` + `1132 passed, 6 deselected` = 2758 passed.
+Bancada: rodada 1 (rodada_2026-11-21_114011, US$ 0,20) completa. Na rodada 2 (114621, US$ 0,11) e na 3
+(115106, US$ 0,00) o Google recusou as chamadas: **402 RESOURCE_EXHAUSTED, "Your prepayment credits are
+depleted"** (créditos pré-pagos do AI Studio acabaram). A rodada 2 vale até o roteiro 24 (antes de
+pos_venda_tudo_otimo); dali em diante e a rodada 3 inteira são falha de crédito, não do Léo.
+Falas lidas (rodada 1 inteira + parte válida da 2): nenhum rótulo interno, nenhum "---", nenhuma frase boa
+apagada, nenhum "logo/em breve" em promessa de contato, nenhuma ação prometida sem ferramenta, nenhum GRAVE.
+A linha nova do prompt não trouxe GRAVE (fica). O juiz novo: estado_do_carro CORRIGIDO na r1 (não reprovou
+por "vistorias" em negação).
+
+### Fechamento do N5
+
+| Item | Resultado |
+|------|-----------|
+| Suíte offline | 2758 passed (3 partes) |
+| Rodadas | r1 completa sem GRAVE; r2 válida até o roteiro 24 sem GRAVE; r3 não rodou (sem crédito) |
+| Custo N5 | US$ 0,31 (teto 0,80) · total da Maratona 3: US$ 1,92 |
+| GRAVE | nenhum |
+| Acabamento | sem_resposta_no_estoque: o modelo ainda deixa 1 das 3 falas sem citar o assunto (leilão ou IPVA), mesmo com a linha do prompt; "eles estão acompanhando o seu atendimento" (sem "já") passa pela guarda de frase proibida |
+| Precisa de decisão | recarregar os créditos do Gemini no AI Studio e rodar a bancada mais 2 vezes |
+
+**Fase Cérebro: NÃO FECHADA** — não por GRAVE, mas porque faltam 2 rodadas completas (créditos do Gemini
+acabaram no meio da rodada 2). Retomada: recarregar créditos e rodar
+`.venv-teste\Scripts\python scripts\rodar_bancada.py` 2 vezes; sem GRAVE nas duas, a fase fecha.
