@@ -2,6 +2,8 @@
 Recebe o 'bot' pronto (context.bot), por isso não importa a biblioteca aqui."""
 from __future__ import annotations
 
+from app.console import id_no_console   # N1
+
 from app.channels.base import Canal, MensagemEntrada
 
 # Ordem importa: animation vem antes de document (o GIF também tem document).
@@ -63,7 +65,7 @@ class CanalTelegram(Canal):
             await self.bot.send_message(chat_id=lead_id, text=texto)
             return True
         except Exception as erro:
-            print(f"[Telegram] Erro ao enviar texto para {lead_id}: {erro}")
+            print(f"[Telegram] Erro ao enviar texto para {id_no_console(lead_id, 'telegram')}: {erro}")
             return False
 
     async def enviar_midia(self, lead_id: str, url: str) -> bool:

@@ -15,6 +15,7 @@ O total do mês (resumo_mes) não muda: é o que o fornecedor cobra.
 from __future__ import annotations
 
 import json
+from app.console import id_no_console   # N1: privacidade no console
 import uuid
 from collections import Counter
 from dataclasses import dataclass
@@ -144,7 +145,7 @@ def registrar_uso(loja_id: int, lead_id: str | None, canal: str, uso: Uso | None
         finally:
             conexao.close()
     except Exception as erro:
-        print(f"[Custos] ERRO ao registrar custo (loja {loja_id}, lead {lead_id}): {erro!r}")
+        print(f"[Custos] ERRO ao registrar custo (loja {loja_id}, lead {id_no_console(lead_id, canal)}): {erro!r}")
         return None
 
     registro = {

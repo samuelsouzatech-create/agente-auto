@@ -565,6 +565,11 @@ _FOTOS_DEMO = _Path(_tempfile.mkdtemp())
 
 def _prep_demo():
     from app.ator import como_sistema
+    import banco
+    conexao = banco.conectar()                 # a loja 1 do teste é marcada demo antes
+    conexao.execute("UPDATE lojas SET config = '{\"demo\": true}' WHERE id = 1")
+    conexao.commit()
+    conexao.close()
     with como_sistema("Teste", "job"):      # a demo nasce na loja 1, sem histórico
         _demo.criar_loja_demo(loja_id=1, indexar=False, com_historico=False, pasta_fotos=_FOTOS_DEMO)
     return {"id": 1}

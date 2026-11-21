@@ -27,6 +27,7 @@ from app.core.turno import (
 from app.channels.base import enviar_humanizado, enviar_resultado
 from app.channels.telegram import CanalTelegram
 from app.api.receber_audio import transcrever_do_cliente
+from app.console import id_no_console, texto_no_console   # N1
 from app.redis_lock import adquirir_lock_esperando, liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.dedup import ja_processada
@@ -75,7 +76,7 @@ async def _responder_audio(canal: CanalTelegram, entrada) -> None:
     # P7c: loja em teste e não é número de teste: nem baixa nem transcreve (custo).
     if porta_fechada(loja_id, CANAL, chat_id):
         return
-    print(f"[Telegram][loja {loja_id}] Cliente {chat_id} mandou um áudio. Transcrevendo...")
+    print(f"[Telegram][loja {loja_id}] Cliente {id_no_console(chat_id, CANAL)} mandou um áudio. Transcrevendo...")
     bytes_audio = await canal.baixar_midia(entrada)
     texto = None
     if bytes_audio:
@@ -86,7 +87,7 @@ async def _responder_audio(canal: CanalTelegram, entrada) -> None:
         if aviso.texto:
             await canal.enviar_texto(chat_id, aviso.texto)
         return
-    print(f"[Telegram][loja {loja_id}] Áudio transcrito: {texto}")
+    print(f"[Telegram][loja {loja_id}] Áudio transcrito: {texto_no_console(texto, CANAL)}")
     await _responder(canal, chat_id, texto)
 
 

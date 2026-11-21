@@ -417,6 +417,8 @@ def preparar_loja(mudancas: dict | None = None, recados: list | None = None) -> 
         montar_loja_ficticia(mudancas, recados)
         return
     from app.demo import CONFIG_DEMO, criar_loja_demo
+    # Banco TEMPORÁRIO: a loja 1 vira demo (criar_loja_demo recusa loja que não é demo).
+    _sql("UPDATE lojas SET config = ? WHERE id = ?", (json.dumps({"demo": True}), LOJA_ID))
     criar_loja_demo(loja_id=LOJA_ID, indexar=False, com_historico=False, pasta_fotos=pasta_temporaria() / "demo_fotos")
     _sql("UPDATE lojas SET config = ? WHERE id = ?",
          (json.dumps(_mesclar(CONFIG_DEMO, mudancas or {}), ensure_ascii=False), LOJA_ID))

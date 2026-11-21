@@ -18,7 +18,8 @@ MAX_RETRIES = 3
 
 # Token de verificação do webhook do WhatsApp (uma senha que VOCÊ inventa
 # e cadastra na Meta; serve para a Meta provar que o webhook é seu).
-WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "leo-webhook-2026")
+# N1 (revisão #3): sem valor padrão no código. Vazio = a verificação falha FECHADA (403).
+WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
 
 # --- Credenciais da Meta/WhatsApp (ficam no .env, nunca no código) ---
 # Token de acesso: hoje é o temporário de 24h; depois vira o permanente.
