@@ -136,3 +136,33 @@ loja_em_sombra 2x fora do projeto (US$ 0,02, os 2 PASSOU).
 ## Acabamento (não gera bloco)
 - (N2) estado_do_carro: "vistorias" dentro de frase negativa reprova o roteiro (checagem estrita demais).
 - (N2) "como mencionei" na 1ª resposta (sinal_reserva r1) e pergunta repetida em conversa_longa r1.
+
+## Relatório final da Maratona 3 (21/11/2026)
+
+1. **Branches** (todas enviadas, nenhum merge, main intocada; em cadeia a partir da main c306a64):
+   `maratona3-n1` 4a3a6b4 -> `maratona3-n2` 09f2421 -> `maratona3-n3` c17e016 -> `maratona3-n4` 4e184ae
+   (+ este relatório). Nenhuma branch "-incompleto". Nenhuma migração (schema continua v20).
+2. **Suíte offline** (em 3 partes por memória; todos os testes rodaram; só "passed" no fim):
+   N1 2688 · N2 2721 · N3 2730 · N4 2733 (N4 de primeira, sem mudar expectativas).
+3. **Gemini:** US$ 1,61 de US$ 2,50 (N1 0,20 · N2 0,59 · N3 0,20 · N4 0,62 com diagnóstico). Relatórios em
+   logs/bancada/ (nomes na tabela do topo).
+4. **Resolvido:**
+   - N1: demo só em loja demo (#1) e no ar pelo Registro (#24); console sem texto do cliente e com número
+     mascarado em canal real (#2); token do webhook sem padrão, falha fechada (#3); Pillow e google-genai
+     fixados (#28/#29); docs/privacidade_lojista.md (#7).
+   - N2: texto interno genérico (rótulos, "---", repetição do chamado) com a bancada usando a mesma função;
+     assunto protegido na limpeza; frase de oferta só sem pergunta e sem ação; "vendedor acompanha" 1x;
+     áudio inaudível (#8: passou 3x); limites de áudio/foto (#4); falso dono (#12: passou 3x); testes sem
+     número fixo de roteiros (#26).
+   - N3: SQLite WAL + 5 s (#14); caderno de recebidas antes do 200 e lista do que ficou sem resposta no log e
+     no painel do operador (#15); logs/leo.log com rotação e except que engoliam erro registrando (#20).
+   - N4: pós-processamento numa lista única e ordenada (#9); _mantem_linhas na definição (#10).
+5. **Sobrou / duvidoso:**
+   - sem_resposta_no_estoque ainda falha em parte das rodadas: às vezes o modelo não repete o assunto, e às
+     vezes a guarda de frase proibida/estado troca a frase inteira e leva o assunto junto.
+   - estado_do_carro: "vistorias" dentro de negação (acabamento).
+   - loja_em_sombra falhou 1x no N4 por falso positivo da regra de 60% (causa no N2, provada offline).
+   - Dois testes antigos sem relógio fixo falhavam aos sábados (consertados no N3, só o relógio).
+6. **Decisões suas:** ver "Precisa de decisão do Samuel" acima. As mais urgentes: (a) pôr
+   WHATSAPP_VERIFY_TOKEN no .env; (b) conserto pequeno da regra de 60% (pode apagar frase boa); (c) aceitar
+   o N4 apesar do loja_em_sombra; (d) guardas que trocam a frase inteira perdem o assunto.
