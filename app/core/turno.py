@@ -39,6 +39,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.chaves import exigir_loja, thread_id
 from app.console import id_no_console, texto_no_console   # N1: privacidade no console
+from app.core.pos_processamento import Contexto, pos_processar   # N4: ordem das guardas
 from app.custos import ferramentas_usadas, registrar_uso, uso_das_mensagens
 from app.estado_loja import pode_responder
 from app.formatacao import limpar_markdown
@@ -317,10 +318,6 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
 
     do_turno = mensagens_do_turno(resultado)
     resposta = resposta_do_turno(do_turno, resultado["messages"][-1])   # L11: texto antes da tool também
-    resposta, interno = tirar_texto_interno(resposta, internos_do_turno(do_turno))   # M1/N2: texto interno
-    if interno:
-        print(f"{rotulo} GUARDA: texto interno ([...], Resumo:, ferramenta) tirado da resposta.")
-    resposta_inicial = resposta                                          # L12: para saber se guarda mexeu
     midias = extrair_midias(do_turno)
     handoff = _chamou_handoff(do_turno)
     ferramentas = ferramentas_usadas(do_turno)
@@ -333,105 +330,14 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
                                  ferramentas=ferramentas, latencia_ms=_ms_desde(inicio))
         return ResultadoTurno(silenciado=True, execucao_id=_id(registro))
 
-    if resposta_tem_preco_inventado(resposta, resultado["messages"]):
-        print(f"{rotulo} GUARDA: preço inventado detectado. Acionando handoff.")
-        print(f"{rotulo} Resposta barrada: {texto_no_console(resposta, canal)}")
-        acionar_handoff.func(
-            motivo="Guarda de política: valor em R$ sem origem em tool.",
-            resumo=f"Resposta barrada do Léo: {resposta}",
-            lead_id=lead_id,
-            loja_id=loja_id,
-        )
-        resposta, midias, handoff = MENSAGEM_SEGURA, [], True
-        ferramentas.append("guarda_preco")
-
-    # L5c: frases que o Léo não pode dizer, trocadas pelo CÓDIGO antes de sair.
-    resposta, trocou = trocar_frases_proibidas(resposta)
-    if trocou:
-        print(f"{rotulo} GUARDA: frase proibida trocada.")
-        ferramentas.append("guarda_frase")
-    resposta, trocou = corrigir_regra_de_entrada(resposta)
-    if trocou:
-        print(f"{rotulo} GUARDA: regra de entrada trocada por 'depende da análise'.")
-        ferramentas.append("guarda_entrada")
-    resposta, riscos = trocar_frases_de_risco(resposta)      # L8: pix, reserva, entrega, preço...
-    resposta, politicas = trocar_politica_sem_base(resposta)  # L11: "não trabalhamos com..." sem base
-    riscos += [f"politica_{t}" for t in politicas]
-    if riscos:
-        print(f"{rotulo} GUARDA: frase de risco trocada ({', '.join(riscos)}).")
-        ferramentas.append("guarda_risco")
-    if not midias:                       # L7: disse que mandou foto, mas nenhuma saiu
-        resposta, trocou = tirar_promessa_de_foto(resposta)
-        if trocou:
-            print(f"{rotulo} GUARDA: promessa de foto sem foto enviada trocada.")
-            ferramentas.append("guarda_foto")
-    if foto_carro:
-        resposta, trocou = tirar_elogio_do_estado(resposta)
-        if trocou:
-            print(f"{rotulo} GUARDA: elogio ao estado do carro da foto retirado.")
-            ferramentas.append("guarda_elogio")
-
-    # L12: estado/qualidade de carro só se vier da ficha (o que as ferramentas devolveram).
-    resposta, trocou = cortar_estado_inventado(resposta, _fichas_do_turno(do_turno),
-                                               substituir=not _comprou_na_loja(loja_id, lead_id))
-    if trocou:
-        print(f"{rotulo} GUARDA: estado do carro sem ficha cortado.")
-        ferramentas.append("guarda_estado")
-    # L12: "agendei" só se a ferramenta de agenda gravou neste turno; test-drive lembra a CNH.
-    agenda = _agenda_do_turno(do_turno)
-    if agenda is None:
-        resposta, trocou = tirar_agendamento_falso(resposta)
-        if trocou:
-            print(f"{rotulo} GUARDA: agendamento dito sem a ferramenta gravar; vira pedido à equipe.")
-            ferramentas.append("guarda_agenda")
-    elif "test-drive" in agenda.lower() and "cnh" not in resposta.lower():
-        resposta = f"{resposta} {FRASE_CNH}"
-
-    # L2 e L5b: chamado aberto pelo CÓDIGO no mesmo turno (a resposta não muda), quando
-    # o cliente pede valor da troca, pergunta assunto que só a equipe responde
-    # (laudo, leilão, IPVA...) ou o Léo prometeu contato da equipe sem chamado.
-    abriu_pelo_codigo = False
-    motivo_guarda = motivo_do_chamado_pelo_codigo(texto, resposta, _aceita_troca(loja_id))
-    if motivo_guarda and not handoff and estado_do_handoff(lead_id, loja_id) == "ativo":
-        motivo, nome_guarda = motivo_guarda
-        print(f"{rotulo} GUARDA: {motivo} Abrindo chamado.")
-        acionar_handoff.func(
-            motivo=f'{motivo} Pergunta do cliente: "{pergunta_curta(texto)}"',
-            resumo=f"Resposta do Léo: {resposta}",
-            lead_id=lead_id,
-            loja_id=loja_id,
-        )
-        handoff = True
-        ferramentas.append(nome_guarda)
-        abriu_pelo_codigo = True
-
-    # L6: cliente irritado/ameaçando (URGENTE) e problema de quem comprou (PÓS-VENDA).
-    if marcar_pos_venda_e_urgencia(loja_id, lead_id, texto):
-        handoff = True
-        ferramentas.append("guarda_pos_venda")
-        abriu_pelo_codigo = True
-
-    # L12: chamado aberto pelo código e a resposta não avisa o cliente: avisa (uma vez).
-    if abriu_pelo_codigo and not _avisa_contato(resposta):
-        resposta = f"{resposta} {FRASE_CONTATO}"
-        ferramentas.append("guarda_aviso_chamado")
-
-    # L3b: número fora da equipe dizendo ser dono/gestor/da loja: o chamado avisa.
-    if marcar_falso_dono(loja_id, lead_id, texto):
-        handoff = True
-        ferramentas.append("guarda_falso_dono")
-
-    # L10: emoji. Padrão 0; cliente usou emoji nesta conversa: no máximo 1; assunto sério: 0.
-    resposta, tirados = limitar_emojis(resposta, limite_de_emojis(loja_id, lead_id, texto, handoff))
-    if tirados:
-        ferramentas.append("guarda_emoji")
-
-    # L12: sem repetir "a equipe vai falar", horário de retorno, frase quase igual; sem pergunta solta.
-    guarda_mexeu = resposta != resposta_inicial
-    resposta = limpar_repeticoes(resposta, guarda_mexeu=guarda_mexeu, pergunta=texto)
-    # M1: a guarda cortou a pergunta final? Termina com uma oferta simples (nunca em assunto sério).
-    if precisa_da_frase_de_oferta(guarda_mexeu, resposta_inicial, resposta, handoff, ferramentas, texto):
-        resposta = f"{resposta} {FRASE_OFERTA}"
+    # N4 (revisão #9): o pós-processamento é UMA lista ordenada, com um nome por passo
+    # (app/core/pos_processamento.py). A ordem é a mesma de antes.
+    contexto = pos_processar(Contexto(
+        loja_id=loja_id, canal=canal, lead_id=lead_id, texto=texto, do_turno=do_turno,
+        mensagens=resultado["messages"], rotulo=rotulo, resposta=resposta, midias=midias,
+        handoff=handoff, ferramentas=ferramentas, foto_carro=foto_carro))
+    resposta, midias = contexto.resposta, contexto.midias
+    handoff, ferramentas = contexto.handoff, contexto.ferramentas
 
     robotico = parece_robotica(resposta)
     if robotico:

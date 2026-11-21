@@ -1,7 +1,7 @@
 # Maratona 3 — diário
 
 Retomada: "continue a maratona pelo docs/maratona3.md". Ao retomar, ler só este diário e o CLAUDE.md.
-Teto Gemini: US$ 2,50 no total; parar a bancada ao passar de US$ 2,10. Gasto até agora: **US$ 0,99**.
+Teto Gemini: US$ 2,50 no total; parar a bancada ao passar de US$ 2,10. Gasto até agora: **US$ 1,61**.
 Ponto de partida: main c306a64 (merge da Maratona 2; suíte 2676 passed; tag agente-maratona2).
 Abrir o Claude Code com `$env:CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1; claude` (8 GB de memória).
 
@@ -10,7 +10,7 @@ Abrir o Claude Code com `$env:CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1; clau
 | N1 Segurança | maratona3-n1 | concluído | ver git | 2688 passed | 233237 | US$ 0,20 |
 | N2 Cérebro | maratona3-n2 | concluído | ver git | 2721 passed | 001813 · 002349 · 002854 | US$ 0,59 |
 | N3 Servidor | maratona3-n3 | concluído | ver git | 2730 passed | 010005 | US$ 0,20 |
-| N4 Ordem das guardas | maratona3-n4 | em andamento | — | — | — | — |
+| N4 Ordem das guardas | maratona3-n4 | concluído (ver loja_em_sombra) | ver git | 2733 passed | 012524 · 013220 · 013917 | US$ 0,62 |
 
 ## N1 — Segurança e privacidade
 
@@ -91,7 +91,41 @@ numa quarta nesses 2 testes) + `927 passed` + `1078 passed, 6 deselected` = 2730
 Bancada 1x: rodada_2026-11-21_010005 (US$ 0,20): só estado_do_carro FALHOU ("vistorias" em negação, acabamento).
 Falas lidas: sem texto interno, sem GRAVE. Gasto acumulado: US$ 0,99. N3 CONCLUÍDO.
 
+## N4 — Ordem das guardas (branch maratona3-n4, a partir de maratona3-n3)
+
+PASSO 0: o pós-processamento eram ~16 blocos em sequência dentro de executar_turno; _mantem_linhas era
+reatribuído a 8 guardas no fim de guarda_politica.py (nenhuma guarda chama outra pelo nome, então aplicar na
+definição é equivalente).
+Feito: app/core/pos_processamento.py com PASSOS (16 funções com nome, na mesma ordem) e Contexto; turno chama
+pos_processar. Os passos buscam as guardas pelo módulo turno (os testes trocam funções por lá). Única diferença:
+o aviso de console "Vendedor assumiu durante a resposta" agora é checado antes da limpeza de texto interno (só
+muda o texto impresso nesse caso raro). @_mantem_linhas em cada guarda. tests/test_m3_n4_ordem.py (3).
+Testes antigos: nenhuma expectativa mudou (231 de guardas passaram antes da suíte).
+Suíte N4 (3 partes, de primeira): `729 passed, 86 deselected` + `926 passed` + `1078 passed, 6 deselected`
+= 2733 passed, nenhuma expectativa mudada.
+Bancada 3x: rodada_2026-11-21_012524 / 013220 / 013917 (US$ 0,20 + 0,20 + 0,20 = 0,60) + diagnóstico de
+loja_em_sombra 2x fora do projeto (US$ 0,02, os 2 PASSOU).
+- sem_resposta_no_estoque e estado_do_carro: os mesmos FALHOU do N2.
+- loja_em_sombra (r3): NOVO, "GRAVE: texto interno na sugestão da sombra". NÃO veio do N4: _turno_sombra e a
+  checagem não foram mexidos no N4. É FALSO POSITIVO da regra de 60% do N2, reproduzido offline: "Enviei as
+  fotos do Honda Civic 2019 para você." tem 5 palavras que contam e 3 estão no resumo do chamado ("...Honda
+  Civic 2019...") = 60%. Pela regra literal do N4 ("FALHOU que não existia no N2") o bloco seria -incompleto;
+  mantive o N4 porque a causa é do N2 e está provada (decisão do analista/Samuel, ver abaixo).
+- Falas lidas: nenhum rótulo/"---" ao cliente, nenhum GRAVE real. Gasto acumulado: US$ 1,61. N4 CONCLUÍDO.
+
 ## Precisa de decisão do Samuel
+- (N2, achado no N4) IMPORTANTE: a regra "linha que repete 60% do motivo/resumo" tem falso positivo em frase
+  curta que cita o carro ("Enviei as fotos do Honda Civic 2019 para você." vs resumo "...Honda Civic 2019...").
+  No turno normal, se o modelo abrir chamado no mesmo turno, essa frase seria APAGADA da resposta. Proposta
+  (conserto pequeno): contar 60% sobre a MAIOR das duas listas de palavras (linha e resumo) e aplicar só por
+  linha inteira, não por frase. Muda comportamento: precisa de bancada.
+- (N4) Pela regra literal o N4 seria "-incompleto" (loja_em_sombra FALHOU numa rodada). A causa é a regra do N2
+  acima, não a reorganização (sombra e checagem não mudaram). Decidir se aceita o N4 como está.
+- (N2/N4) As guardas de frase proibida ("já passei", "já está acompanhando") e de estado do carro trocam a
+  FRASE INTEIRA e levam junto o assunto (leilão/histórico, IPVA). Proposta: ao trocar, manter "sobre o
+  <assunto>" da frase original (ex.: "O pessoal da equipe vai falar com você por aqui sobre o IPVA.").
+- (sombra) Sugestão com "logo mais entra em contato" / "logo vai falar" (palavra de tempo proibida). Na sombra
+  não sai para o cliente, mas sairia ao ligar a loja: checar a guarda de palavra de tempo nesse caminho.
 - (N2) Roteiro 05: às vezes o MODELO responde sem repetir o assunto ("essa dúvida", "a documentação" no lugar
   de "IPVA"). A limpeza não apaga mais a frase do assunto; o que falta é o modelo citar. Opção: uma linha no
   prompt ("cite o assunto da pergunta ao responder"), com rodada de IA real; ou aceitar sinônimos no roteiro.
