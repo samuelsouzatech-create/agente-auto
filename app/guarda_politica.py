@@ -409,10 +409,43 @@ _PERGUNTA_TROCA = re.compile(r"\b(aceita\w*|pega\w*|recebe\w*|trabalha\w*\s+com)
                              r"|\bdar\b[^.!?]{0,30}\bna\s+troca\b|\b(da|daria)\s+pra\s+trocar\b|\btroca\s+(o|a|meu|minha)\b")
 
 
+# N4 (revisão #10): aplicado com @_mantem_linhas onde cada guarda é definida.
+def _mantem_linhas(guarda):
+    """A guarda roda linha por linha: lista ("- item") e parágrafos não viram uma linha só.
+    Linha que a guarda esvaziou sai; o resultado junta as informações de todas as linhas."""
+    def envolta(resposta, *args, **kwargs):
+        texto = str(resposta or "")
+        if "\n" not in texto:
+            return guarda(texto, *args, **kwargs)
+        linhas, juntas, vista = [], None, False
+        for linha in texto.split("\n"):
+            if not linha.strip():
+                linhas.append("")
+                continue
+            nova, info = guarda(linha, *args, **kwargs)
+            vista = True
+            if nova.strip():
+                linhas.append(nova)
+            if juntas is None:
+                juntas = info
+            elif isinstance(info, list):
+                juntas = juntas + info
+            else:
+                juntas = bool(juntas) or bool(info)
+        if not vista:
+            return guarda(texto, *args, **kwargs)
+        saida = re.sub(r"\n{3,}", "\n\n", "\n".join(linhas)).strip()
+        return saida, juntas
+    envolta.__wrapped__ = guarda
+    envolta.__doc__ = guarda.__doc__
+    return envolta
+
+
 def _frases_originais(texto: str) -> list[str]:
     return [f for f in re.split(r"(?<=[.!?])\s+|\n+", str(texto or "")) if f.strip()]
 
 
+@_mantem_linhas
 def trocar_frases_proibidas(resposta: str) -> tuple[str, bool]:
     """Frase com "já está acompanhando", "acompanhando a conversa" ou "já passei"
     vira "O pessoal da equipe vai falar com você por aqui." (uma vez só)."""
@@ -427,6 +460,7 @@ def trocar_frases_proibidas(resposta: str) -> tuple[str, bool]:
     return (" ".join(saida) if trocou else resposta), trocou
 
 
+@_mantem_linhas
 def corrigir_regra_de_entrada(resposta: str) -> tuple[str, bool]:
     """Frase que fala de entrada e afirma regra (sem dizer que depende da análise)
     vira "O valor da entrada depende da análise de crédito, feita por um vendedor." """
@@ -474,6 +508,7 @@ TEMAS_DE_POLITICA = [
 ]
 
 
+@_mantem_linhas
 def trocar_politica_sem_base(resposta: str) -> tuple[str, list[str]]:
     """L11: troca a frase que afirma política da loja sobre pagamento/reserva, entrega,
     fotos ou promoção (o Léo não tem esse fato na base). Devolve (resposta, temas trocados)."""
@@ -492,6 +527,7 @@ def trocar_politica_sem_base(resposta: str) -> tuple[str, list[str]]:
     return (" ".join(saida) if trocados else resposta), trocados
 
 
+@_mantem_linhas
 def tirar_elogio_do_estado(resposta: str) -> tuple[str, bool]:
     """Foto do carro do cliente: tira as frases que avaliam/elogiam o estado.
     Se não sobrar nada, fica só "Obrigado pela foto!"."""
@@ -541,6 +577,7 @@ PROMESSA_DE_FOTO = re.compile(
 FRASE_SEM_FOTO = "Por aqui não tenho fotos desse carro para mandar."
 
 
+@_mantem_linhas
 def tirar_promessa_de_foto(resposta: str) -> tuple[str, bool]:
     """L7: só vale quando nenhuma foto saiu no turno. Frase que promete/diz que mandou
     foto vira "Por aqui não tenho fotos desse carro para mandar." (uma vez só)."""
@@ -616,6 +653,7 @@ FRASES_DE_RISCO = [
 _NEGA = re.compile(r"\b(nao|nunca|nem|sem\s+passar)\b")
 
 
+@_mantem_linhas
 def trocar_frases_de_risco(resposta: str) -> tuple[str, list[str]]:
     """L8: frases que prometem o que só a equipe pode (pix/conta, reserva, entrega,
     cobrir preço, aprovação de crédito, test-drive confirmado) viram a frase segura.
@@ -689,6 +727,7 @@ def _negacao_perto(frase_normal: str, inicio: int) -> bool:
     return bool(_NEGA.search(antes))
 
 
+@_mantem_linhas
 def cortar_estado_inventado(resposta: str, ficha: str = "", substituir: bool = True) -> tuple[str, bool]:
     """Corta a frase que afirma estado/qualidade do carro sem estar na ficha do turno.
     A primeira vira FRASE_ESTADO; pergunta e negação ficam.
@@ -725,6 +764,7 @@ FRASE_AGENDA = "Vou pedir para a equipe confirmar o horário."
 FRASE_CNH = "Para o test-drive, traga sua CNH válida."
 
 
+@_mantem_linhas
 def tirar_agendamento_falso(resposta: str) -> tuple[str, bool]:
     saida, trocou = [], False
     for frase in _frases_originais(resposta):
@@ -929,44 +969,3 @@ def toca_a_pergunta(frase_normal: str, pergunta: str) -> bool:
 
 
 FRASE_OFERTA = "Quer a ficha completa ou agendar uma visita?"
-
-
-def _mantem_linhas(guarda):
-    """A guarda roda linha por linha: lista ("- item") e parágrafos não viram uma linha só.
-    Linha que a guarda esvaziou sai; o resultado junta as informações de todas as linhas."""
-    def envolta(resposta, *args, **kwargs):
-        texto = str(resposta or "")
-        if "\n" not in texto:
-            return guarda(texto, *args, **kwargs)
-        linhas, juntas, vista = [], None, False
-        for linha in texto.split("\n"):
-            if not linha.strip():
-                linhas.append("")
-                continue
-            nova, info = guarda(linha, *args, **kwargs)
-            vista = True
-            if nova.strip():
-                linhas.append(nova)
-            if juntas is None:
-                juntas = info
-            elif isinstance(info, list):
-                juntas = juntas + info
-            else:
-                juntas = bool(juntas) or bool(info)
-        if not vista:
-            return guarda(texto, *args, **kwargs)
-        saida = re.sub(r"\n{3,}", "\n\n", "\n".join(linhas)).strip()
-        return saida, juntas
-    envolta.__wrapped__ = guarda
-    envolta.__doc__ = guarda.__doc__
-    return envolta
-
-
-trocar_frases_proibidas = _mantem_linhas(trocar_frases_proibidas)
-corrigir_regra_de_entrada = _mantem_linhas(corrigir_regra_de_entrada)
-trocar_politica_sem_base = _mantem_linhas(trocar_politica_sem_base)
-tirar_promessa_de_foto = _mantem_linhas(tirar_promessa_de_foto)
-trocar_frases_de_risco = _mantem_linhas(trocar_frases_de_risco)
-cortar_estado_inventado = _mantem_linhas(cortar_estado_inventado)
-tirar_agendamento_falso = _mantem_linhas(tirar_agendamento_falso)
-tirar_elogio_do_estado = _mantem_linhas(tirar_elogio_do_estado)
