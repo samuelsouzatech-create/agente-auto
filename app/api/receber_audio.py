@@ -19,6 +19,8 @@ from app.credenciais import SemCredencial, credencial_whatsapp
 from app.chaves import exigir_loja
 from app.custos import Uso, registrar_uso
 from app.limites_midia import MidiaGrandeDemais, conferir_audio, audio_passou_do_limite
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
+_log = _logger("receber_audio")
 
 # Uso de cada transcrição do WhatsApp, guardado pelo id do áudio até o
 # webhook pegar (pegar_uso_da_transcricao) e registrar o custo.
@@ -41,6 +43,7 @@ def uso_da_resposta(resposta) -> Uso:
         audio = min(audio, entrada)
         return Uso(entrada - audio, saida, audio)
     except Exception:
+        _log.exception("[Audio] Não consegui ler o uso (tokens) da transcrição.")
         return Uso()
 
 
@@ -75,7 +78,7 @@ def transcrever_bytes_com_uso(bytes_audio: bytes, mime: str = "audio/ogg") -> tu
         )
         return limpar_transcricao(resposta.text), uso_da_resposta(resposta)
     except Exception as e:
-        print(f"[Audio] Erro ao transcrever na IA: {e}")
+        _log.error(f"[Audio] Erro ao transcrever na IA: {e}")
         return None, Uso()
 
 
@@ -108,7 +111,7 @@ async def transcrever_audio(id_audio: str, *, loja_id: int) -> str | None:
     try:
         cred = credencial_whatsapp(loja_id)
     except SemCredencial as erro:
-        print(f"[WhatsApp][loja {loja_id}] Transcrição de áudio pulada: {erro}.")
+        _log.warning(f"[WhatsApp][loja {loja_id}] Transcrição de áudio pulada: {erro}.")
         return None
 
     cabecalho = {"Authorization": f"Bearer {cred.token}"}
@@ -136,5 +139,5 @@ async def transcrever_audio(id_audio: str, *, loja_id: int) -> str | None:
     except MidiaGrandeDemais:
         raise                                      # N2: o webhook responde com a mensagem fixa
     except Exception as e:
-        print(f"[WhatsApp][loja {loja_id}] Erro ao baixar áudio: {type(e).__name__}")
+        _log.error(f"[WhatsApp][loja {loja_id}] Erro ao baixar áudio: {type(e).__name__}")
         return None

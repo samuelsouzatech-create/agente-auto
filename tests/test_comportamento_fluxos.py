@@ -309,8 +309,12 @@ def test_grafo_injeta_lead_id_e_registrar_lead_faz_upsert(
  
  
 def test_grafo_injeta_lead_id_nas_demais_tools_de_escrita(
-    banco_com_estoque, instalar_llm_falso
+    banco_com_estoque, instalar_llm_falso, monkeypatch
 ):
+    # N3: relógio fixo numa quarta (13:00 UTC). Sem isso, no sábado "sábado 10h" fica ambíguo e o teste falha.
+    from datetime import datetime as _dt, timezone as _tz
+    from app import relogio as _relogio
+    monkeypatch.setattr(_relogio, "agora_utc", lambda: _dt(2026, 11, 18, 13, 0, tzinfo=_tz.utc))
     instalar_llm_falso([
         chamada_de_tool("agendar_visita", {
             "nome_cliente": "Marina", "tipo": "visita", "data_hora": "sábado 10h"}),

@@ -6,6 +6,8 @@ from app.config import WHATSAPP_API_VERSION
 from app.credenciais import SemCredencial, credencial_whatsapp
 
 from app.limites_midia import LIMITE_FOTO_BYTES as LIMITE_BYTES, MidiaGrandeDemais, conferir_foto   # N2
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
+_log = _logger("receber_imagem")
 
 
 async def baixar_imagem_whatsapp(id_midia: str, *, loja_id: int) -> tuple[bytes, str] | None:
@@ -13,7 +15,7 @@ async def baixar_imagem_whatsapp(id_midia: str, *, loja_id: int) -> tuple[bytes,
     try:
         cred = credencial_whatsapp(loja_id)
     except SemCredencial as erro:
-        print(f"[WhatsApp][loja {loja_id}] Foto não baixada: {erro}.")
+        _log.info(f"[WhatsApp][loja {loja_id}] Foto não baixada: {erro}.")
         return None
     cabecalho = {"Authorization": f"Bearer {cred.token}"}
     try:
@@ -28,8 +30,8 @@ async def baixar_imagem_whatsapp(id_midia: str, *, loja_id: int) -> tuple[bytes,
         conferir_foto(len(arquivo.content))
         return arquivo.content, dados.get("mime_type", "image/jpeg")
     except MidiaGrandeDemais:
-        print(f"[WhatsApp][loja {loja_id}] Foto grande demais. Não lida.")
+        _log.warning(f"[WhatsApp][loja {loja_id}] Foto grande demais. Não lida.")
         raise
     except Exception as erro:
-        print(f"[WhatsApp][loja {loja_id}] Erro ao baixar foto: {type(erro).__name__}")
+        _log.error(f"[WhatsApp][loja {loja_id}] Erro ao baixar foto: {type(erro).__name__}")
         return None

@@ -18,6 +18,9 @@ from app.credenciais import SemCredencial, credencial_whatsapp
 from app.humanizador import dividir_em_bolhas
 from app.resultado_envio import ResultadoEnvio
 from app.templates import ValoresFaltando, parametros_meta
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
+from app.console import id_no_console   # N1
+_log = _logger("enviar_whatsapp")
 
 # Pausa entre bolhas, em segundos (PDF: 2 a 6 s).
 PAUSA_ENTRE_BOLHAS = 2
@@ -27,6 +30,7 @@ def _id_da_mensagem(resposta) -> str:
     try:
         return str(resposta.json()["messages"][0]["id"])
     except Exception:
+        _log.exception("[WhatsApp] Resposta da Meta sem o id da mensagem.")
         return ""
 
 
@@ -34,6 +38,7 @@ def _codigo_de_erro(resposta):
     try:
         return int(resposta.json()["error"]["code"])
     except Exception:
+        _log.exception("[WhatsApp] Resposta de erro da Meta sem código.")
         return None
 
 
@@ -41,7 +46,7 @@ async def _postar_detalhado(loja_id, corpo: dict, descricao: str, para: str) -> 
     try:
         cred = credencial_whatsapp(loja_id)        # sem loja: erro (bug no chamador)
     except SemCredencial as erro:
-        print(f"[WhatsApp][loja {loja_id}] {descricao} não enviado: {erro}.")
+        _log.info(f"[WhatsApp][loja {loja_id}] {descricao} não enviado: {erro}.")
         return ResultadoEnvio(ok=False, detalhe=f"sem credencial: {erro}")
     url = f"https://graph.facebook.com/{WHATSAPP_API_VERSION}/{cred.phone_number_id}/messages"
     cabecalhos = {"Authorization": f"Bearer {cred.token}", "Content-Type": "application/json"}
@@ -49,12 +54,12 @@ async def _postar_detalhado(loja_id, corpo: dict, descricao: str, para: str) -> 
         async with httpx.AsyncClient(timeout=30) as cliente:
             resposta = await cliente.post(url, headers=cabecalhos, json=corpo)
     except Exception as erro:
-        print(f"[WhatsApp][loja {loja_id}] ERRO de conexão ({descricao}): {type(erro).__name__}")
+        _log.error(f"[WhatsApp][loja {loja_id}] ERRO de conexão ({descricao}): {type(erro).__name__}")
         return ResultadoEnvio(ok=False, detalhe=f"conexão: {type(erro).__name__}")
     if resposta.status_code == 200:
-        print(f"[WhatsApp][loja {loja_id}] {descricao} enviado para {para}.")
+        _log.info(f"[WhatsApp][loja {loja_id}] {descricao} enviado para {id_no_console(para, "whatsapp")}.")
         return ResultadoEnvio(ok=True, id_externo=_id_da_mensagem(resposta))
-    print(f"[WhatsApp][loja {loja_id}] ERRO ({descricao}, {resposta.status_code}): {resposta.text}")
+    _log.error(f"[WhatsApp][loja {loja_id}] ERRO ({descricao}, {resposta.status_code}): {resposta.text}")
     return ResultadoEnvio(ok=False, codigo_erro=_codigo_de_erro(resposta),
                           detalhe=str(resposta.text)[:500])
 
@@ -92,7 +97,7 @@ async def enviar_template_whatsapp(numero_cliente: str, modelo, valores: dict, *
     try:
         parametros = parametros_meta(modelo, valores)
     except ValoresFaltando as erro:
-        print(f"[WhatsApp][loja {loja_id}] Modelo {modelo.nome} não enviado: {erro}")
+        _log.info(f"[WhatsApp][loja {loja_id}] Modelo {modelo.nome} não enviado: {erro}")
         return ResultadoEnvio(ok=False, detalhe=str(erro))
     template = {"name": modelo.nome, "language": {"code": modelo.idioma}}
     if parametros:

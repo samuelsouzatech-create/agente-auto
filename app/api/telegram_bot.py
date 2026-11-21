@@ -36,6 +36,9 @@ from app.dedup import ja_processada
 from app.canais import resolver_loja, id_bot_telegram
 from app.chaves import exigir_loja
 from app.logs import registrar_canal_desconhecido
+from app.recebidas import anotar as anotar_recebida, avisar_ao_ligar as avisar_sem_resposta   # N3
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
+_log = _logger("telegram_bot")
 
 CANAL = "telegram"
 VARIAVEL_PADRAO = "TELEGRAM_TOKEN"
@@ -78,7 +81,7 @@ async def _responder_audio(canal: CanalTelegram, entrada) -> None:
     # P7c: loja em teste e não é número de teste: nem baixa nem transcreve (custo).
     if porta_fechada(loja_id, CANAL, chat_id):
         return
-    print(f"[Telegram][loja {loja_id}] Cliente {id_no_console(chat_id, CANAL)} mandou um áudio. Transcrevendo...")
+    _log.info(f"[Telegram][loja {loja_id}] Cliente {id_no_console(chat_id, CANAL)} mandou um áudio. Transcrevendo...")
     texto = None
     try:
         conferir_audio(getattr(entrada, "tamanho", 0), getattr(entrada, "duracao", 0))   # N2: antes de baixar
@@ -96,7 +99,7 @@ async def _responder_audio(canal: CanalTelegram, entrada) -> None:
         if aviso.texto:
             await canal.enviar_texto(chat_id, aviso.texto)
         return
-    print(f"[Telegram][loja {loja_id}] Áudio transcrito: {texto_no_console(texto, CANAL)}")
+    _log.info(f"[Telegram][loja {loja_id}] Áudio transcrito: {texto_no_console(texto, CANAL)}")
     await _responder(canal, chat_id, texto)
 
 
@@ -141,6 +144,7 @@ async def ao_receber(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     for entrada in canal.ler_webhook(update):
         if await ja_processada(CANAL, entrada.id_externo):
             continue
+        anotar_recebida(_loja_do_bot(), CANAL, entrada.lead_id, entrada.id_externo)   # N3: antes de processar
         if entrada.tipo == "texto":
             await _responder(canal, entrada.lead_id, entrada.texto)
         elif entrada.tipo == "audio":
@@ -159,27 +163,31 @@ def main(argv=None) -> None:
     argumentos = sys.argv[1:] if argv is None else list(argv)
     variavel = argumentos[0] if argumentos else VARIAVEL_PADRAO
     if ":" in variavel:
-        print("[Telegram] ERRO: passe o NOME da variável do .env, não o token.")
+        _log.error("[Telegram] ERRO: passe o NOME da variável do .env, não o token.")
         return
     token = (os.getenv(variavel) or "").strip()
     if not token:
-        print(f"[Telegram] ERRO: {variavel} vazio. Confira o .env.")
+        _log.error(f"[Telegram] ERRO: {variavel} vazio. Confira o .env.")
         return
 
     BOT_ID = id_bot_telegram(token)
     loja = resolver_loja(CANAL, BOT_ID)
     if loja is None:
         registrar_canal_desconhecido(CANAL, BOT_ID)
-        print(f"[Telegram] ERRO: o bot {BOT_ID} não está cadastrado (ou está desativado) em canais.")
-        print("  Cadastre em: painel do operador > Lojas e canais.")
+        _log.error(f"[Telegram] ERRO: o bot {BOT_ID} não está cadastrado (ou está desativado) em canais.")
+        _log.info("  Cadastre em: painel do operador > Lojas e canais.")
         return
     LOJA_DO_BOT = loja
 
     aplicacao = Application.builder().token(token).concurrent_updates(True).build()
     aplicacao.add_handler(MessageHandler(filters.UpdateType.MESSAGE & ~filters.COMMAND, ao_receber))
 
-    print(f"[Telegram] Bot {BOT_ID} ({variavel}) no ar, atendendo a loja {LOJA_DO_BOT}.")
-    print("[Telegram] (Ctrl+C aqui no terminal para parar.)")
+    _log.info(f"[Telegram] Bot {BOT_ID} ({variavel}) no ar, atendendo a loja {LOJA_DO_BOT}.")
+    _log.info("[Telegram] (Ctrl+C aqui no terminal para parar.)")
+    try:
+        avisar_sem_resposta()        # N3: lista as das últimas 24 h sem resposta (não responde sozinho)
+    except Exception:
+        _log.exception("[Telegram] Não consegui listar as mensagens sem resposta ao ligar.")
     aplicacao.run_polling()
 
 

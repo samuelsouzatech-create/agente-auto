@@ -17,7 +17,12 @@ def conectar():
     """Abre uma conexão com o banco. row_factory deixa a gente
     acessar as colunas pelo nome (ex: carro['modelo']) em vez de por número.
     Também registra a função sem_acento para buscas que ignoram acentuação."""
-    conexao = sqlite3.connect(CAMINHO_BANCO)
+    # N3 (revisão #14): espera até 5 s quando outra conexão está escrevendo (em vez de "database is
+    # locked") e modo WAL (quem lê não trava quem escreve). WAL fica gravado no arquivo do banco.
+    conexao = sqlite3.connect(CAMINHO_BANCO, timeout=5)
+    conexao.execute("PRAGMA busy_timeout = 5000")
+    if conexao.execute("PRAGMA journal_mode").fetchone()[0].lower() not in ("wal", "memory"):
+        conexao.execute("PRAGMA journal_mode = WAL")
     conexao.row_factory = sqlite3.Row
     conexao.create_function("sem_acento", 1, _sem_acento)
     return conexao

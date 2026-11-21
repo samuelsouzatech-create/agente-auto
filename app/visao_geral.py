@@ -55,6 +55,7 @@ from app.relogio import (
     agora_utc, do_banco, fuso, hora_local, limites_do_dia_em_utc,
     minutos_no_expediente, no_horario, para_banco,
 )
+from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
 
 VERDE, AMARELO, VERMELHO = "verde", "amarelo", "vermelho"
 DESCONHECIDO, SEM_DADOS = "desconhecido", "sem_dados"
@@ -153,6 +154,7 @@ def _redis_responde(cliente) -> bool:
     try:
         return bool(cliente.ping())
     except Exception:
+        _logger("visao_geral").exception("Redis não respondeu ao ping.")
         return False
 
 
@@ -160,6 +162,7 @@ def _item_relogio(cliente, agora: datetime) -> dict:
     try:
         sinal = batimento.ler(cliente)
     except Exception:
+        _logger("visao_geral").exception("Não consegui ler o sinal do relógio no Redis.")
         return _item("relogio", DESCONHECIDO, "Não deu para ler o sinal do relógio no Redis.")
     ligar = f"Para ligar: {COMANDO_RELOGIO}"
     if sinal is None:

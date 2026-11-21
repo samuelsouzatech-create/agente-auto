@@ -162,6 +162,23 @@ else:
     _checklist()
     _botao_no_ar()
 
+# N3 (revisão #15): o que chegou nas últimas 24 h e ficou sem resposta (ex.: o servidor caiu no meio).
+# O Léo não responde sozinho: alguém da loja decide. A lista e as horas vêm prontas de app/.
+from app.recebidas import sem_resposta
+
+_pendentes = sem_resposta(loja.id)
+st.divider()
+st.subheader("Mensagens sem resposta (últimas 24 h)")
+if not _pendentes:
+    st.caption("Nenhuma mensagem ficou sem resposta.")
+else:
+    st.warning(f"{len(_pendentes)} cliente(s) mandaram mensagem e não receberam resposta. "
+               "O assistente não responde sozinho: avise a equipe da loja.")
+    for _p in _pendentes:
+        _quem = formatar_telefone_br(_p["lead_id"]) or "cliente"
+        st.write(f"- {horario_para_tela(loja, _p['quando'])} · {nome_do_canal(_p['canal'])} · {_quem}")
+
+
 # M2 (Demo, D3): só aparece na loja marcada como demo. Apaga e recria o estado inicial dela.
 if loja.get("demo"):
     from app.demo import LojaNaoEDemo, reiniciar_demo

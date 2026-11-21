@@ -35,3 +35,7 @@ demo_fotos/
 # Áudios da bancada (voz sintética ou gravada; nunca vão para o Git)
 bancada/audios/*
 !bancada/audios/LEIA.md
+
+# SQLite em modo WAL (N3): arquivos de apoio do banco
+*.db-wal
+*.db-shm
