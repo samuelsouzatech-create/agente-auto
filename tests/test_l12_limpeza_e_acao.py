@@ -76,12 +76,19 @@ def test_paragrafos_ficam():
 # ------------------------------------------------------------ 3. estado do carro
 
 @pytest.mark.parametrize("texto", [
-    "É um carro muito bem conservado.", "É um excelente carro.", "Ele é revisado e de único dono.",
-    "Nunca bateu e está sem detalhes.", "Está impecável!", "Em ótimo estado.",
+    "Ele é revisado e de único dono.", "Nunca bateu e está sem detalhes.", "Em ótimo estado.",
 ])
 def test_estado_sem_ficha_e_cortado(texto):
     novo, trocou = cortar_estado_inventado(texto + " Quer ver?")
     assert trocou and novo == f"{FRASE_ESTADO} Quer ver?"
+
+
+@pytest.mark.parametrize("texto", [
+    "É um carro muito bem conservado.", "É um excelente carro.", "Está impecável!",
+])
+def test_elogio_sem_ficha_so_sai(texto):
+    # M1 (L13): elogio ao carro só sai, sem frase no lugar.
+    assert cortar_estado_inventado(texto + " Quer ver?") == ("Quer ver?", True)
 
 
 @pytest.mark.parametrize("texto", [
@@ -167,7 +174,7 @@ def test_agendei_sem_a_ferramenta_vira_pedido_e_abre_chamado(duas_lojas):
 def test_estado_inventado_no_turno_e_cortado(duas_lojas):
     r = _turno(LOJA_A, "e1", "o civic é bom?", Grafo("É um carro muito bem conservado. Quer marcar uma visita?",
                                                      "consultar_estoque", "Honda Civic 2019, 48.000 km"))
-    assert r.texto == f"{FRASE_ESTADO} Quer marcar uma visita?"
+    assert r.texto == "Quer marcar uma visita?"          # M1: elogio só sai
 
 
 def test_chamado_aberto_pelo_codigo_sempre_avisa_o_cliente(duas_lojas):
@@ -277,7 +284,7 @@ def test_bancada_falha_acao_sem_ferramenta(bancada, monkeypatch):
 def test_bancada_falha_estado_sem_ficha(bancada, monkeypatch):
     rb = bancada
     from app.core import turno
-    monkeypatch.setattr(turno, "cortar_estado_inventado", lambda r, ficha="": (r, False))   # desliga a guarda
+    monkeypatch.setattr(turno, "cortar_estado_inventado", lambda r, ficha="", **k: (r, False))   # desliga a guarda
     rodada = asyncio.run(rb.rodar([rb.validar_roteiro({"nome": "x", "falas": ["o civic é bom?"]}, "t")],
                                   Grafo("É um excelente carro."), teto=1.0))
     assert rodada.resultados[0].status == rb.FALHOU

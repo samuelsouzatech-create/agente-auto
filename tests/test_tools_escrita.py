@@ -17,11 +17,19 @@ from zoneinfo import ZoneInfo
 # H14: a ferramenta agora confere o dia de verdade. "segunda" dita NA segunda
 # vira pergunta ao cliente (e "sábado" dito NO sábado também). Para o teste
 # não depender do dia em que roda, usamos um dia útil que NÃO é hoje.
-_HOJE = datetime.now(ZoneInfo("America/Recife")).weekday()
-DIA_DA_VISITA = next(
-    nome for numero, nome in ((2, "quarta"), (3, "quinta"), (4, "sexta"))
-    if numero != _HOJE
-)
+# M1 (L13): o relógio do teste é FIXO. Antes, o dia era escolhido na carga do arquivo e a
+# suíte que atravessava a meia-noite quebrava (o dia escolhido virava "hoje"). Quarta 18/11/2026,
+# 10:00 em Recife; a visita é na quinta (dia útil que não é hoje).
+from datetime import timezone as _tz
+
+AGORA_FIXA = datetime(2026, 11, 18, 13, 0, tzinfo=_tz.utc)
+DIA_DA_VISITA = "quinta"
+
+
+@pytest.fixture(autouse=True)
+def relogio_fixo(monkeypatch):
+    from app import relogio
+    monkeypatch.setattr(relogio, "agora_utc", lambda: AGORA_FIXA)
 
 
 @pytest.fixture

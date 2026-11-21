@@ -36,7 +36,7 @@ import banco
 from banco import conectar
 from app import config  # noqa: F401  (carrega o .env)
 from app import base_pos_venda, bloqueios, regua, vendas
-from app.guarda_politica import sem_emoji
+from app.guarda_politica import sem_emoji, tirar_texto_interno
 from app.pausa import pausado
 from app.sombra import em_sombra
 from app.modo_envio import real_para
@@ -274,6 +274,7 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
     aberta = janela_aberta(loja.id, lead_id, canal, agora)
     try:
         texto = sem_emoji(_texto_livre(modelo, valores) if aberta else preencher(modelo, valores))   # L10
+        texto = tirar_texto_interno(texto)[0]                                                          # M1
     except ValoresFaltando:
         return registrar("bloqueado", "faltam_dados", modelo=modelo.nome)
     categoria = "livre" if aberta else categoria_para_custo(loja.id, modelo)

@@ -50,7 +50,7 @@ from app.pausa import pausado
 from app.sombra import em_sombra
 from app.modo_envio import real_para
 from app.custos import Uso, registrar_uso, uso_das_mensagens
-from app.guarda_politica import sem_emoji
+from app.guarda_politica import sem_emoji, tirar_texto_interno
 from app.filtro_remarketing import (acao_inventada, fato_inventado, preco_fora,
                                     precos_da_conversa, precos_do_estoque, repete_toque)
 from app.elegibilidade import Decisao, avaliar, candidatos, elegiveis
@@ -226,6 +226,7 @@ def _limpar_texto(texto, permitidos=frozenset()) -> str:
     if not isinstance(texto, str):
         return ""
     t = sem_emoji(texto.replace("**", "").replace("__", "").strip().strip('"').strip())   # L10
+    t = tirar_texto_interno(t)[0]                                                         # M1
     t = re.sub(r"\n{3,}", "\n\n", t)
     if not t or len(t) > LIMITE_TEXTO_LIVRE or _CARA_DE_ROBO.search(t) or _PROMESSA.search(t) or acao_inventada(t) or fato_inventado(t) or preco_fora(t, permitidos):
         return ""

@@ -486,7 +486,7 @@ def test_l3b_handoff_ate_fala():
     def abre_na_segunda(texto, loja_id, lead_id):
         if texto == "dois":
             acionar_handoff.func(motivo="m", resumo="r", lead_id=lead_id, loja_id=loja_id)
-        return [AIMessage(content="Oi!")]
+        return [AIMessage(content=f"Oi, sobre {texto}!")]      # M1: respostas seguidas iguais = FALHOU
 
     tarde = rodar([roteiro(falas=["um", "dois"], deve={"handoff_ate_fala": 1})], GrafoFalso(abre_na_segunda))
     assert tarde.resultados[0].status == rb.FALHOU
@@ -648,7 +648,7 @@ def test_l5c_regra_de_entrada_com_guarda_vira_aviso():
     rodada = rodar([roteiro(nao_pode=["regra_entrada"])],
                    GrafoFalso(lambda t, l, c: [AIMessage(content="A entrada é flexível, você define.")]))
     res = rodada.resultados[0]
-    assert res.status == rb.AVISO and "depende da análise" in res.texto_do_leo
+    assert res.status == rb.CORRIGIDO      # M1: guarda corrigiu = CORRIGIDO and "depende da análise" in res.texto_do_leo
 
 
 def test_l5c_elogio_ao_estado_na_bancada():

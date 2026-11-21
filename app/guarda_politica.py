@@ -382,7 +382,8 @@ def pergunta_curta(texto: str, limite: int = 120) -> str:
 # L5c: frases trocadas pelo CÓDIGO antes de a resposta sair
 # ======================================================================
 FRASE_CONTATO = "O pessoal da equipe vai falar com você por aqui."
-FRASE_ENTRADA = "O valor da entrada depende da análise de crédito, feita por um vendedor."
+FRASE_ENTRADA = ("O valor da entrada depende da análise de crédito do banco; um vendedor acompanha "
+                 "a análise com você.")
 
 # "já está acompanhando", "acompanhando a conversa", "já passei": falsos (ninguém lê a
 # conversa até ser chamado) e com palavra de tempo.
@@ -458,11 +459,12 @@ _NAO_HA_REGRA_ENTRADA = re.compile(
 _POLITICA_AFIRMADA = re.compile(
     r"\b(nao|nunca)\s+(trabalhamos|fazemos|realizamos|aceitamos|entregamos|enviamos|envia|mandamos|manda"
     r"|oferecemos|disponibilizamos|temos\s+(servico|politica|esse\s+servico))\b"
-    r"|\bnossas?\s+politicas?\b|\bpolitica\s+da\s+loja\b")
+    r"|\bnossas?\s+politicas?\b|\bpolitica\s+da\s+loja\b"
+    r"|\bnao\s+(temos|ha|existe|tem)\s+(nenhuma\s+|uma\s+)?(promoc\w*|campanha\w*)")
 FRASE_PAGAMENTO_EXPLICA = "Sobre pagamento, sinal e reserva, o pessoal da equipe explica como funciona."
 FRASE_ENTREGA_CONFIRMA = "Vou confirmar com a equipe se fazemos entrega."
 FRASE_FOTO_AGORA = "Não consigo enviar fotos por aqui agora."
-FRASE_PROMOCAO = "No momento não tenho promoção para te passar por aqui."
+FRASE_PROMOCAO = "Vou confirmar com a equipe se há alguma promoção agora."
 TEMAS_DE_POLITICA = [
     ("pagamento", re.compile(r"\bpix\b|\breserv\w*|\bsinal\b|\bpagament\w*|\bboleto\b|\btransferencia\b|\bdeposit\w*"),
      FRASE_PAGAMENTO_EXPLICA),
@@ -585,9 +587,13 @@ def pedido_da_equipe(texto: str) -> str | None:
 FRASE_PAGAMENTO = "Pagamento e reserva são combinados só com o pessoal da equipe."
 FRASE_ENTREGA = "Entrega fora da loja é combinada só com o pessoal da equipe."
 FRASE_NEGOCIACAO = "Negociação de preço é com o pessoal da equipe."
-FRASE_CREDITO = "A aprovação depende da análise de crédito, feita por um vendedor."
+FRASE_CREDITO = "A aprovação do crédito é do banco; um vendedor acompanha a análise com você."
 FRASE_TEST_DRIVE = "O test-drive é confirmado pelo pessoal da equipe."
 FRASES_DE_RISCO = [
+    # M1 (L13): a análise/aprovação é do banco, não "feita por um vendedor".
+    ("credito_vendedor", FRASE_CREDITO,
+     re.compile(r"\banalise\b[^.!?]{0,60}\b(feita|realizada|aprovada|decidida)\s+(pelo|por\s+(um|o|nossos?))\s+"
+                r"(vendedor\w*|consultor\w*|equipe)|\b(vendedor|consultor)\w*\s+(faz|fazem|aprova\w*)\s+a\s+analise")),
     ("dados_pagamento", FRASE_PAGAMENTO,
      re.compile(r"\bchave\s+pix\b|\bpix\b[^.!?]{0,30}\d|\bagencia\b|\bconta\s+(corrente|poupanca)\b"
                 r"|\bboleto\b[^.!?]{0,25}\b(segue|gerad\w*|envi\w*|mando)\b|\bcnpj\b[^.!?]{0,15}\d")),
@@ -666,25 +672,48 @@ ESTADO_AFIRMADO = re.compile(
     r"|\bsem\s+(batida\w*|detalhe\w*|nenhum\s+detalhe|arranh\w*)|\btodo\s+original\b"
     r"|\b(excelente|otimo|belo|lindo)\s+carro\b|\bcarro\s+(excelente|impecavel|perfeito)\b|\bnovinho\b")
 FRASE_ESTADO = "O estado do carro o pessoal da equipe confirma, e você pode ver pessoalmente aqui na loja."
+ESTADO_VERIFICADO = re.compile(r"\b(verificac\w*|vistori\w*|inspec\w*|revis(ao|oes|ad\w*)|garant(ir|o|imos)\s+que)")
+_PALAVRA_DE_CARRO = re.compile(r"\b(carros?|veiculos?|estoque|seminov\w*|modelo|civic|corolla|onix|gol|hb20|renegade)\b")
+ELOGIO_DE_CARRO = re.compile(r"\b(excelente|otimo|belo|lindo)\s+carro\b|\bcarro\s+(excelente|impecavel|perfeito)\b"
+                             r"|\bnovinho\b|\bimpecave\w*|\bbem\s+(conservad\w*|cuidad\w*)|\bconservadissim\w*")
 
 
-def cortar_estado_inventado(resposta: str, ficha: str = "") -> tuple[str, bool]:
+_VIRADA = re.compile(r"\b(mas|porem|contudo|entretanto|so\s+que)\b")
+
+
+def _negacao_perto(frase_normal: str, inicio: int) -> bool:
+    antes = frase_normal[max(0, inicio - 40):inicio]
+    viradas = list(_VIRADA.finditer(antes))
+    if viradas:
+        antes = antes[viradas[-1].end():]
+    return bool(_NEGA.search(antes))
+
+
+def cortar_estado_inventado(resposta: str, ficha: str = "", substituir: bool = True) -> tuple[str, bool]:
     """Corta a frase que afirma estado/qualidade do carro sem estar na ficha do turno.
-    A primeira vira FRASE_ESTADO; pergunta e negação ficam."""
+    A primeira vira FRASE_ESTADO; pergunta e negação ficam.
+    M1 (L13): pega também verificação/vistoria/inspeção/revisão/"garanto que" ligados ao carro ou
+    ao estoque. Elogio ("excelente carro", "bem conservado") ou conversa de pós-venda
+    (substituir=False): a frase só sai, sem frase no lugar."""
     ficha_n = _sem_acento(ficha)
     saida, trocou = [], False
     for frase in _frases_originais(resposta):
         f = _sem_acento(frase)
         achado = ESTADO_AFIRMADO.search(f)
-        # "nunca bateu" é a própria afirmação; negação conta só fora do trecho achado.
-        resto = (f[:achado.start()] + " " + f[achado.end():]) if achado else f
-        if (not achado or f.rstrip().endswith("?") or _NEGA.search(resto)
+        if not achado and _PALAVRA_DE_CARRO.search(f):
+            achado = ESTADO_VERIFICADO.search(f)
+        # "nunca bateu" é a própria afirmação. L14: a negação só protege se estiver PERTO, antes do
+        # trecho (até 40 letras) e sem "mas/porém" no meio ("não tenho acesso..., mas posso te
+        # garantir que todos passam por verificação" é afirmação).
+        if (not achado or f.rstrip().endswith("?") or _negacao_perto(f, achado.start())
                 or achado.group(0) in ficha_n):
             saida.append(frase)
             continue
-        if not trocou:
+        if not trocou and substituir and not ELOGIO_DE_CARRO.search(f):
             saida.append(FRASE_ESTADO)
         trocou = True
+    if trocou and not saida:
+        return "", True
     return (" ".join(saida) if trocou else resposta), trocou
 
 
@@ -719,7 +748,7 @@ _PERGUNTA_SEM_OPCOES = re.compile(r"^(e\s+)?(o\s+que|qual|como)\s+(voce\s+)?(pre
                                   r"|quer\s+fazer|vai\s+ser)\s*\??$|^(pode\s+ser|tudo\s+bem|combinado)\s*\?$")
 
 
-def limpar_repeticoes(texto: str, guarda_mexeu: bool = False) -> str:
+def limpar_repeticoes(texto: str, guarda_mexeu: bool = False, pergunta: str = "") -> str:
     """L12 (depois de juntar os textos e das guardas): "a equipe vai falar com você" no
     máximo 1 vez; horário de retorno no máximo 1 vez (a frase que tem os dois fica);
     frase igual ou quase igual sai; se uma guarda trocou frase, pergunta solta sem
@@ -737,6 +766,8 @@ def limpar_repeticoes(texto: str, guarda_mexeu: bool = False) -> str:
     fica_contato = (fica_retorno if fica_retorno in contato else (contato[0] if contato else None))
     sai = {k for k in contato if k != fica_contato} | {k for k in retorno if k != fica_retorno}
     sai.discard(fica_contato)
+    # M1 (L13): a frase de contato que cita o assunto do cliente ("Sobre o leilão...") fica.
+    sai -= {k for k in contato if toca_a_pergunta(todas[k][3], pergunta)}
     vistas = []
     for k, (_, _, f, n) in enumerate(todas):
         if k in sai:
@@ -765,3 +796,92 @@ def limpar_repeticoes(texto: str, guarda_mexeu: bool = False) -> str:
         if linhas:
             saida.append("\n".join(linhas))
     return "\n\n".join(saida) if saida else original
+
+
+
+# ======================================================================
+# M1 (L13): texto interno, assunto do cliente, oferta final e linhas preservadas
+# ======================================================================
+_FERRAMENTAS_NOMES = re.compile(r"\b(acionar_handoff|consultar_estoque|detalhes_veiculo|enviar_fotos|agendar_visita"
+                                r"|simular_financiamento|registrar_\w+|buscar_conhecimento)\b")
+_COLCHETES = re.compile(r"\[[^\[\]]{0,800}\]")
+_ROTULO_INTERNO = re.compile(r"^\s*(resumo|motivo|resumo do lead|resumo para o vendedor|nota interna)\s*:", re.IGNORECASE)
+
+
+def tirar_texto_interno(texto: str) -> tuple[str, bool]:
+    """Nada entre colchetes, nada começando com "Resumo:"/"Motivo:", nenhum nome de ferramenta
+    chega ao cliente (o resumo vai só para o chamado). Devolve (texto, mudou)."""
+    original = str(texto or "")
+    novo = _COLCHETES.sub("", original)
+    linhas = []
+    for linha in novo.split("\n"):
+        frases = [f for f in _frases_originais(linha)
+                  if not _ROTULO_INTERNO.match(f) and not _FERRAMENTAS_NOMES.search(f)]
+        if frases or not linha.strip():
+            linhas.append(" ".join(frases))
+    novo = re.sub(r"[ \t]{2,}", " ", "\n".join(linhas))
+    novo = re.sub(r" +([,.!?;:])", r"\1", novo)
+    novo = re.sub(r"\n{3,}", "\n\n", novo).strip()
+    return novo, novo != original.strip()
+
+
+_VAZIAS_DA_PERGUNTA = {
+    "voces", "voce", "tenho", "temos", "quero", "queria", "pode", "posso", "seria", "esse", "essa", "esta",
+    "isso", "aqui", "loja", "mesmo", "mesma", "ainda", "sobre", "como", "quando", "quanto", "qual", "quais",
+    "para", "pelo", "pela", "porque", "consigo", "consegue", "fazer", "falar", "equipe", "pessoal",
+    "vendedor", "carro", "dele", "dela", "minha", "seus", "suas", "muito", "tambem", "entao", "desse", "dessa",
+}
+
+
+def toca_a_pergunta(frase_normal: str, pergunta: str) -> bool:
+    """A frase cita o assunto da pergunta: "sobre <algo>" ou repete uma palavra de conteúdo dela."""
+    if not pergunta:
+        return False
+    if re.search(r"\bsobre\s+(o|a|os|as|essa|esse|sua|seu|esta|este)?\s*[a-z]{4,}", frase_normal):
+        return True
+    palavras = {p[:5] for p in re.findall(r"[a-z]{4,}", _sem_acento(pergunta)) if p not in _VAZIAS_DA_PERGUNTA}
+    return any(p[:5] in palavras for p in re.findall(r"[a-z]{4,}", frase_normal) if p not in _VAZIAS_DA_PERGUNTA)
+
+
+FRASE_OFERTA = "Quer a ficha completa ou agendar uma visita?"
+
+
+def _mantem_linhas(guarda):
+    """A guarda roda linha por linha: lista ("- item") e parágrafos não viram uma linha só.
+    Linha que a guarda esvaziou sai; o resultado junta as informações de todas as linhas."""
+    def envolta(resposta, *args, **kwargs):
+        texto = str(resposta or "")
+        if "\n" not in texto:
+            return guarda(texto, *args, **kwargs)
+        linhas, juntas, vista = [], None, False
+        for linha in texto.split("\n"):
+            if not linha.strip():
+                linhas.append("")
+                continue
+            nova, info = guarda(linha, *args, **kwargs)
+            vista = True
+            if nova.strip():
+                linhas.append(nova)
+            if juntas is None:
+                juntas = info
+            elif isinstance(info, list):
+                juntas = juntas + info
+            else:
+                juntas = bool(juntas) or bool(info)
+        if not vista:
+            return guarda(texto, *args, **kwargs)
+        saida = re.sub(r"\n{3,}", "\n\n", "\n".join(linhas)).strip()
+        return saida, juntas
+    envolta.__wrapped__ = guarda
+    envolta.__doc__ = guarda.__doc__
+    return envolta
+
+
+trocar_frases_proibidas = _mantem_linhas(trocar_frases_proibidas)
+corrigir_regra_de_entrada = _mantem_linhas(corrigir_regra_de_entrada)
+trocar_politica_sem_base = _mantem_linhas(trocar_politica_sem_base)
+tirar_promessa_de_foto = _mantem_linhas(tirar_promessa_de_foto)
+trocar_frases_de_risco = _mantem_linhas(trocar_frases_de_risco)
+cortar_estado_inventado = _mantem_linhas(cortar_estado_inventado)
+tirar_agendamento_falso = _mantem_linhas(tirar_agendamento_falso)
+tirar_elogio_do_estado = _mantem_linhas(tirar_elogio_do_estado)

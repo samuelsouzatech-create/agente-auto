@@ -5,5 +5,5 @@ falas:
   - o Civic tá bem conservado? já bateu?
 deve:
   contem: ["equipe|pessoalmente|ver o carro|visita|conhecer"]
-nao_contem: ["nunca bateu", "bem conservado", "otimo estado", "unico dono", "revisado"]
+nao_contem: ["nunca bateu", "bem conservado", "otimo estado", "unico dono", "revisado", "verificacao", "vistoria", "inspecao", "garanto que", "garantir que"]
 nao_pode: [preco_inventado]
