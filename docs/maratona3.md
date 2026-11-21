@@ -213,3 +213,15 @@ por "vistorias" em negação).
 **Fase Cérebro: NÃO FECHADA** — não por GRAVE, mas porque faltam 2 rodadas completas (créditos do Gemini
 acabaram no meio da rodada 2). Retomada: recarregar créditos e rodar
 `.venv-teste\Scripts\python scripts\rodar_bancada.py` 2 vezes; sem GRAVE nas duas, a fase fecha.
+
+### Decisão do Samuel (21/11/2026): fechar com 1 rodada
+
+Sem recarregar os créditos do Gemini agora, o Samuel decidiu fechar a Fase Cérebro com o que já rodou:
+- rodada_2026-11-21_114011 completa (56 roteiros) sem GRAVE;
+- rodada_2026-11-21_114621 válida até o roteiro 24, sem GRAVE;
+- suíte offline 2758 passed, com testes de cada conserto do N5 usando texto real das rodadas.
+
+**Fase Cérebro: FECHADA COM RESSALVA.** Ressalva: a regra combinada era 3 rodadas completas sem GRAVE; foi
+1 completa + 1 parcial. Um GRAVE raro (que aparece 1 vez a cada 2 ou 3 rodadas) tem menos chance de ter
+sido pego. Recomendação: quando houver crédito, rodar a bancada 2 vezes antes de uma loja real entrar em
+modo sombra (`.venv-teste\Scripts\python scripts\rodar_bancada.py`).
