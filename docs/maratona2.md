@@ -1,12 +1,12 @@
 # Maratona 2 — diário
 
 Retomada: "continue a maratona pelo docs/maratona2.md". Ler só este diário e o CLAUDE.md.
-Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 1,11**
+Teto de Gemini: US$ 3,00 (parar a bancada ao passar de US$ 2,50). Gasto até agora: **US$ 1,74**
 
 | Bloco | Branch | Status | Último commit | pytest | Bancada | Custo |
 |---|---|---|---|---|---|---|
 | M1 (L13+L14) | maratona2-l13 | concluído (Fase Cérebro fechada) | ver abaixo | 2655 passed (16:08) | 191656 · 192212 · 192746 | US$ 1,11 |
-| M2 Demo | maratona2-demo | pendente | — | — | — | — |
+| M2 Demo | maratona2-demo | concluído: suíte 2669, bancada 3x e ensaio 3x sem GRAVE | ver abaixo | — | — | — |
 | M3 Áudio | maratona2-audio | pendente | — | — | — | — |
 | M4 Revisão | maratona2-revisao | pendente | — | — | — | — |
 
@@ -61,6 +61,46 @@ conversas com o varredor de frases de risco: só negações honestas, "verificar
 da base e agendamento que gravou). FALHOU não-grave: falso_dono (resposta fixa igual, 3x) e
 estado_do_carro r2 (checagem por palavra pegou "vistorias" numa negação). Ver Acabamento.
 **FASE CÉREBRO FECHADA** (anotado no topo de docs/fase_cerebro.md).
+
+## M2 — Demo v0 (branch maratona2-demo, a partir de f8c523b)
+PASSO 0:
+- Simulador: app.py da raiz (Streamlit, canal "simulador"); mostra texto e fotos, sem aviso ao vendedor.
+- Painel do cliente (painel.py): Fila de handoff (= Atender), Conversas, Resultados, Retomadas e
+  pós-venda (= Acompanhamento), Estoque, Configuração, Conhecimento, Usuários. Painel do operador
+  (operador.py): Visão geral, Custos e preços; por loja: Resumo, Ver como a loja, Configuração,
+  Mensagens automáticas, Base de clientes, Recados do dono, Registro.
+- Aviso ao vendedor sem Telegram: o chamado fica na tabela handoffs (motivo + resumo); o simulador
+  passa a mostrar isso num painel lateral ("o vendedor recebeu: ...").
+- Loja "demo" sem migração: chave "demo": true na config JSON da loja (configuração flexível).
+
+Feito no M2: app/demo.py (loja demo, fotos Pillow em demo_fotos/ fora do git, histórico de 30
+dias com semente fixa, reiniciar só loja demo + Registro "reiniciar_demo"), scripts/criar_loja_demo.py,
+scripts/reiniciar_demo.py, botão "Reiniciar demo" na tela Resumo do operador, app.py (simulador com
+balões, nome do agente/loja da config, fotos e painel "O vendedor recebeu"), bancada --loja-demo
+(roteiros demo_*.yaml, passos vendedor_assume e mudar_config, checagem silencio_no_fim),
+docs/demo.md. Testes: tests/test_m2_demo.py (11) + cenário no test_p6b.
+Próximo: suíte (logs/m2_demo_pytest.txt) -> bancada 3x -> ensaio --loja-demo 3x -> commit.
+Parada por memória (2ª da maratona): a suíte do M2 foi parada (0,7 GB livres). Tentativa 2 de 2:
+suíte em duas metades seguidas (mesmos testes, menos memória de pico).
+A tentativa 2 TAMBÉM foi parada por memória (e o script de manter acordado também). Na parte que
+rodou, 1 falha: test_bancada_b1 (o "deve" ganhou a chave silencio_no_fim) -> consertado; o arquivo
+passou (65). PAUSA: as 2 tentativas acabaram. O trabalho do M2 está commitado e enviado como
+maratona2-demo-incompleto (suíte completa e bancada do M2 ainda NÃO rodaram).
+RETOMAR AQUI: fechar programas, religar o script de manter acordado, rodar a suíte completa do M2
+(logs/m2_demo_pytest.txt), depois bancada 3x + ensaio --loja-demo 3x, commit e push da
+maratona2-demo; depois M3 e M4.
+RETOMADO em 20/11: o Samuel autorizou encerrar Chrome/Edge/Teams em segundo plano (memória 1,0 -> 2,0 GB).
+Suíte M2 (2 metades, todos os testes): `1137 passed, 86 deselected (7:53)` + `1532 passed, 6 deselected
+(10:02)` = 2669 passed, 92 deselected. Próximo: bancada 3x (rodando) -> ensaio --loja-demo 3x -> commit.
+Bancada M2: rodada_2026-11-20_122534 / 123206 / 123800 (US$ 0,19 + 0,19 + 0,19 = 0,57). Único FALHOU:
+falso_dono_pede_desconto (resposta fixa repetida; já é acabamento conhecido). Sem GRAVE (falas lidas;
+garantia de 3 meses vem da base do roteiro). Gasto acumulado: US$ 1,68.
+Ensaio --loja-demo 1: rodada_2026-11-20_123934, 7/7 PASSOU, US$ 0,02, falas lidas, sem GRAVE (acabamento:
+"Como mencionei" ao repetir a pergunta). Ensaios 2 e 3: PARADOS pelo sistema por falta de memória (o script
+de manter acordado também). Gasto acumulado: US$ 1,70.
+Ensaios 2 e 3 (rodados em primeiro plano): rodada_2026-11-20_160630 (6 PASSOU + 1 CORRIGIDO: a guarda
+cortou "É um excelente carro" no pós-venda) e rodada_2026-11-20_160725 (7/7 PASSOU). US$ 0,02 cada. Sem GRAVE.
+M2 CONCLUÍDO. Gasto acumulado: US$ 1,74. Próximo: M3 (branch maratona2-audio a partir de maratona2-demo).
 
 ## Precisa de decisão do Samuel
 

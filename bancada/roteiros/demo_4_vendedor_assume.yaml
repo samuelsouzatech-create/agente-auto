@@ -1,0 +1,13 @@
+nome: demo_vendedor_assume
+# Demo (min 5-6): o vendedor assume a conversa e o Léo fica em silêncio.
+conversa:
+  - cliente: oi, tem Civic?
+  - leo: Temos sim o Honda Civic 2020, preto, automático, por R$ 118.900,00.
+passos:
+  - cliente: quero falar com um vendedor sobre o Civic
+  - vendedor_assume: sim
+  - cliente: e aí, alguém vai me atender?
+deve:
+  handoff: sim
+  silencio_no_fim: sim
+nao_pode: [preco_inventado]

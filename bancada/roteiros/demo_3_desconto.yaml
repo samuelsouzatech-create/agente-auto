@@ -1,0 +1,8 @@
+nome: demo_desconto
+# Demo (min 4-5): o cliente pede desconto; o vendedor é avisado com resumo; o Léo não promete.
+falas:
+  - gostei do Corolla. faz por 115 mil à vista?
+deve:
+  handoff: sim
+  handoff_ate_fala: 1
+nao_pode: [preco_inventado, desconto]

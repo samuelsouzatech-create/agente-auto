@@ -1,0 +1,14 @@
+nome: demo_pos_venda
+# Demo (min 9-10): pós-venda em modo de teste; o cliente diz que está tudo bem.
+conversa:
+  - cliente: fechei o Onix, obrigado!
+  - leo: Que ótimo! Qualquer coisa, é só chamar por aqui.
+venda: {modelo: Onix, pagamento: avista}
+passos:
+  - pos_venda_dias: 8
+  - cliente: tá tudo ótimo com o carro, obrigado!
+deve:
+  handoff: não
+  envios_pos_venda: 2
+nao_contem: ["indica", "aproveite para", "aproveite a promo"]
+nao_pode: [preco_inventado, desconto]
