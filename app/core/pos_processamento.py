@@ -18,8 +18,10 @@ Depois que a IA responde, o texto passa por estes passos, NESTA ordem (cada um �
     13. falso_dono              número fora da equipe dizendo ser da loja
     14. emoji                   limite de emoji
     15. palavra_de_tempo        "logo", "em breve", "já já" saem da promessa de contato (N5)
-    16. repeticoes              contato/horário/frase repetidos; pergunta solta
-    17. frase_de_oferta         a guarda tirou a pergunta e não sobrou nenhuma nem ação gravada
+    16. dia_de_reabertura       loja fechada: dia/hora de reabertura errados -> horário calculado (N5b)
+    17. fragmentos              pedaço solto sem verbo depois de cortes; "só um instante" fechada (N5b)
+    18. repeticoes              contato/horário/frase repetidos; pergunta solta
+    19. frase_de_oferta         a guarda tirou a pergunta e não sobrou nenhuma nem ação gravada
 
 Mudar a ordem muda o comportamento: um passo novo entra AQUI, com nome, no lugar certo.
 Os passos buscam as guardas pelo módulo app.core.turno (os testes trocam funções por lá).
@@ -195,6 +197,28 @@ def emoji(c: Contexto) -> None:
         c.ferramentas.append("guarda_emoji")
 
 
+def dia_de_reabertura(c: Contexto) -> None:
+    """N5b: com a loja fechada, dia/hora de reabertura errados viram a frase de horário do código."""
+    t = _t()
+    c.resposta, trocou = t.corrigir_reabertura(c.resposta, t.reabertura_agora(c.loja_id))
+    if trocou:
+        c.avisar("GUARDA: dia/hora de reabertura trocados pelo horário calculado.")
+        c.ferramentas.append("guarda_reabertura")
+
+
+def fragmentos(c: Contexto) -> None:
+    """N5b: depois de cortes, pedaço solto sem verbo sai; loja fechada: sem "Só um instante"."""
+    t = _t()
+    fechada = t.reabertura_agora(c.loja_id) is not None
+    if c.resposta == c.resposta_inicial and not fechada:
+        return                                   # sem corte e loja aberta: nada a limpar
+    novo, trocou = t.tirar_fragmentos(c.resposta, c.texto, loja_fechada=fechada)
+    if trocou and novo.strip():
+        c.resposta = novo
+        c.avisar("GUARDA: pedaço solto ou 'só um instante' tirado da resposta.")
+        c.ferramentas.append("guarda_fragmento")
+
+
 def palavra_de_tempo(c: Contexto) -> None:
     """N5: promessa de contato sem prazo ("logo", "em breve", "já já" saem)."""
     c.resposta, trocou = _t().tirar_palavra_de_tempo(c.resposta)
@@ -231,6 +255,8 @@ PASSOS = (
     falso_dono,
     emoji,
     palavra_de_tempo,
+    dia_de_reabertura,
+    fragmentos,
     repeticoes,
     frase_de_oferta,
 )

@@ -527,6 +527,9 @@ _NAO_HA_REGRA_ENTRADA = re.compile(
 _POLITICA_AFIRMADA = re.compile(
     r"\b(nao|nunca)\s+(trabalhamos|fazemos|realizamos|aceitamos|entregamos|enviamos|envia|mandamos|manda"
     r"|oferecemos|disponibilizamos|temos\s+(servico|politica|esse\s+servico))\b"
+    # N5b: "a gente não...", "não trabalha", "não faz", "não aceita", "não prevê" (a loja, sem base)
+    r"|\ba\s+gente\s+(nao|nunca)\b|\b(nao|nunca)\s+(trabalha|faz|aceita|preve|prevemos|realiza|oferece"
+    r"|permite|permitimos|libera|liberamos|segura|seguramos)\b"
     r"|\bnossas?\s+politicas?\b|\bpolitica\s+da\s+loja\b"
     r"|\bnao\s+(temos|ha|existe|tem)\s+(nenhuma\s+|uma\s+)?(promoc\w*|campanha\w*)")
 FRASE_PAGAMENTO_EXPLICA = "Sobre pagamento, sinal e reserva, o pessoal da equipe explica como funciona."
@@ -572,16 +575,37 @@ def tirar_elogio_do_estado(resposta: str) -> tuple[str, bool]:
     return (" ".join(ficam) if ficam else FRASE_FOTO_CARRO), True
 
 
+# N5b (item 10): palavras de estado que também saem da descrição da foto.
+_ESTADO_NA_DESCRICAO = re.compile(r"\bconservacao\b|\bboas?\s+condic\w*|\bconservad\w*|\bbrilhant\w*"
+                                  r"|\bcuidad\w*|\bzerad\w*|\bimpecave\w*|\btinindo\b|\bnovinho\b")
+
+
 def tirar_elogio_da_descricao(descricao: str) -> str:
-    """Descrição da foto do carro sem julgamento de estado ("bom estado", "bem conservado")."""
+    """Descrição da foto do carro sem julgamento de estado ("bom estado", "bem conservado",
+    "boas condições", "brilhante"). Só as palavras de estado saem; modelo, cor e riscos ficam."""
     texto = str(descricao or "")
     sem = _sem_acento(texto)
-    partes = [p.strip() for p in re.split(r",|\be\b", texto)]
-    if not ELOGIO_DO_ESTADO.search(sem) and not re.search(r"\bconservacao\b", sem):
+    if not ELOGIO_DO_ESTADO.search(sem) and not _ESTADO_NA_DESCRICAO.search(sem):
         return texto
-    limpas = [p for p in partes if p and not ELOGIO_DO_ESTADO.search(_sem_acento(p))
-              and not re.search(r"\bconservacao\b", _sem_acento(p))]
-    return ", ".join(limpas).strip(" ,.")
+    trechos = [(m.start(), m.end()) for r in (ELOGIO_DO_ESTADO, _ESTADO_NA_DESCRICAO) for m in r.finditer(sem)]
+    trechos.sort()
+    saida, pos = [], 0
+    for ini, fim_ in trechos:                  # sem acento e original têm o mesmo tamanho
+        if ini >= pos:
+            saida.append(texto[pos:ini])
+            pos = fim_
+    saida.append(texto[pos:])
+    novo = "".join(saida)
+    # sobras: "em ," / "e ," / "muito ," / "de conservação" sem nada
+    anterior = None
+    while anterior != novo:                    # "em excelente estado de conservação" -> "em  de " -> ""
+        anterior = novo
+        novo = re.sub(r"\s*\b(em|e|com|muito|bem|de|num|em um|em uma)\s*(?=[,;.]|$)", "", novo,
+                      flags=re.IGNORECASE).rstrip()
+    novo = re.sub(r"\s*,\s*(,\s*)+", ", ", novo)
+    novo = re.sub(r"\s+([,;.])", r"\1", novo)
+    novo = re.sub(r"\s{2,}", " ", novo).strip(" ,.;")
+    return novo
 
 
 def pergunta_se_aceita_troca(texto: str) -> bool:
@@ -630,6 +654,9 @@ def tirar_promessa_de_foto(resposta: str) -> tuple[str, bool]:
 # ======================================================================
 # L8: pedidos do cliente que só a equipe resolve (chamado pelo CÓDIGO) e frases de risco
 # ======================================================================
+_CIDADES = (r"recife|olinda|paulista|jaboatao|caruaru|petrolina|garanhuns|igarassu|camaragibe|cabo"
+            r"|vitoria\s+de\s+santo\s+antao|gravata|sao\s+lourenco|goiana|carpina|serra\s+talhada|arcoverde"
+            r"|joao\s+pessoa|campina\s+grande|maceio|natal|fortaleza|salvador|aracaju|teresina|sao\s+luis")
 PEDIDOS_DA_EQUIPE = [
     ("Cliente pediu para falar com uma pessoa.",
      r"\b(falar|conversar|atendid\w*)\s+(com|por)\s+(uma?\s+|o\s+|a\s+)?(pessoa|humano|atendente|gente"
@@ -637,8 +664,11 @@ PEDIDOS_DA_EQUIPE = [
     ("Cliente quer pagar, mandar sinal ou reservar o carro.",
      r"\bpix\b|\bboleto\b|\bsinal\b|\breserv\w*|\bsegurar\s+o\s+carro\b|\bconta\s+(pra|para)\s+(deposit|transfer)\w*"
      r"|\bdeposit\w*\b|\btransferir\s+o\s+dinheiro\b"),
+    # N5b: "entreg*" só conta junto de carro/veículo ou de cidade ("entregar o melhor serviço" não).
     ("Cliente pediu entrega do carro.",
-     r"\bentreg(a|ar|am|ue|uem|ariam)\b|\blevar\s+o\s+carro\s+(ate|pra|para)\b|\bfrete\b|\boutra\s+cidade\b"),
+     r"\bentreg\w*\b[^.!?]{0,40}\b(carros?|veiculos?|moto|caminhonete|picape|suv|cidade|" + _CIDADES + r")\b"
+     r"|\b(carros?|veiculos?)\b[^.!?]{0,40}\bentreg\w*"
+     r"|\blevar\s+o\s+carro\s+(ate|pra|para)\b|\bfrete\b|\boutra\s+cidade\b"),
     ("Cliente citou preço de outra loja/anúncio.",
      r"\bolx\b|\bwebmotors\b|\bmercado\s+livre\b|\bicarros\b|\boutra\s+loja\b|\bconcorrent\w*"
      r"|\b(vi|achei|tem)\b[^.!?]{0,25}\bpor\s+(r\$\s*)?\d"),
@@ -1053,3 +1083,89 @@ def tirar_palavra_de_tempo(resposta: str) -> tuple[str, bool]:
             mudou = True
         saida.append(frase)
     return (" ".join(saida) if mudou else resposta), mudou
+
+
+# ======================================================================
+# N5b (itens 8 e 9): dia/hora de reabertura e fragmentos depois de cortes
+# ======================================================================
+_DIAS_DA_SEMANA = ("segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo")
+_FALA_DE_REABRIR = re.compile(r"\b(abre|abrimos|abriremos|abrir|reabre|reabrimos|retom\w*|volt\w*\s+a\s+atender"
+                              r"|a\s+partir\s+d[ae]s?|atendimento\s+(volta|retorna))\b")
+_HORA = re.compile(r"\b(\d{1,2})\s*(?::\s*(\d{2})|h\s*(\d{2})?)(?!\d)")
+
+
+def _horas_citadas(normal: str) -> list[str]:
+    return [f"{int(h):02d}:{(m or m2 or '00')}" for h, m, m2 in _HORA.findall(normal)]
+
+
+def corrigir_reabertura(resposta: str, reabre: dict | None) -> tuple[str, bool]:
+    """Loja fechada (reabre = relogio.reabertura): frase que diz QUANDO a loja reabre com dia da semana,
+    "hoje"/"amanhã" ou hora diferente da próxima abertura calculada vira a frase de horário do código.
+    Frase que lista o horário ("das 08:00 às 18:00") fica."""
+    if not reabre:
+        return resposta, False
+    certa = f"A loja está fechada agora; abre {reabre['quando']}."
+    saida, trocou = [], False
+    for frase in _frases_originais(resposta):
+        f = _sem_acento(frase)
+        horas = _horas_citadas(f)
+        if not _FALA_DE_REABRIR.search(f) or len(horas) >= 2:          # 2 horas = lista do horário
+            saida.append(frase)
+            continue
+        dias = {i for i, d in enumerate(_DIAS_DA_SEMANA) if re.search(rf"\b{d}\b", f)}
+        errado = bool(dias - {reabre["dia"]})
+        errado |= bool(re.search(r"\bamanha\b", f)) and reabre["relativo"] != "amanha"
+        errado |= bool(re.search(r"\bhoje\b", f)) and reabre["relativo"] != "hoje"
+        errado |= bool(horas) and horas[0] != reabre["hora"]
+        if not errado:
+            saida.append(frase)
+            continue
+        if not trocou:
+            saida.append(certa)
+        trocou = True
+    return (" ".join(saida) if trocou else resposta), trocou
+
+
+# Promessa de resposta imediata com a loja fechada (ninguém responde agora).
+_JA_JA_FECHADO = re.compile(r"\b(so\s+um\s+instante|um\s+instante|ja\s+te\s+aviso|ja\s+te\s+retorno|ja\s+volto"
+                            r"|aguarde\s+(so\s+)?um\s+(pouco|momento|minuto)|so\s+um\s+(momento|minuto))\b")
+_PARECE_VERBO = re.compile(
+    r"\b(e|era|sao|esta|estao|estava|tem|temos|tinha|foi|foram|vai|vou|vao|pode|posso|podemos|ha|fica|ficam"
+    r"|ficou|fez|faz|faco|fazemos|quer|quero|sei|tenho|da|dao|ve|vem|custa|custam|sai|saem|aceita|aceitamos"
+    r"|abre|abrimos|fecha|chega|chegou|passa|segue|seguem|precisa|precisam|gostaria|deseja|prefere|consigo"
+    r"|consegue|mando|manda|mandei|enviei|envio|agendo|anoto|anotei|confirmo|confirma|ajudo|ajuda|explica"
+    r"|atende|atendemos|trabalha|trabalhamos|oferece|oferecemos|financia|financiamos|garanto|acho|vejo|veja"
+    r"|aviso|avisa|retorno|retorna|volto|volta|falo|fala|chamo|chama|respondo|responde|mostro|mostra)\b"
+    r"|\b\w{2,}(ar|er|ir|amos|emos|imos|aram|eram|iram|ando|endo|indo|ou|ei|aria|eria|iria|arei|erei|irei)\b")
+_INTERJEICOES = re.compile(r"^(oi|ola|ola!|bom dia|boa tarde|boa noite|obrigad\w*|claro|perfeito|otimo|certo|"
+                           r"entendi|sim|nao|beleza|show|combinado|tudo bem|que bom|imagina|de nada)\b")
+
+
+def _e_fragmento(frase: str, pergunta: str) -> bool:
+    f = _sem_acento(frase).strip(" .!?")
+    if not f or frase.strip().endswith("?") or _INTERJEICOES.match(f):
+        return False
+    if _PALAVRA_DE_CARRO.search(f) or toca_a_pergunta(f, pergunta):
+        return False                       # nome do carro e assunto ficam
+    palavras = re.findall(r"[a-z0-9]+", f)
+    return not _PARECE_VERBO.search(f) or (len(palavras) < 4 and bool(re.search(r"\d", f)))
+
+
+def tirar_fragmentos(resposta: str, pergunta: str = "", loja_fechada: bool = False) -> tuple[str, bool]:
+    """Depois dos cortes das guardas: pedaço solto sem verbo (ex.: "Domingos Ferreira, 1000, Boa Viagem.")
+    sai; nome do carro e assunto da pergunta ficam. Loja fechada: nunca "Só um instante"/"já te aviso"."""
+    linhas, mudou = [], False
+    for linha in str(resposta or "").split("\n"):
+        if not linha.strip():
+            linhas.append(linha)
+            continue
+        frases = _frases_originais(linha)
+        ficam = [fr for fr in frases if not _e_fragmento(fr, pergunta)
+                 and not (loja_fechada and _JA_JA_FECHADO.search(_sem_acento(fr)))]
+        if len(ficam) != len(frases):
+            mudou = True
+        if ficam:
+            linhas.append(" ".join(ficam) if len(ficam) != len(frases) else linha)
+    if not mudou:
+        return resposta, False
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(linhas)).strip(), True

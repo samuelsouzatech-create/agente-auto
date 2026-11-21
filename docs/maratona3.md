@@ -225,3 +225,35 @@ Sem recarregar os créditos do Gemini agora, o Samuel decidiu fechar a Fase Cér
 1 completa + 1 parcial. Um GRAVE raro (que aparece 1 vez a cada 2 ou 3 rodadas) tem menos chance de ter
 sido pego. Recomendação: quando houver crédito, rodar a bancada 2 vezes antes de uma loja real entrar em
 modo sombra (`.venv-teste\Scripts\python scripts\rodar_bancada.py`).
+
+## N5b — itens 7 a 11 (só código e testes offline; sem Gemini)
+
+PASSO 0:
+- 7 (política inventada): existia EM PARTE (guarda_politica._POLITICA_AFIRMADA / trocar_politica_sem_base):
+  pegava "não trabalhamos/fazemos/aceitamos", "nossa política"; NÃO pegava "a gente não trabalha",
+  "não aceita", "não prevê" (a frase real do roteiro 37 escapou).
+- 8 (dia de reabertura): não existia. O horário certo já é calculado (relogio.status_agora) e vai no prompt,
+  mas nada conferia a resposta.
+- 9 (fragmentos; "Só um instante" com a loja fechada): não existia.
+- 10 (foto): existia EM PARTE (guarda_politica.tirar_elogio_da_descricao, chamado no turno): pegava "bem
+  conservado", "bem cuidado", "ótimo estado"; NÃO pegava "boas condições", "conservado" sozinho, "brilhante";
+  "modelo não identificado" não existia.
+- 11 (chamado de entrega): existia SEM a regra (guarda_politica.PEDIDOS_DA_EQUIPE): qualquer "entregar" abria.
+Feito (N5b):
+- 7: _POLITICA_AFIRMADA ganhou "a gente não", "não trabalha/faz/aceita/prevê/permite/realiza/oferece" (e
+  "nossa política" já existia); a frase vira a resposta padrão do tema ("o pessoal da equipe explica como
+  funciona"). Roteiros 37 e 41: variações no "não podia".
+- 8: relogio.reabertura(loja, dt) (fonte única) + guarda corrigir_reabertura: loja fechada e frase de
+  reabertura com dia/"hoje"/"amanhã"/hora diferente da próxima abertura -> "A loja está fechada agora; abre
+  <quando>." (lista de horário "das 08:00 às 18:00" fica). Passo dia_de_reabertura.
+- 9: guarda tirar_fragmentos (passo fragmentos, só depois de corte ou com a loja fechada): pedaço sem verbo
+  sai (nome do carro e assunto ficam); loja fechada: sem "Só um instante"/"já te aviso".
+- 10: descrição da foto sem "boas condições", "conservado", "brilhante", "bem cuidado", "ótimo estado" (só as
+  palavras saem); foto de carro sem marca/modelo -> "modelo não identificado". Prompt da visão intacto.
+- 11: chamado de entrega só com carro/veículo ou cidade ("entregar o melhor serviço" não abre).
+- tests/test_m3_n5b_itens.py (38). Ajustes de teste sem mudar expectativa: test_m3_n4_ordem (+2 passos),
+  test_m3_n2_cerebro (também desliga a guarda de fragmentos para provar a checagem da bancada).
+**Itens 7-11 só com teste offline; validar na bancada quando houver crédito.**
+Suíte N5b (3 partes): `729 passed, 86 deselected` + `935 passed` (1ª vez 1 falha: a descrição da foto com
+"modelo não identificado" passava de 200 letras; agora corta no fim) + `1132 passed, 6 deselected` = 2796 passed.
+Sem bancada (sem crédito). NÃO houve merge.

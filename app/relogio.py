@@ -167,6 +167,30 @@ def proxima_abertura_da_loja(loja, dt: datetime):
     return None
 
 
+def reabertura(loja, dt: datetime) -> dict | None:
+    """N5b: None se a loja está aberta agora (ou sem horário); senão a próxima abertura pronta para
+    comparar e para a tela: {"quando": "hoje, às 08:00", "dia": 5, "hora": "08:00", "relativo": "hoje"}."""
+    local = hora_local(loja, dt)
+    hoje = _faixa_do_dia(loja, local.weekday())
+    if hoje is not None and hoje[0] <= local.time() < hoje[1]:
+        return None
+    abre = proxima_abertura_da_loja(loja, dt)
+    if abre is None:
+        return None
+    abre = abre.astimezone(fuso(loja))
+    dias = (abre.date() - local.date()).days
+    nome = DIAS_COMPLETOS[abre.weekday()]
+    hora = f"{abre:%H:%M}"
+    if dias == 0:
+        quando, relativo = f"hoje, às {hora}", "hoje"
+    elif dias == 1:
+        quando, relativo = f"amanhã, {nome}, às {hora}", "amanha"
+    else:
+        artigo = "no" if abre.weekday() >= 5 else "na"
+        quando, relativo = f"{artigo} {nome}, às {hora}", None
+    return {"quando": quando, "dia": abre.weekday(), "hora": hora, "relativo": relativo}
+
+
 def status_agora(loja, dt: datetime) -> str:
     """Status pronto para o Léo repetir (ele não faz conta de horário):
     "Agora a loja está ABERTA até 13:00." ou

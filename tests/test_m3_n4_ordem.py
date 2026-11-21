@@ -17,8 +17,8 @@ def test_lista_unica_na_ordem_combinada():
     assert [p.__name__ for p in PASSOS] == [
         "texto_interno", "preco_inventado", "frases_proibidas", "regra_de_entrada", "risco_e_politica",
         "promessa_de_foto", "elogio_da_foto", "estado_sem_ficha", "agendamento", "chamado_pelo_codigo",
-        "pos_venda_e_urgencia", "aviso_de_chamado", "falso_dono", "emoji", "palavra_de_tempo", "repeticoes",
-        "frase_de_oferta"]   # N5: + palavra_de_tempo
+        "pos_venda_e_urgencia", "aviso_de_chamado", "falso_dono", "emoji", "palavra_de_tempo", "dia_de_reabertura", "fragmentos", "repeticoes",
+        "frase_de_oferta"]   # N5: + palavra_de_tempo; N5b: + dia_de_reabertura, fragmentos
 
 
 def test_guardas_linha_a_linha_na_definicao_e_sem_reatribuir_no_fim():

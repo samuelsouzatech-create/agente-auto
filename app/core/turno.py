@@ -53,7 +53,7 @@ from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da
                                  tirar_promessa_de_foto, pedido_da_equipe, trocar_frases_de_risco,
                                  trocar_politica_sem_base, cortar_estado_inventado,
                                  tirar_agendamento_falso, limpar_repeticoes, FRASE_CNH, FRASE_CONTATO,
-                                 tirar_palavra_de_tempo,
+                                 tirar_palavra_de_tempo, corrigir_reabertura, tirar_fragmentos,
                                  FRASE_OFERTA, tirar_texto_interno,
                                  trocar_frases_proibidas)
 from banco import conectar
@@ -124,6 +124,17 @@ class ResultadoTurno:
 # N2: ferramentas que gravam algo (depois delas a frase de oferta fixa não entra).
 FERRAMENTAS_QUE_GRAVAM = frozenset({"agendar_visita", "registrar_interesse", "registrar_lead", "registrar_recado",
                                     "registrar_troca", "acionar_handoff"})
+
+
+def reabertura_agora(loja_id: int):
+    """N5b: None com a loja aberta; senão a próxima abertura (app/relogio.py, a fonte única de horário)."""
+    from app.lojas import carregar_loja
+    from app.relogio import agora_utc, reabertura
+    try:
+        return reabertura(carregar_loja(loja_id), agora_utc())
+    except Exception:
+        _logger("turno").exception("Não consegui calcular a reabertura da loja.")
+        return None
 
 
 def precisa_da_frase_de_oferta(guarda_mexeu: bool, resposta_inicial: str, resposta: str, handoff: bool,
