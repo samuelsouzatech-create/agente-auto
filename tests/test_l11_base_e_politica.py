@@ -193,9 +193,16 @@ def test_base_ficticia_do_roteiro(bancada):
 def test_roteiros_l11(bancada):
     rb = bancada
     roteiros = {r["nome"]: r for r in rb.carregar_roteiros()}
-    assert len(roteiros) == 56
+    assert len(roteiros) == _total_de_roteiros()
     assert "20%" not in roteiros["entrada_sem_base"]["conhecimento"][0]
     assert "não trabalhamos" in roteiros["pede_pix_reserva"]["nao_contem"]
     assert "não realizamos" in roteiros["entrega_outra_cidade"]["nao_contem"]
     assert "não enviamos" in roteiros["fotos_modulo_desligado"]["nao_contem"]
     assert "não temos mínimo" in roteiros["entrada_minima"]["nao_contem"]
+
+
+def _total_de_roteiros() -> int:
+    """N2 (revisão #26): conta os arquivos (sem os da demo), em vez de um número fixo."""
+    from pathlib import Path as _P
+    pasta = _P(__file__).resolve().parents[1] / "bancada" / "roteiros"
+    return len([c for c in pasta.glob("*.yaml") if not c.stem.startswith("demo_")])

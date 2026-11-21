@@ -189,7 +189,7 @@ def bancada(monkeypatch, tmp_path):
 def test_bancada_falha_texto_interno_e_respostas_iguais(bancada, monkeypatch):
     rb = bancada
     from app.core import turno
-    monkeypatch.setattr(turno, "tirar_texto_interno", lambda t: (t, False))     # desliga a guarda
+    monkeypatch.setattr(turno, "tirar_texto_interno", lambda t, *a: (t, False))  # desliga a guarda
 
     class Mesmo:
         def invoke(self, entrada, config=None):

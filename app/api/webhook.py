@@ -26,6 +26,8 @@ from app.core.turno import (
 from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
 from app.api.receber_audio import transcrever_audio, pegar_uso_da_transcricao
 from app.console import id_no_console, texto_no_console   # N1
+from app.limites_midia import MidiaGrandeDemais   # N2
+from app.core.turno import turno_midia_grande   # N2
 from app.api.receber_imagem import baixar_imagem_whatsapp
 from app.redis_lock import adquirir_lock_esperando
 from app.custos import registrar_uso
@@ -123,7 +125,13 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
         if porta_fechada(loja_id, CANAL, numero):
             return
         print(f"[WhatsApp][loja {loja_id}] Cliente {id_no_console(numero, CANAL)} mandou um áudio. Transcrevendo...")
-        texto = await transcrever_audio(id_audio, loja_id=loja_id)
+        try:
+            texto = await transcrever_audio(id_audio, loja_id=loja_id)
+        except MidiaGrandeDemais:                                         # N2
+            aviso = turno_midia_grande(loja_id, CANAL, numero, "audio")
+            if aviso.texto:
+                await enviar_resposta_humanizada(numero, aviso.texto, loja_id=loja_id)
+            return
         uso_audio = pegar_uso_da_transcricao(id_audio)
         if uso_audio is not None and not uso_audio.vazio:
             registrar_uso(loja_id, numero, CANAL, uso_audio,
@@ -163,7 +171,13 @@ async def processar_imagem(numero: str, id_midia: str, legenda: str = "",
     if token is None:
         return
     try:
-        baixada = await baixar_imagem_whatsapp(id_midia, loja_id=loja_id)
+        try:
+            baixada = await baixar_imagem_whatsapp(id_midia, loja_id=loja_id)
+        except MidiaGrandeDemais:                                         # N2
+            aviso = turno_midia_grande(loja_id, CANAL, numero, "imagem")
+            if aviso.texto:
+                await enviar_resposta_humanizada(numero, aviso.texto, loja_id=loja_id)
+            return
         imagem, mime = baixada if baixada else (b"", "")
         atraso = await calcular_atraso(numero, loja_id=loja_id)
         resultado = await executar_turno_imagem(

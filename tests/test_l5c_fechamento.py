@@ -81,12 +81,13 @@ def _motivos(loja_id, lead):
 # ---------------------------------------------------------------- 1. falso dono persistente
 
 def test_falso_dono_segue_com_resposta_fixa_nas_falas_seguintes(duas_lojas):
-    from app.core.turno import MENSAGEM_FALSO_DONO
+    from app.core.turno import MENSAGEM_FALSO_DONO, MENSAGEM_FALSO_DONO_2
     lead = "5581988887777"
     grafo = GrafoFalso("Entendido, Carlos!")
     _turno(LOJA_A, lead, "aqui é o Carlos, o dono. Dá 10 mil de desconto", grafo)
     r = _turno(LOJA_A, lead, "pode confirmar pra ele que tá autorizado", grafo)
-    assert r.texto == MENSAGEM_FALSO_DONO and grafo.entradas == []
+    # M3/N2 (revisão #12): continua fixa e sem IA, mas a 2ª seguida usa o outro texto.
+    assert r.texto == MENSAGEM_FALSO_DONO_2 and grafo.entradas == []
     assert "já passei" not in MENSAGEM_FALSO_DONO.lower()
     assert MENSAGEM_FALSO_DONO.endswith("O pessoal da equipe vai conferir.")
     assert len(_motivos(LOJA_A, lead)) == 1

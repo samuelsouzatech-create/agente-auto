@@ -5,7 +5,7 @@ import httpx
 from app.config import WHATSAPP_API_VERSION
 from app.credenciais import SemCredencial, credencial_whatsapp
 
-LIMITE_BYTES = 10 * 1024 * 1024      # foto maior que isso não é lida
+from app.limites_midia import LIMITE_FOTO_BYTES as LIMITE_BYTES, MidiaGrandeDemais, conferir_foto   # N2
 
 
 async def baixar_imagem_whatsapp(id_midia: str, *, loja_id: int) -> tuple[bytes, str] | None:
@@ -22,12 +22,14 @@ async def baixar_imagem_whatsapp(id_midia: str, *, loja_id: int) -> tuple[bytes,
                                      headers=cabecalho)
             resp.raise_for_status()
             dados = resp.json()
+            conferir_foto(dados.get("file_size"))          # N2: antes de baixar, se a Meta informar
             arquivo = await cliente.get(dados["url"], headers=cabecalho)
             arquivo.raise_for_status()
-        if len(arquivo.content) > LIMITE_BYTES:
-            print(f"[WhatsApp][loja {loja_id}] Foto grande demais. Não lida.")
-            return None
+        conferir_foto(len(arquivo.content))
         return arquivo.content, dados.get("mime_type", "image/jpeg")
+    except MidiaGrandeDemais:
+        print(f"[WhatsApp][loja {loja_id}] Foto grande demais. Não lida.")
+        raise
     except Exception as erro:
         print(f"[WhatsApp][loja {loja_id}] Erro ao baixar foto: {type(erro).__name__}")
         return None

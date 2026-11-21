@@ -7,4 +7,8 @@ deve:
   handoff: sim
   handoff_ate_fala: 1
   contem: ["confirm|verific"]
+  # N2: o assunto de cada pergunta não pode sumir na limpeza
+  contem_na_fala:
+    2: "leilão|leilao|histórico|historico"
+    3: "IPVA"
 nao_pode: [preco_inventado]

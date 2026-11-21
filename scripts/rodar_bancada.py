@@ -48,7 +48,7 @@ from app.guarda_politica import (  # noqa: E402
     numeros_do_cliente, resposta_tem_preco_inventado, valores_em_reais,
 )
 from app.recados import termos_da_condicao  # noqa: E402
-from app.core.turno import _agenda_do_turno, _fichas_do_turno, resposta_do_turno  # noqa: E402
+from app.core.turno import _agenda_do_turno, _fichas_do_turno, internos_do_turno, resposta_do_turno  # noqa: E402
 from app.guarda_politica import FRASES_PROIBIDAS, ELOGIO_DO_ESTADO  # noqa: E402
 from app.naturalidade import parece_robotica  # noqa: E402
 from app.utils import extrair_texto, mensagens_do_turno  # noqa: E402
@@ -100,7 +100,7 @@ CAMPOS_ROTEIRO = {"nome", "falas", "remetente", "imagem", "audio", "deve", "nao_
                   "canal", "conversa", "interesse", "venda", "passos",      # L6: roteiros de job
                   "rajada",                                                 # L7: mensagens seguidas
                   "conhecimento"}                                           # L11: base própria do roteiro
-CAMPOS_DEVE = {"tools", "handoff", "contem", "handoff_ate_fala", "motivo_contem", "vira_lead",
+CAMPOS_DEVE = {"tools", "handoff", "contem", "contem_na_fala", "handoff_ate_fala", "motivo_contem", "vira_lead",
                "toques", "envios_pos_venda", "textos_diferentes", "envios_no_horario",   # L6
                "fotos", "fotos_de", "respostas",                                          # L7
                "trocas",                                                                  # L8
@@ -194,6 +194,8 @@ def validar_roteiro(dados, origem: str = "") -> dict:
             "tools": [str(t) for t in (deve.get("tools") or [])],
             "handoff": _sim_nao(deve["handoff"], "deve.handoff") if "handoff" in deve else None,
             "contem": [str(c) for c in (deve.get("contem") or [])],
+            # N2: o que a resposta de UMA fala precisa citar ({2: "leilão|histórico"})
+            "contem_na_fala": _validar_contem_na_fala(deve.get("contem_na_fala"), origem),
             # L3b: o chamado tem que abrir até esta fala (1 = primeira mensagem do cliente)
             "handoff_ate_fala": _inteiro_positivo(deve.get("handoff_ate_fala"), origem),
             # L6: roteiros de job
@@ -236,6 +238,14 @@ def validar_roteiro(dados, origem: str = "") -> dict:
 def _politicas_demo() -> list[str]:
     from app.demo import POLITICAS_DEMO
     return [f"{titulo}: {texto}" for titulo, texto in POLITICAS_DEMO]
+
+
+def _validar_contem_na_fala(valor, origem: str) -> dict:
+    if not valor:
+        return {}
+    if not isinstance(valor, dict) or not all(isinstance(k, int) and k >= 1 for k in valor):
+        raise RoteiroInvalido(f"{origem}: 'contem_na_fala' é um mapa número da fala -> texto (ex.: 2: \"IPVA\")")
+    return {k: [str(v)] if isinstance(v, str) else [str(x) for x in v] for k, v in valor.items()}
 
 
 def _validar_conhecimento(conhecimento, origem: str):
@@ -654,6 +664,7 @@ class Turno:
     foto_lida: dict | None = None   # L5b: {"tipo", "descricao"} da foto deste turno
     do_job: bool = False            # L6: mensagem mandada por um job (não é fala do cliente)
     antes_da_tool: list = field(default_factory=list)   # L11: texto que o modelo escreveu junto da tool
+    internos: list = field(default_factory=list)        # N2: motivo/resumo que o modelo passou ao acionar_handoff
     ficha: str = ""                 # L12: o que as ferramentas de estoque devolveram no turno
     agenda_gravou: bool = False     # L12: a ferramenta de agenda gravou neste turno
 
@@ -789,6 +800,14 @@ def checar(res: ResultadoRoteiro) -> None:
         esperado = "gravar como cliente" if deve["vira_lead"] else "não gravar como cliente"
         (res.ok if virou == deve["vira_lead"] else res.falhas).append(
             f"{esperado}: {res.mensagens_gravadas} mensagem(ns) gravada(s)")
+    falas_do_cliente = [t for t in res.turnos if not t.do_job]
+    for numero, itens in (deve.get("contem_na_fala") or {}).items():      # N2
+        resposta = normalizar(" ".join(falas_do_cliente[numero - 1].bolhas)) if len(falas_do_cliente) >= numero else ""
+        for item in itens:
+            opcoes = [normalizar(o).strip() for o in item.split("|") if o.strip()]
+            cita = any(o in resposta for o in opcoes)
+            (res.ok if cita else res.falhas).append(
+                f"resposta da fala {numero} {'cita' if cita else 'não cita'} \"{item}\"")
     texto = normalizar(res.texto_do_leo)
     for item in deve["contem"]:
         opcoes = [normalizar(o).strip() for o in item.split("|") if o.strip()]
@@ -1148,6 +1167,7 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
                 rodada.tokens_saida += saida
                 original = resposta_do_turno(do_turno, gravador.ultimo["messages"][-1])   # L11
                 turno.antes_da_tool = textos_antes_da_tool(do_turno)
+                turno.internos = internos_do_turno(do_turno)   # N2
                 turno.ficha = _fichas_do_turno(do_turno)                     # L12
                 turno.agenda_gravou = _agenda_do_turno(do_turno) is not None
                 turno.original = original
@@ -1402,14 +1422,18 @@ _TEXTO_INTERNO = re.compile(r"\[|\]|(^|\n)\s*(resumo|motivo)\s*:|\b(acionar_hand
 def checar_texto_interno_e_repeticao(res: "ResultadoRoteiro") -> None:
     """M1 (FALHOU, todos os roteiros): texto interno ([...], "Resumo:", nome de ferramenta) chegando
     ao cliente, inclusive em job e na sugestão da sombra; duas respostas seguidas iguais."""
+    # N2: a MESMA limpeza do Léo é a checagem (se ela ainda tiraria algo, o texto interno passou: GRAVE).
+    from app.guarda_politica import tirar_texto_interno
+    internos = []        # o que o MODELO mandou ao chamado (o resumo do código pode conter a resposta)
     for turno in res.turnos:
+        internos += turno.internos
         for bolha in turno.bolhas:
-            if _TEXTO_INTERNO.search(bolha):
-                res.falhas.append(f"texto interno chegou ao cliente: \"{bolha[:100]}\"")
+            if tirar_texto_interno(bolha, internos)[1]:
+                res.falhas.append(f"GRAVE: texto interno chegou ao cliente: \"{bolha[:100]}\"")
     for sugestao in res.sugestoes_texto:
         sem_fotos = re.sub(r"\[Fotos que o Léo mandaria:[^\]]*\]", "", sugestao)
-        if _TEXTO_INTERNO.search(sem_fotos):
-            res.falhas.append(f"texto interno na sugestão da sombra: \"{sugestao[:100]}\"")
+        if tirar_texto_interno(sem_fotos, internos)[1]:
+            res.falhas.append(f"GRAVE: texto interno na sugestão da sombra: \"{sugestao[:100]}\"")
     anteriores = [normalizar(" ".join(t.bolhas)).strip() for t in res.turnos if t.bolhas and not t.do_job]
     for a, b in zip(anteriores, anteriores[1:]):
         if a and a == b:
@@ -1529,6 +1553,7 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
             rodada.tokens_saida += saida
             original = resposta_do_turno(do_turno, gravador.ultimo["messages"][-1])   # L11
             turno.antes_da_tool = textos_antes_da_tool(do_turno)
+            turno.internos = internos_do_turno(do_turno)   # N2
             turno.ficha = _fichas_do_turno(do_turno)                         # L12
             turno.agenda_gravou = _agenda_do_turno(do_turno) is not None
             turno.original = original
@@ -1558,9 +1583,15 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
         transcrito = {}
 
         async def _chamar():
-            texto, uso = await asyncio.to_thread(
-                transcrever_do_cliente, LOJA_ID, lead_id, CANAL, caminho.read_bytes(),
-                _mime_do_audio(caminho.name), transcritor=rodada.transcritor)
+            from app.core.turno import turno_midia_grande
+            from app.limites_midia import MidiaGrandeDemais
+            try:
+                texto, uso = await asyncio.to_thread(
+                    transcrever_do_cliente, LOJA_ID, lead_id, CANAL, caminho.read_bytes(),
+                    _mime_do_audio(caminho.name), transcritor=rodada.transcritor)
+            except MidiaGrandeDemais:                       # N2: áudio grande demais, sem IA
+                transcrito["texto"] = None
+                return turno_midia_grande(LOJA_ID, CANAL, lead_id, "audio")
             transcrito["texto"] = texto
             res.transcricoes.append(texto or "")
             res.tokens_audio += uso.tokens_audio

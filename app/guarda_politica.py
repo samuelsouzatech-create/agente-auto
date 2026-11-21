@@ -748,13 +748,36 @@ _PERGUNTA_SEM_OPCOES = re.compile(r"^(e\s+)?(o\s+que|qual|como)\s+(voce\s+)?(pre
                                   r"|quer\s+fazer|vai\s+ser)\s*\??$|^(pode\s+ser|tudo\s+bem|combinado)\s*\?$")
 
 
+# N2: "um vendedor acompanha a análise com você" (guarda de entrada + crédito + modelo) só uma vez.
+_VENDEDOR_ACOMPANHA = re.compile(
+    r"(?:[;,]\s*|\s+e\s+)?\b(?:e\s+)?um\s+vendedor(?:\s+da\s+(?:nossa\s+)?equipe)?\s+acompanha\s+"
+    r"(?:a\s+an[aá]lise|esse\s+processo|o\s+processo)[^.!?;\n]*", re.IGNORECASE)
+
+
+def vendedor_acompanha_uma_vez(texto: str) -> str:
+    """Mantém a 1ª menção; nas outras, tira só o pedaço repetido (a frase continua)."""
+    achados = list(_VENDEDOR_ACOMPANHA.finditer(str(texto or "")))
+    if len(achados) < 2:
+        return texto
+    saida, ultimo = [], 0
+    for m in achados[1:]:
+        saida.append(texto[ultimo:m.start()])
+        ultimo = m.end()
+    saida.append(texto[ultimo:])
+    novo = "".join(saida)
+    novo = re.sub(r"\s+([.!?])", r"\1", novo)
+    # frase que ficou vazia ("." sozinho) sai
+    novo = re.sub(r"(^|(?<=[.!?]))\s*[.!?]+", r"\1", novo)
+    return re.sub(r"[ \t]{2,}", " ", novo).strip()
+
+
 def limpar_repeticoes(texto: str, guarda_mexeu: bool = False, pergunta: str = "") -> str:
     """L12 (depois de juntar os textos e das guardas): "a equipe vai falar com você" no
     máximo 1 vez; horário de retorno no máximo 1 vez (a frase que tem os dois fica);
     frase igual ou quase igual sai; se uma guarda trocou frase, pergunta solta sem
     opções ("O que prefere?") sai. Mantém os parágrafos."""
     import difflib
-    original = str(texto or "")
+    original = vendedor_acompanha_uma_vez(str(texto or ""))     # N2
     # Estrutura: parágrafos (linha em branco) > linhas (lista "- item") > frases. As quebras ficam.
     blocos = [[re.split(r"(?<=[.!?])\s+", linha.strip()) for linha in p.split("\n") if linha.strip()]
               for p in re.split(r"\n\s*\n", original) if p.strip()]
@@ -767,7 +790,8 @@ def limpar_repeticoes(texto: str, guarda_mexeu: bool = False, pergunta: str = ""
     sai = {k for k in contato if k != fica_contato} | {k for k in retorno if k != fica_retorno}
     sai.discard(fica_contato)
     # M1 (L13): a frase de contato que cita o assunto do cliente ("Sobre o leilão...") fica.
-    sai -= {k for k in contato if toca_a_pergunta(todas[k][3], pergunta)}
+    # N2: vale também para a frase de horário de retorno (nunca some a frase com o assunto).
+    sai -= {k for k in sai if toca_a_pergunta(todas[k][3], pergunta)}
     vistas = []
     for k, (_, _, f, n) in enumerate(todas):
         if k in sai:
@@ -805,24 +829,63 @@ def limpar_repeticoes(texto: str, guarda_mexeu: bool = False, pergunta: str = ""
 _FERRAMENTAS_NOMES = re.compile(r"\b(acionar_handoff|consultar_estoque|detalhes_veiculo|enviar_fotos|agendar_visita"
                                 r"|simular_financiamento|registrar_\w+|buscar_conhecimento)\b")
 _COLCHETES = re.compile(r"\[[^\[\]]{0,800}\]")
-_ROTULO_INTERNO = re.compile(r"^\s*(resumo|motivo|resumo do lead|resumo para o vendedor|nota interna)\s*:", re.IGNORECASE)
+# N2 (Maratona 3): rótulos internos. Linha (ou frase) que COMEÇA com um destes, seguido de ":" logo
+# depois (até 40 letras, ex.: "Motivo do handoff:"), é texto do sistema. "Sábado: 08:00" não é rótulo.
+_ROTULO_INTERNO = re.compile(
+    r"^\s*[-*•>#]*\s*\**\s*(resumo|motivo|observacao|observacoes|obs|nota|notas|handoff|chamado|ferramenta|ferramentas)"
+    r"\b[^:\n.!?]{0,40}:", re.IGNORECASE)
+_SEPARADOR = re.compile(r"^\s*(?:[-–—_=*]\s*){3,}$")
+_PALAVRAS_DE_LIGACAO = {"para", "pelo", "pela", "com", "que", "uma", "das", "dos", "sobre", "cliente", "voce",
+                        "esse", "essa", "este", "esta", "mais", "por", "nos", "nao", "sim", "ele", "ela"}
 
 
-def tirar_texto_interno(texto: str) -> tuple[str, bool]:
-    """Nada entre colchetes, nada começando com "Resumo:"/"Motivo:", nenhum nome de ferramenta
-    chega ao cliente (o resumo vai só para o chamado). Devolve (texto, mudou)."""
+def _palavras(texto: str) -> set[str]:
+    return {p for p in re.findall(r"[a-z0-9]{3,}", _sem_acento(texto)) if p not in _PALAVRAS_DE_LIGACAO}
+
+
+def repete_texto_interno(trecho: str, internos=()) -> bool:
+    """A linha repete o motivo/resumo passado ao acionar_handoff (60% ou mais das palavras iguais)."""
+    palavras = _palavras(trecho)
+    if len(palavras) < 4:
+        return False
+    for interno in internos or ():
+        base = _palavras(interno)
+        if base and len(palavras & base) / len(palavras) >= 0.6:
+            return True
+    return False
+
+
+def e_rotulo_interno(trecho: str) -> bool:
+    return bool(_ROTULO_INTERNO.match(_sem_acento(trecho)) or _SEPARADOR.match(trecho))
+
+
+def tirar_texto_interno(texto: str, internos=()) -> tuple[str, bool]:
+    """Nada entre colchetes, nenhuma linha/frase com rótulo interno ("Motivo...:", "Resumo:", "Nota:",
+    "handoff", "chamado", "ferramenta", "Observação"), nenhum separador "---", nenhum nome de ferramenta
+    e nenhuma linha que repita o motivo/resumo do chamado (internos) chega ao cliente.
+    Devolve (texto, mudou). mudou só é True se algo foi tirado (a bancada usa como checagem)."""
     original = str(texto or "")
     novo = _COLCHETES.sub("", original)
+    tirou = novo != original
     linhas = []
     for linha in novo.split("\n"):
-        frases = [f for f in _frases_originais(linha)
-                  if not _ROTULO_INTERNO.match(f) and not _FERRAMENTAS_NOMES.search(f)]
-        if frases or not linha.strip():
-            linhas.append(" ".join(frases))
+        if linha.strip() and (_SEPARADOR.match(linha) or repete_texto_interno(linha, internos)):
+            tirou = True
+            continue
+        # Linha com rótulo: sai a FRASE com o rótulo (e as que repetem o chamado); o resto da linha fica.
+        frases = _frases_originais(linha)
+        ficam = [f for f in frases if not e_rotulo_interno(f) and not _FERRAMENTAS_NOMES.search(f)
+                 and not repete_texto_interno(f, internos)]
+        if len(ficam) != len(frases):
+            tirou = True
+        if ficam or not linha.strip():
+            linhas.append(" ".join(ficam) if len(ficam) != len(frases) else linha)
+    if not tirou:
+        return original, False
     novo = re.sub(r"[ \t]{2,}", " ", "\n".join(linhas))
     novo = re.sub(r" +([,.!?;:])", r"\1", novo)
     novo = re.sub(r"\n{3,}", "\n\n", novo).strip()
-    return novo, novo != original.strip()
+    return novo, True
 
 
 _VAZIAS_DA_PERGUNTA = {
@@ -833,13 +896,35 @@ _VAZIAS_DA_PERGUNTA = {
 }
 
 
+# N2: palavras do mesmo assunto (a resposta costuma trocar a palavra da pergunta por outra do tema).
+_ASSUNTOS_LIGADOS = (
+    {"leila", "histo", "sinis", "proce", "batid", "colis", "acide"},          # leilão, histórico, sinistro...
+    {"ipva", "debit", "multa", "licen", "docum", "dpvat"},                    # IPVA, débitos, documentação
+    {"laudo", "caute", "visto", "inspe", "peric"},                            # laudo cautelar, vistoria
+    {"garan", "cober"},
+    {"finan", "parce", "credi"},
+    {"troca", "avali"},
+    {"revis", "manut", "oleo"},
+)
+
+
+def _ligadas(prefixos: set) -> set:
+    saida = set(prefixos)
+    for grupo in _ASSUNTOS_LIGADOS:
+        if prefixos & grupo:
+            saida |= grupo
+    return saida
+
+
 def toca_a_pergunta(frase_normal: str, pergunta: str) -> bool:
-    """A frase cita o assunto da pergunta: "sobre <algo>" ou repete uma palavra de conteúdo dela."""
+    """A frase cita o assunto da pergunta: "sobre <algo>", repete uma palavra de conteúdo dela ou
+    uma palavra do mesmo assunto (N2: "leilão" -> "histórico"; "IPVA" -> "débitos")."""
     if not pergunta:
         return False
     if re.search(r"\bsobre\s+(o|a|os|as|essa|esse|sua|seu|esta|este)?\s*[a-z]{4,}", frase_normal):
         return True
     palavras = {p[:5] for p in re.findall(r"[a-z]{4,}", _sem_acento(pergunta)) if p not in _VAZIAS_DA_PERGUNTA}
+    palavras = _ligadas(palavras)
     return any(p[:5] in palavras for p in re.findall(r"[a-z]{4,}", frase_normal) if p not in _VAZIAS_DA_PERGUNTA)
 
 

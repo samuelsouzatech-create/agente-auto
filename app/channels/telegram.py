@@ -46,11 +46,14 @@ class CanalTelegram(Canal):
         if audio is not None:
             return [MensagemEntrada(tipo="audio", id_midia=audio.file_id,
                                     mime=getattr(audio, "mime_type", None) or "audio/ogg",
+                                    tamanho=int(getattr(audio, "file_size", 0) or 0),        # N2
+                                    duracao=int(getattr(audio, "duration", 0) or 0),
                                     tipo_original="audio", **comum)]
 
         fotos = getattr(msg, "photo", None)
         if fotos:          # L5b: várias resoluções da mesma foto; a última é a maior
             return [MensagemEntrada(tipo="imagem", id_midia=fotos[-1].file_id, mime="image/jpeg",
+                                    tamanho=int(getattr(fotos[-1], "file_size", 0) or 0),    # N2
                                     texto=(getattr(msg, "caption", None) or "").strip(),
                                     tipo_original="image", **comum)]
 
