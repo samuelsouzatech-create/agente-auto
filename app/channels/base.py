@@ -33,6 +33,8 @@ class MensagemEntrada:
     id_canal: str = ""       # conta da LOJA que recebeu (phone_number_id, id do bot)
     hora: int = 0            # timestamp da mensagem
     conteudo: bytes = b""    # L5, só no simulador: a imagem já vem junto (nunca é guardada)
+    tamanho: int = 0         # N2: bytes da mídia, quando o canal informa (checa o limite antes de baixar)
+    duracao: int = 0         # N2: segundos do áudio, quando o canal informa
 
 
 class Canal(ABC):

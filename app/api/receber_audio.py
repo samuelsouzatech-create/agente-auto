@@ -18,6 +18,7 @@ from app.config import WHATSAPP_API_VERSION, GOOGLE_API_KEY, MODELO_LLM
 from app.credenciais import SemCredencial, credencial_whatsapp
 from app.chaves import exigir_loja
 from app.custos import Uso, registrar_uso
+from app.limites_midia import MidiaGrandeDemais, conferir_audio, audio_passou_do_limite
 
 # Uso de cada transcrição do WhatsApp, guardado pelo id do áudio até o
 # webhook pegar (pegar_uso_da_transcricao) e registrar o custo.
@@ -43,6 +44,24 @@ def uso_da_resposta(resposta) -> Uso:
         return Uso()
 
 
+# N2 (revisão #8): sem fala clara, a IA devolve só a marca; a marca, vazio ou erro viram
+# "áudio não entendido" (resposta fixa, sem IA).
+MARCA_INAUDIVEL = "[inaudível]"
+PROMPT_TRANSCRICAO = (
+    "Transcreva este áudio em português do Brasil. Responda APENAS com a transcrição, sem comentários. "
+    f"Se não houver fala humana clara (silêncio, chiado, ruído, música ou fala que não dá para entender), "
+    f"responda exatamente {MARCA_INAUDIVEL} e nada mais. Nunca invente palavras.")
+
+
+def limpar_transcricao(texto) -> str | None:
+    """Transcrição pronta para o Léo, ou None (vazia ou só a marca de inaudível)."""
+    texto = str(texto or "").strip()
+    sem_marca = texto.strip(" .!?\"'").lower().replace("inaudivel", "inaudível")
+    if not texto or sem_marca in {"[inaudível]", "inaudível", "[inaudivel]"}:
+        return None
+    return texto
+
+
 def transcrever_bytes_com_uso(bytes_audio: bytes, mime: str = "audio/ogg") -> tuple[str | None, Uso]:
     """Transcreve e devolve (texto, uso). Nunca lança exceção."""
     try:
@@ -50,13 +69,11 @@ def transcrever_bytes_com_uso(bytes_audio: bytes, mime: str = "audio/ogg") -> tu
         resposta = cliente_ia.models.generate_content(
             model=MODELO_LLM,
             contents=[
-                "Transcreva este áudio em português do Brasil. "
-                "Responda APENAS com a transcrição, sem comentários.",
+                PROMPT_TRANSCRICAO,
                 genai.types.Part.from_bytes(data=bytes_audio, mime_type=mime),
             ],
         )
-        texto = (resposta.text or "").strip()
-        return (texto or None), uso_da_resposta(resposta)
+        return limpar_transcricao(resposta.text), uso_da_resposta(resposta)
     except Exception as e:
         print(f"[Audio] Erro ao transcrever na IA: {e}")
         return None, Uso()
@@ -72,7 +89,9 @@ def transcrever_do_cliente(loja_id: int, lead_id: str, canal: str, bytes_audio: 
     """M3: caminho único do áudio que já está em bytes: transcreve e registra o custo
     (tipo "transcricao"). transcritor: só testes (padrão: a IA de verdade)."""
     loja_id = exigir_loja(loja_id)
+    conferir_audio(tamanho=len(bytes_audio or b""))      # N2: grande demais nem vai para a IA
     texto, uso = (transcritor or transcrever_bytes_com_uso)(bytes_audio, mime)
+    texto = limpar_transcricao(texto)                  # N2: "[inaudível]" = não entendido
     if uso is not None and not uso.vazio:
         registrar_uso(loja_id, lead_id, canal, uso, tipo="transcricao", ferramentas=["transcricao_audio"])
     return texto, uso or Uso()
@@ -101,16 +120,21 @@ async def transcrever_audio(id_audio: str, *, loja_id: int) -> str | None:
             dados_midia = resp.json()
             url_arquivo = dados_midia["url"]
             mime = dados_midia.get("mime_type", "audio/ogg")
+            if audio_passou_do_limite(tamanho=dados_midia.get("file_size")):   # N2: antes de baixar
+                raise MidiaGrandeDemais("audio")
 
             resp_audio = await cliente.get(url_arquivo, headers=cabecalho)
             resp_audio.raise_for_status()
             bytes_audio = resp_audio.content
+            conferir_audio(tamanho=len(bytes_audio))
 
         texto, uso = transcrever_bytes_com_uso(bytes_audio, mime)
         if len(_uso_por_audio) > _LIMITE_USOS:
             _uso_por_audio.clear()
         _uso_por_audio[id_audio] = uso
         return texto
+    except MidiaGrandeDemais:
+        raise                                      # N2: o webhook responde com a mensagem fixa
     except Exception as e:
         print(f"[WhatsApp][loja {loja_id}] Erro ao baixar áudio: {type(e).__name__}")
         return None

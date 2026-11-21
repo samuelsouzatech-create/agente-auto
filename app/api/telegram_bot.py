@@ -28,6 +28,8 @@ from app.channels.base import enviar_humanizado, enviar_resultado
 from app.channels.telegram import CanalTelegram
 from app.api.receber_audio import transcrever_do_cliente
 from app.console import id_no_console, texto_no_console   # N1
+from app.limites_midia import MidiaGrandeDemais, conferir_audio, foto_passou_do_limite   # N2
+from app.core.turno import turno_midia_grande   # N2
 from app.redis_lock import adquirir_lock_esperando, liberar_lock
 from app.redis_atraso import calcular_atraso
 from app.dedup import ja_processada
@@ -77,11 +79,18 @@ async def _responder_audio(canal: CanalTelegram, entrada) -> None:
     if porta_fechada(loja_id, CANAL, chat_id):
         return
     print(f"[Telegram][loja {loja_id}] Cliente {id_no_console(chat_id, CANAL)} mandou um áudio. Transcrevendo...")
-    bytes_audio = await canal.baixar_midia(entrada)
     texto = None
-    if bytes_audio:
-        texto, _ = await asyncio.to_thread(
-            transcrever_do_cliente, loja_id, chat_id, CANAL, bytes_audio, entrada.mime or "audio/ogg")
+    try:
+        conferir_audio(getattr(entrada, "tamanho", 0), getattr(entrada, "duracao", 0))   # N2: antes de baixar
+        bytes_audio = await canal.baixar_midia(entrada)
+        if bytes_audio:
+            texto, _ = await asyncio.to_thread(
+                transcrever_do_cliente, loja_id, chat_id, CANAL, bytes_audio, entrada.mime or "audio/ogg")
+    except MidiaGrandeDemais:
+        aviso = turno_midia_grande(loja_id, CANAL, chat_id, "audio")
+        if aviso.texto:
+            await canal.enviar_texto(chat_id, aviso.texto)
+        return
     if not texto:
         aviso = turno_audio_falhou(loja_id, CANAL, chat_id)
         if aviso.texto:
@@ -101,7 +110,16 @@ async def _responder_imagem(canal: CanalTelegram, entrada) -> None:
     if token is None:
         return
     try:
-        imagem = await canal.baixar_midia(entrada)
+        if foto_passou_do_limite(getattr(entrada, "tamanho", 0)):  # N2: antes de baixar
+            imagem, grande = None, True
+        else:
+            imagem = await canal.baixar_midia(entrada)
+            grande = foto_passou_do_limite(len(imagem or b""))
+        if grande:
+            aviso = turno_midia_grande(loja_id, CANAL, chat_id, "imagem")
+            if aviso.texto:
+                await canal.enviar_texto(chat_id, aviso.texto)
+            return
         atraso = await calcular_atraso(chat_id, loja_id=loja_id)
         resultado = await executar_turno_imagem(
             loja_id, CANAL, chat_id, imagem or b"", entrada.mime or "image/jpeg", entrada.texto,

@@ -292,4 +292,11 @@ def test_bancada_falha_estado_sem_ficha(bancada, monkeypatch):
 
 def test_roteiro_52(bancada):
     roteiros = {r["nome"]: r for r in bancada.carregar_roteiros()}
-    assert len(roteiros) == 56 and "nunca bateu" in roteiros["estado_do_carro"]["nao_contem"]
+    assert len(roteiros) == _total_de_roteiros() and "nunca bateu" in roteiros["estado_do_carro"]["nao_contem"]
+
+
+def _total_de_roteiros() -> int:
+    """N2 (revisão #26): conta os arquivos (sem os da demo), em vez de um número fixo."""
+    from pathlib import Path as _P
+    pasta = _P(__file__).resolve().parents[1] / "bancada" / "roteiros"
+    return len([c for c in pasta.glob("*.yaml") if not c.stem.startswith("demo_")])

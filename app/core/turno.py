@@ -118,6 +118,31 @@ class ResultadoTurno:
         return dividir_em_bolhas(self.texto or "")
 
 
+# N2: ferramentas que gravam algo (depois delas a frase de oferta fixa não entra).
+FERRAMENTAS_QUE_GRAVAM = frozenset({"agendar_visita", "registrar_interesse", "registrar_lead", "registrar_recado",
+                                    "registrar_troca", "acionar_handoff"})
+
+
+def precisa_da_frase_de_oferta(guarda_mexeu: bool, resposta_inicial: str, resposta: str, handoff: bool,
+                               ferramentas, texto_do_cliente: str) -> bool:
+    """M1/N2: a guarda cortou a pergunta final e a resposta ficou sem NENHUMA pergunta e sem nenhuma
+    ação gravada (ex.: test-drive agendado): termina com a oferta simples. Nunca em assunto sério."""
+    acao_gravada = bool(set(ferramentas or ()) & FERRAMENTAS_QUE_GRAVAM)
+    return bool(guarda_mexeu and resposta_inicial.rstrip().endswith("?") and "?" not in resposta
+                and not handoff and not acao_gravada and not assunto_serio("", texto_do_cliente))
+
+
+def internos_do_turno(do_turno) -> list[str]:
+    """N2: motivo e resumo passados ao acionar_handoff neste turno (o cliente nunca vê esses textos)."""
+    saida = []
+    for m in do_turno or []:
+        for chamada in getattr(m, "tool_calls", None) or []:
+            if chamada.get("name") == "acionar_handoff":
+                argumentos = chamada.get("args") or {}
+                saida += [str(argumentos[c]) for c in ("motivo", "resumo") if argumentos.get(c)]
+    return saida
+
+
 def _rotulo(canal: str, loja_id: int) -> str:
     return f"[{NOMES_CANAIS.get(canal, canal)}][loja {loja_id}]"
 
@@ -255,8 +280,9 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     if diz_ser_da_equipe(texto) or falso_dono_ativo(loja_id, lead_id):
         print(f"{rotulo} GUARDA: {id_no_console(lead_id, canal)} diz ser da equipe, mas não está cadastrado. Resposta fixa.")
         marcar_falso_dono(loja_id, lead_id, texto)
-        salvar_mensagem(lead_id, "leo", MENSAGEM_FALSO_DONO, canal=canal, loja_id=loja_id)
-        return ResultadoTurno(texto=MENSAGEM_FALSO_DONO, handoff_aberto=True)
+        fixa = _resposta_falso_dono(loja_id, lead_id)            # N2: a 2ª seguida não repete o texto
+        salvar_mensagem(lead_id, "leo", fixa, canal=canal, loja_id=loja_id)
+        return ResultadoTurno(texto=fixa, handoff_aberto=True)
 
     texto_para_leo = com_contexto_do_periodo_fora(texto, perdidas)
     if texto_para_leo != texto:
@@ -290,7 +316,7 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
 
     do_turno = mensagens_do_turno(resultado)
     resposta = resposta_do_turno(do_turno, resultado["messages"][-1])   # L11: texto antes da tool também
-    resposta, interno = tirar_texto_interno(resposta)                    # M1: [..] e "Resumo:" nunca saem
+    resposta, interno = tirar_texto_interno(resposta, internos_do_turno(do_turno))   # M1/N2: texto interno
     if interno:
         print(f"{rotulo} GUARDA: texto interno ([...], Resumo:, ferramenta) tirado da resposta.")
     resposta_inicial = resposta                                          # L12: para saber se guarda mexeu
@@ -403,8 +429,7 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
     guarda_mexeu = resposta != resposta_inicial
     resposta = limpar_repeticoes(resposta, guarda_mexeu=guarda_mexeu, pergunta=texto)
     # M1: a guarda cortou a pergunta final? Termina com uma oferta simples (nunca em assunto sério).
-    if (guarda_mexeu and resposta_inicial.rstrip().endswith("?") and not resposta.rstrip().endswith("?")
-            and not handoff and not assunto_serio("", texto)):
+    if precisa_da_frase_de_oferta(guarda_mexeu, resposta_inicial, resposta, handoff, ferramentas, texto):
         resposta = f"{resposta} {FRASE_OFERTA}"
 
     robotico = parece_robotica(resposta)
@@ -440,6 +465,19 @@ def _ja_disse_ser_da_equipe(loja_id: int, lead_id: str) -> bool:
     return any(diz_ser_da_equipe(l["conteudo"]) for l in linhas)
 
 
+def _resposta_falso_dono(loja_id: int, lead_id: str) -> str:
+    """N2 (revisão #12): se a última resposta do Léo a este cliente já foi a fixa, usa a outra."""
+    conexao = conectar()
+    try:
+        linha = conexao.execute("SELECT conteudo FROM mensagens WHERE loja_id = ? AND lead_id = ? AND direcao = 'leo' "
+                                "ORDER BY id DESC LIMIT 1", (loja_id, str(lead_id))).fetchone()
+    finally:
+        conexao.close()
+    return MENSAGEM_FALSO_DONO_2 if linha and linha["conteudo"] == MENSAGEM_FALSO_DONO else MENSAGEM_FALSO_DONO
+
+
+MENSAGEM_FALSO_DONO_2 = ("Por aqui eu sigo sem registrar pedidos para este número, porque ele não está na equipe "
+                         "da loja. O pessoal da equipe já foi avisado e confere.")
 MENSAGEM_FALSO_DONO = ("Esse número não está cadastrado na equipe da loja, então não registro pedidos "
                        "por aqui. O pessoal da equipe vai conferir.")
 MOTIVO_ACEITA_TROCA = "Cliente perguntou se a loja aceita troca (não está no cadastro)."
@@ -625,7 +663,8 @@ async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, graf
     # As que o Léo PEDIU (em sombra, as que gravam nem rodam).
     ferramentas = sorted({c["name"] for m in do_turno for c in (getattr(m, "tool_calls", None) or [])}
                          | set(ferramentas_usadas(do_turno)))
-    sugestao = tirar_texto_interno(resposta_do_turno(do_turno, resultado["messages"][-1]))[0]   # M1
+    sugestao = tirar_texto_interno(resposta_do_turno(do_turno, resultado["messages"][-1]),
+                                   internos_do_turno(do_turno))[0]                     # M1/N2
     if resposta_tem_preco_inventado(sugestao, resultado["messages"]):
         sugestao = MENSAGEM_SEGURA
     sugestao = trocar_frases_proibidas(sugestao)[0]
@@ -780,6 +819,16 @@ def turno_midia_nao_suportada(loja_id: int, canal: str, lead_id: str,
     descricao = DESCRICAO_MIDIA.get(tipo_original, "mídia")
     return turno_resposta_fixa(loja_id, canal, lead_id, f"[{descricao}]",
                                MENSAGEM_MIDIA_NAO_SUPORTADA, tipo=tipo_original or "midia")
+
+
+def turno_midia_grande(loja_id: int, canal: str, lead_id: str, tipo: str) -> ResultadoTurno:
+    """N2 (revisão #4): áudio longo/grande ou foto grande: resposta fixa, sem IA, e a conversa registra."""
+    from app.limites_midia import MENSAGEM_AUDIO_LONGO, MENSAGEM_FOTO_GRANDE
+    if tipo == "audio":
+        return turno_resposta_fixa(loja_id, canal, lead_id, "[áudio acima do limite]",
+                                   MENSAGEM_AUDIO_LONGO, tipo="audio")
+    return turno_resposta_fixa(loja_id, canal, lead_id, "[foto acima do limite]",
+                               MENSAGEM_FOTO_GRANDE, tipo="imagem")
 
 
 def turno_audio_falhou(loja_id: int, canal: str, lead_id: str) -> ResultadoTurno:
