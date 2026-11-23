@@ -14,6 +14,7 @@ import math
 
 from banco import conectar
 from app import estoque
+from app.demo import endereco_da_foto
 
 TAMANHO_PADRAO, TAMANHO_MAXIMO = 50, 100
 SITUACOES = ("disponivel", "reservado", "indisponivel", "vendido")
@@ -36,7 +37,12 @@ def fotos_em_lista(texto) -> list:
 def valores_da_api(carro: dict) -> dict:
     v = estoque.valores_do_carro(carro)
     return {**v, "ano": int(v["ano"]), "km": int(v["km"]), "preco": float(v["preco"]),
-            "fotos": fotos_em_lista(v["fotos"])}
+            "fotos": [_foto_para_a_tela(u) for u in fotos_em_lista(v["fotos"])]}
+
+
+def _foto_para_a_tela(foto: str) -> str:
+    """Q2: foto da demo (arquivo da pasta de fotos da demo) sai pelo endereço da própria API."""
+    return endereco_da_foto(foto) or foto
 
 
 def interessados(loja_id: int) -> dict:

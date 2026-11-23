@@ -3,6 +3,7 @@ A luz "Léo atendendo" do topo (GET /saude, C2b; item 14 e decisão D4).
 
 Olha só o cadastro, sem testar o canal ao vivo:
   vermelha  nenhum canal ativo                     "Léo fora do ar"
+            (na loja de demonstração, e só nela, o simulador conta como canal ativo)
   amarela   loja em teste, ou envios pausados       "Léo com atenção"
   verde     tudo certo                              "Léo atendendo"
 Nunca verde com pausa, loja em teste ou sem canal ativo.
@@ -14,6 +15,7 @@ from __future__ import annotations
 from app.apresentacao import nome_do_canal
 from app.api_painel.formato import horario
 from app.canais import listar_canais
+from app.demo import e_demo
 from app.estado_loja import EM_TESTE, situacao_da_loja
 from app.lojas import carregar_loja
 from app.pausa import situacao as situacao_da_pausa
@@ -21,6 +23,7 @@ from app.relogio import agora_utc
 
 TIPOS = ("whatsapp", "telegram", "instagram")
 FAIXA_EM_TESTE = "Sua loja está em teste: o Léo só responde aos números de teste."
+DETALHE_DEMO = "Atendendo pelo simulador (loja de demonstração)."
 
 
 def _juntar(rotulos) -> str:
@@ -59,6 +62,14 @@ def montar_saude(loja_id: int, agora=None) -> dict:
         quando = f" desde {desde['texto']}" if desde else ""
         faixa = {"tipo": "laranja", "texto": f"Envios automáticos pausados{quem}{quando}."}
 
+    # Q2 (Maratona Painel 2): na loja de demonstração, e só nela, o simulador conta como canal
+    # ativo. Não entra na lista "canais" (o contrato só tem whatsapp, telegram e instagram).
+    if not ligados and e_demo(loja_id):
+        ligados = ["simulador"]
+        detalhe_canais = DETALHE_DEMO
+    else:
+        detalhe_canais = f"Atendendo {_juntar(ligados)}." if ligados else ""
+
     if not ligados:
         luz, titulo, detalhe = "vermelha", "Léo fora do ar", "Nenhum canal está ativo."
     elif em_teste:
@@ -66,7 +77,7 @@ def montar_saude(loja_id: int, agora=None) -> dict:
     elif pausa["ativa"]:
         luz, titulo, detalhe = "amarela", "Léo com atenção", "Os envios automáticos estão pausados."
     else:
-        luz, titulo, detalhe = "verde", "Léo atendendo", f"Atendendo {_juntar(ligados)}."
+        luz, titulo, detalhe = "verde", "Léo atendendo", detalhe_canais
 
     return {"luz": luz, "titulo": titulo, "detalhe": detalhe, "estado": estado,
             "pausa": pausa, "canais": canais, "faixa": faixa}

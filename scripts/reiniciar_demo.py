@@ -1,6 +1,8 @@
 r"""
 Reinicia a loja de DEMONSTRAÇÃO (Maratona 2, D3): apaga conversas, leads, chamados, vendas e o
 resto SÓ da loja marcada como demo e recria o estado inicial. Recusa qualquer outra loja.
+Depois recria as pessoas de teste do painel (dono, gerente e vendedor) e imprime as senhas novas
+SÓ neste terminal (Maratona Painel 2, Q2).
 
     .venv-teste\Scripts\python scripts\reiniciar_demo.py
 """
@@ -31,6 +33,13 @@ def main(argv=None) -> int:
     with como_sistema("Script reiniciar_demo", "job"):
         reiniciar_demo(loja_id, indexar=not args.sem_indexar)
     print(f"Demo reiniciada: {NOME_DEMO} (número {loja_id}).")
+    # Q2 (Maratona Painel 2): o reinício apaga as pessoas da loja; recria as de teste do painel.
+    from scripts.criar_usuarios_demo import criar_usuarios
+    print("Pessoas de teste para entrar no painel (senhas novas, só neste terminal):")
+    for p in criar_usuarios(loja_id):
+        situacao = f"senha: {p['senha']}" if p["senha"] else "já existia (senha não mudou)"
+        print(f"  {p['nome']:<14} {p['email']:<32} {situacao}")
+    print("Anote as senhas agora: elas não ficam gravadas em lugar nenhum.")
     return 0
 
 

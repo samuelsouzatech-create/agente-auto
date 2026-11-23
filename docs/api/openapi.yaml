@@ -440,6 +440,26 @@ paths:
         '404': {$ref: '#/components/responses/NaoEncontrado'}
         '409': {$ref: '#/components/responses/Conflito'}
         '422': {$ref: '#/components/responses/Invalido'}
+  /demo/fotos/{arquivo}:
+    get:
+      tags: [Estoque]
+      summary: Foto ilustrativa de carro da loja de demonstração (v1.1)
+      x-papeis: [dono, gestor]
+      description: |
+        Só para loja de demonstração (outra loja: 404). Só arquivos da pasta de fotos da demo, com nome
+        simples; qualquer outro nome (com "..", barra ou caminho) dá 404. Na loja demo, os carros trazem
+        em "fotos" este endereço, e ele é aceito de volta ao editar o carro.
+      parameters:
+        - {name: arquivo, in: path, required: true, schema: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,150}\.png$'}}
+      responses:
+        '200':
+          description: A imagem.
+          content:
+            image/png:
+              schema: {type: string, format: binary}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
   /v/{token}:
     get:
       tags: [Link]
@@ -984,7 +1004,7 @@ components:
         preco: {$ref: '#/components/schemas/Preco'}
         status: {type: string, enum: [disponivel, reservado, indisponivel, vendido]}
         status_rotulo: {type: string}
-        fotos: {type: array, items: {type: string, format: uri}, description: Por URL na v1; upload fica para depois (A4).}
+        fotos: {type: array, items: {type: string, format: uri-reference}, description: 'Por URL na v1; upload fica para depois (A4). Na loja de demonstração (v1.1), o endereço relativo da própria API (/api/v1/demo/fotos/...).'}
         interessados: {type: integer, description: 'Pessoas interessadas agora (um carro de interesse por cliente). Não é histórico de perguntas.'}
         pode_editar: {type: boolean, description: Falso para carro vendido.}
     CarroEntrada:
@@ -999,7 +1019,7 @@ components:
         cambio: {type: string, maxLength: 40}
         preco: {type: number, exclusiveMinimum: 0}
         status: {type: string, enum: [disponivel, reservado, indisponivel], description: '"vendido" só por registrar-venda.'}
-        fotos: {type: array, items: {type: string, format: uri}, maxItems: 20}
+        fotos: {type: array, items: {type: string, format: uri-reference}, maxItems: 20, description: 'Links https; na loja de demonstração também o endereço da própria API (/api/v1/demo/fotos/...).'}
     CarroEdicao:
       type: object
       required: [dados]

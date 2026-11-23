@@ -371,6 +371,7 @@ def test_so_as_rotas_do_c2a_todas_em_api_v1():
                      ("GET", PREFIXO + "/estoque"),
                      ("POST", PREFIXO + "/estoque"),
                      ("PUT", PREFIXO + "/estoque/{id}"),
+                     ("GET", PREFIXO + "/demo/fotos/{arquivo}"),                    # Q2
                      ("GET", PREFIXO + "/leads"),                          # C2: leituras
                      ("GET", PREFIXO + "/resultado"),
                      ("POST", PREFIXO + "/auth/esqueci-senha"),   # C2f

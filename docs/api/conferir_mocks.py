@@ -136,7 +136,9 @@ def principal():
     for rota, ops in doc["paths"].items():
         for metodo, op in ops.items():
             sucesso = [s for s in op["responses"] if s.startswith("2")]
-            tem_corpo = any(resolver(doc, op["responses"][s]).get("content") for s in sucesso)
+            # Só resposta em JSON precisa de dado falso (uma imagem, como a foto da demo, não tem).
+            tem_corpo = any((resolver(doc, op["responses"][s]).get("content") or {}).get("application/json")
+                            for s in sucesso)
             if tem_corpo and (rota, metodo) not in cobertas:
                 erros.append(f"sem dado falso de sucesso para {metodo.upper()} {rota}")
     print(f"{len(indice)} dados falsos conferidos contra {sum(len(v) for v in doc['paths'].values())} operações.")

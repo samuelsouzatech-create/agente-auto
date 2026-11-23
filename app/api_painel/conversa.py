@@ -17,6 +17,7 @@ from app.api_painel.atender import (AGUARDANDO, ASSUMIDO, CANAL_SEM_RESPOSTA, JA
                                     NENHUM, SEM_MENSAGEM, janela_do_cartao)
 from app.api_painel.formato import horario
 from app.api_painel.saude import FAIXA_EM_TESTE
+from app.demo import e_demo
 from app.envio_painel import CANAIS_COM_ENVIO
 from app.estado_loja import esta_no_ar
 from app.interesse import situacao_do_lead
@@ -106,7 +107,8 @@ def motivo_para_nao_assumir(f: dict, nome: str):
     return f"{f['assumido_por'] or 'Outra pessoa'} já assumiu esta conversa."
 
 
-def motivo_para_nao_responder(f: dict, janela: dict, nome: str):
+def motivo_para_nao_responder(f: dict, janela: dict, nome: str, *, demo: bool):
+    """demo: a loja é de demonstração (Q2): lá a resposta pelo simulador é gravada no histórico."""
     if f["estado"] != ASSUMIDO:
         return "Assuma a conversa antes de responder."
     if f["assumido_por"] != nome:
@@ -114,7 +116,7 @@ def motivo_para_nao_responder(f: dict, janela: dict, nome: str):
     canal = f["canal"]
     if canal not in CANAIS_COM_ENVIO:
         if canal == "simulador":
-            return "O simulador não recebe mensagens do painel."
+            return None if demo else "O simulador não recebe mensagens do painel."
         return CANAL_SEM_RESPOSTA if canal else SEM_MENSAGEM
     if not janela["aberta"]:
         return FORA_DA_JANELA
@@ -170,7 +172,7 @@ def montar_conversa(loja_id: int, lead: str, sessao: dict, agora=None) -> dict |
         "aviso": None if esta_no_ar(loja_id) else FAIXA_EM_TESTE,
         "acoes": {
             "assumir": _acao(motivo_para_nao_assumir(f, sessao["nome"])),
-            "responder": _acao(motivo_para_nao_responder(f, janela, sessao["nome"])),
+            "responder": _acao(motivo_para_nao_responder(f, janela, sessao["nome"], demo=e_demo(loja_id))),
             "devolver": _acao(motivo_para_nao_devolver(f, sessao)),
             "registrar_venda": _acao(None),
             "reativar_contato": _acao(_motivo_para_nao_reativar(loja_id, lead, sessao)),

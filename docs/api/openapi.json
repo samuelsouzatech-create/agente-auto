@@ -941,6 +941,44 @@
         ]
       }
     },
+    "/api/v1/demo/fotos/{arquivo}": {
+      "get": {
+        "operationId": "foto_da_demo_api_v1_demo_fotos__arquivo__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "arquivo",
+            "required": true,
+            "schema": {
+              "title": "Arquivo",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "A foto."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Foto Da Demo",
+        "tags": [
+          "Estoque"
+        ]
+      }
+    },
     "/api/v1/estoque": {
       "get": {
         "operationId": "listar_api_v1_estoque_get",

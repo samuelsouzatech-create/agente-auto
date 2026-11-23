@@ -23,6 +23,7 @@ from app.api_painel.carros import (TAMANHO_PADRAO, interessados, montar_carro, m
 from app.api_painel.erros import ErroApi
 from app.api_painel.modulos import ESTOQUE, escrita, leitura
 from app.ator import como
+from app.demo import ENDERECO_FOTOS, caminho_da_foto, e_demo
 
 MAX_TEXTO = 60
 MAX_FOTOS = 20
@@ -67,7 +68,26 @@ def _foto_ruim(url: str) -> bool:
             or len(url) > MAX_URL)
 
 
-def validar(entrada: CarroEntrada) -> dict:
+def _fotos_para_gravar(fotos: list, loja_id: int) -> list | None:
+    """Q2: na loja demo, o endereço da própria API (foto da demo) volta a ser o arquivo.
+    Links de fora seguem a regra de sempre. None se alguma foto for recusada."""
+    demo = None
+    saida = []
+    for u in fotos:
+        if u.startswith(ENDERECO_FOTOS):
+            demo = e_demo(loja_id) if demo is None else demo
+            caminho = caminho_da_foto(u) if demo else None
+            if caminho is None:
+                return None
+            saida.append(caminho)
+        elif _foto_ruim(u):
+            return None
+        else:
+            saida.append(u)
+    return saida
+
+
+def validar(entrada: CarroEntrada, loja_id: int) -> dict:
     if entrada.status == estoque.VENDIDO:
         raise ErroApi("invalido", {"status": "Use Registrar venda."}, USE_VENDA)
     campos = {}
@@ -89,8 +109,11 @@ def validar(entrada: CarroEntrada) -> dict:
     if entrada.status not in estoque.OPCOES_STATUS:
         campos["status"] = "Escolha Disponível, Reservado ou Indisponível."
     fotos = [_texto(u) for u in entrada.fotos if _texto(u)]
-    if len(fotos) > MAX_FOTOS or any(_foto_ruim(u) for u in fotos):
+    gravar = _fotos_para_gravar(fotos, loja_id) if len(fotos) <= MAX_FOTOS else None
+    if gravar is None:
         campos["fotos"] = f"Até {MAX_FOTOS} links, cada um começando com https://."
+    else:
+        fotos = gravar
     if campos:
         raise ErroApi("invalido", campos)
     return {**textos, "ano": entrada.ano, "km": entrada.km, "cambio": entrada.cambio,
@@ -118,7 +141,7 @@ def listar(pagina: int = 1, tamanho: int = TAMANHO_PADRAO,
 @router.post("/estoque", status_code=201)
 def cadastrar(entrada: CarroEntrada, sessao: dict = Depends(escrita(ESTOQUE))):
     loja_id = sessao["loja_id"]
-    dados = validar(entrada)
+    dados = validar(entrada, loja_id)
     with _como(sessao):
         try:
             novo = estoque.adicionar_carro(**dados, loja_id=loja_id)
@@ -133,7 +156,7 @@ def editar(id: int, entrada: CarroEdicao, sessao: dict = Depends(escrita(ESTOQUE
     atual = _carro_da_loja(loja_id, id)
     if atual["status"] == estoque.VENDIDO:
         raise ErroApi("invalido", mensagem=estoque.MENSAGEM_JA_VENDIDO)
-    dados = validar(entrada.dados)
+    dados = validar(entrada.dados, loja_id)
     esperado = None
     if entrada.esperado is not None:
         esperado = {**entrada.esperado}

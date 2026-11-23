@@ -37,6 +37,36 @@ Painel da loja (Fila de atendimento, Conversas, Resultados, Retomadas e pós-ven
 O navegador abre sozinho. Se não abrir, use o endereço que aparece no PowerShell
 (ex.: http://localhost:8501).
 
+### Painel novo do cliente (celular e computador)
+
+É a tela nova (repositório `leo-painel-web`), ligada na API do painel. Precisa de dois PowerShell.
+
+1. API do painel, na pasta `C:\Users\Samuel\agente-auto`:
+
+   ```powershell
+   .venv-teste\Scripts\python -m uvicorn app.api_painel.main:app --host 127.0.0.1 --port 8001
+   ```
+
+2. Tela, na pasta `C:\Users\Samuel\leo-painel-web` (só na primeira vez: `npm ci` e crie o
+   arquivo `.env.local` com a linha `VITE_API_URL=/api/v1`):
+
+   ```powershell
+   npm run dev
+   ```
+
+   Abra http://localhost:5173 e entre com o **Dono Demo** (`dono.loja<N>@demo.exemplo`, onde
+   `<N>` é o número da loja demo). A senha aparece no PowerShell quando você roda
+   `scripts\criar_usuarios_demo.py` ou `scripts\reiniciar_demo.py` (ela não fica gravada em
+   lugar nenhum). Há também o **Gerente Demo** e o **Vendedor Demo**.
+
+O que dá para mostrar no painel novo:
+- a luz do topo fica verde ("Léo atendendo"): na demo, o simulador conta como canal;
+- **Atender**: quem chamou vendedor no simulador aparece em "Esperando vendedor". Toque no nome,
+  **Assumir** e escreva uma resposta: em até 4 segundos ela aparece no simulador, num balão
+  azul com o nome do vendedor. Nada é enviado a ninguém;
+- **Registrar venda** escolhendo o carro; **Leads**; **Resultado** com as setas de período;
+- **Estoque** com as fotos ilustrativas; dá para editar um carro e salvar.
+
 ## 3. O que mostrar em cada tela
 
 1. **Simulador** (a loja demo já vem escolhida na barra da esquerda):
@@ -61,6 +91,10 @@ Pelo painel do operador: escolha a loja "Recife Seminovos Demo", tela **Resumo**
 ```
 
 Só a loja de demonstração é apagada e recriada. Qualquer outra loja é recusada.
+
+O script também recria o Dono Demo, o Gerente Demo e o Vendedor Demo do painel novo e mostra as
+**senhas novas** no PowerShell (anote na hora). Se você reiniciar pelo painel do operador, rode
+depois `.venv-teste\Scripts\python scripts\criar_usuarios_demo.py` para ter as pessoas de teste de novo.
 
 ## 5. Se algo der errado
 

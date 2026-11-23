@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -117,6 +118,49 @@ def _slug(texto: str) -> str:
 _CORES = {"Prata": (190, 190, 195), "Preto": (40, 40, 45), "Branco": (235, 235, 235), "Cinza": (120, 120, 125),
           "Vermelho": (180, 40, 40), "Azul": (40, 80, 170), "Verde": (60, 110, 70), "Laranja": (220, 120, 40),
           "Marrom": (110, 80, 50)}
+
+
+# ------------------------------------------------------------ fotos da demo pelo painel (Q2)
+# O banco continua guardando o caminho do arquivo (o simulador e a bancada mostram as fotos por
+# ele, mesmo sem a API ligada). A API do painel mostra cada foto por um endereço próprio, só de
+# arquivos desta pasta, e na edição troca o endereço de volta pelo arquivo.
+
+ENDERECO_FOTOS = "/api/v1/demo/fotos/"
+_NOME_FOTO = re.compile(r"^[a-z0-9][a-z0-9-]{0,150}\.png$")
+
+
+def arquivo_da_foto(nome: str, pasta: Path | None = None) -> Path | None:
+    """O arquivo da foto da demo, ou None. Recusa qualquer nome fora do padrão, com "..",
+    barra ou caminho, e qualquer coisa que resolva fora da pasta de fotos."""
+    nome = str(nome or "")
+    if not _NOME_FOTO.match(nome):
+        return None
+    base = (pasta or PASTA_FOTOS).resolve()
+    arquivo = (base / nome).resolve()
+    if arquivo.parent != base or not arquivo.is_file():
+        return None
+    return arquivo
+
+
+def endereco_da_foto(caminho: str, pasta: Path | None = None) -> str | None:
+    """Caminho de arquivo de foto da demo -> endereço na API; None se não for foto da demo."""
+    try:
+        arquivo = Path(str(caminho)).resolve()
+    except (OSError, ValueError):
+        return None
+    base = (pasta or PASTA_FOTOS).resolve()
+    if arquivo.parent != base or not _NOME_FOTO.match(arquivo.name):
+        return None
+    return ENDERECO_FOTOS + arquivo.name
+
+
+def caminho_da_foto(endereco: str, pasta: Path | None = None) -> str | None:
+    """Endereço da API (ENDERECO_FOTOS + nome) -> caminho do arquivo; None se não for válido."""
+    texto = str(endereco or "")
+    if not texto.startswith(ENDERECO_FOTOS):
+        return None
+    arquivo = arquivo_da_foto(texto[len(ENDERECO_FOTOS):], pasta)
+    return str(arquivo) if arquivo else None
 
 
 def foto_ilustrativa(marca: str, modelo: str, ano: int, cor: str, pasta: Path | None = None) -> str:
@@ -375,6 +419,20 @@ def cabecalho_do_simulador(loja_id: int) -> dict:
     from app.lojas import carregar_loja
     loja = carregar_loja(exigir_loja(loja_id))
     return {"agente": loja.get("nome_agente") or "Léo", "loja": loja.nome, "demo": bool(loja.get("demo"))}
+
+
+def mensagens_do_vendedor(loja_id: int, lead_id: str, depois_de: int) -> list[dict]:
+    """Q2: o que o vendedor respondeu pelo painel nesta conversa do simulador, depois da
+    mensagem de número 'depois_de'. Só lê. [{id, autor, texto}] em ordem."""
+    conexao = conectar()
+    try:
+        linhas = conexao.execute(
+            "SELECT id, autor, conteudo FROM mensagens WHERE loja_id = ? AND lead_id = ? "
+            "AND direcao = 'vendedor' AND id > ? ORDER BY id", (exigir_loja(loja_id), str(lead_id), int(depois_de))
+        ).fetchall()
+    finally:
+        conexao.close()
+    return [{"id": int(l["id"]), "autor": l["autor"] or "Vendedor", "texto": l["conteudo"] or ""} for l in linhas]
 
 
 def avisos_ao_vendedor(loja_id: int, lead_id: str) -> list[dict]:
