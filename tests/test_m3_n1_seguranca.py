@@ -47,7 +47,7 @@ def test_criar_demo_com_loja_id_de_loja_real_recusa_e_nao_apaga(tmp_path):
     with como_sistema("Teste", "job"):
         for loja in (1, 2):
             with pytest.raises(demo.LojaNaoEDemo):
-                demo.criar_loja_demo(loja_id=loja, indexar=False, com_historico=False, pasta_fotos=tmp_path)
+                demo.criar_loja_demo(loja_id=loja, indexar=False, com_historico=False)
     assert len(_ler("SELECT id FROM mensagens")) == 2
     assert {l["nome"] for l in _ler("SELECT nome FROM lojas")} >= {"Loja B"}
     assert demo.NOME_DEMO not in {l["nome"] for l in _ler("SELECT nome FROM lojas")}
@@ -57,19 +57,19 @@ def test_criar_demo_com_loja_id_que_ja_e_demo_aceita(tmp_path):
     from app.ator import como_sistema
     _sql("UPDATE lojas SET config = ? WHERE id = 1", (json.dumps({"demo": True}),))
     with como_sistema("Teste", "job"):
-        assert demo.criar_loja_demo(loja_id=1, indexar=False, com_historico=False, pasta_fotos=tmp_path) == 1
+        assert demo.criar_loja_demo(loja_id=1, indexar=False, com_historico=False) == 1
     assert _ler("SELECT nome FROM lojas WHERE id = 1")[0]["nome"] == demo.NOME_DEMO
 
 
 def test_demo_entra_no_ar_pelo_registro(tmp_path):
     from app.ator import como_sistema
     with como_sistema("Teste", "job"):
-        loja = demo.criar_loja_demo(indexar=False, com_historico=False, pasta_fotos=tmp_path)
+        loja = demo.criar_loja_demo(indexar=False, com_historico=False)
     assert _ler("SELECT estado FROM estado_lojas WHERE loja_id = ?", (loja,))[0]["estado"] == "no_ar"
     linhas = _ler("SELECT papel, loja_id FROM registro_acoes WHERE acao = 'colocar_no_ar'")
     assert linhas == [{"papel": "operador", "loja_id": loja}]
     with como_sistema("Teste", "job"):                      # reiniciar: já no ar, nada novo no Registro
-        demo.criar_loja_demo(indexar=False, com_historico=False, pasta_fotos=tmp_path)
+        demo.criar_loja_demo(indexar=False, com_historico=False)
     assert len(_ler("SELECT id FROM registro_acoes WHERE acao = 'colocar_no_ar'")) == 1
 
 

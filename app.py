@@ -14,6 +14,7 @@ import uuid
 import streamlit as st
 
 import banco
+from app import fotos as fotos_do_estoque
 from app.core.turno import executar_turno
 from app.demo import avisos_ao_vendedor, cabecalho_do_simulador, id_da_loja_demo, mensagens_do_vendedor
 
@@ -83,6 +84,14 @@ if st.sidebar.button("Nova conversa"):
 topo = cabecalho_do_simulador(loja_id)
 conversa, lateral = st.columns([2, 1])
 
+def mostrar_foto(ref: str) -> None:
+    """Maratona Fotos: a foto do estoque vem do depósito (qualquer tomada), pela interface única."""
+    try:
+        st.image(fotos_do_estoque.ler(loja_id, ref), width=300)
+    except Exception:
+        st.caption("(foto indisponível)")
+
+
 @st.fragment(run_every=VER_VENDEDOR_A_CADA)
 def mostrar_conversa():
     """Q2: a cada poucos segundos, traz do banco o que o vendedor respondeu pelo painel
@@ -99,8 +108,8 @@ def mostrar_conversa():
         for quem, texto, fotos, autor in st.session_state.historico:
             if texto:
                 balao(quem, texto, autor)
-            for caminho in fotos:
-                st.image(caminho, width=300)
+            for ref in fotos:
+                mostrar_foto(ref)
 
 
 with conversa:

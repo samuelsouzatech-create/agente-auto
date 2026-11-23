@@ -81,6 +81,22 @@ class CanalTelegram(Canal):
             _log.error(f"[Telegram] Erro ao enviar foto {url}: {erro}")
             return False
 
+    async def enviar_foto(self, lead_id: str, loja_id: int, ref: str) -> bool:
+        """Maratona Fotos: o Telegram aceita os bytes, então funciona com qualquer tomada do
+        depósito (inclusive a local). Foto que não está no depósito desta loja: falha."""
+        from app import fotos
+        try:
+            dados = fotos.ler(loja_id, ref)
+        except Exception as erro:
+            _log.error(f"[Telegram] Foto do estoque indisponível: {type(erro).__name__}")
+            return False
+        try:
+            await self.bot.send_photo(chat_id=lead_id, photo=dados)
+            return True
+        except Exception as erro:
+            _log.error(f"[Telegram] Erro ao enviar foto do estoque: {erro}")
+            return False
+
     async def digitando(self, lead_id: str) -> None:
         try:
             await self.bot.send_chat_action(chat_id=lead_id, action="typing")

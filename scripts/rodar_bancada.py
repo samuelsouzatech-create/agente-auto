@@ -404,17 +404,27 @@ FOTOS_POR_CARRO = 2
 CARROS_SEM_FOTO = {"HB20"}
 
 
+def apontar_deposito_temporario() -> None:
+    """Maratona Fotos: as fotos da bancada vão para um depósito local temporário (nunca o real)."""
+    os.environ["FOTOS_DEPOSITO"] = "local"
+    os.environ["FOTOS_PASTA"] = str(pasta_temporaria() / "fotos_deposito")
+
+
+def modelo_da_foto(ref: str) -> str:
+    """De qual carro do estoque é esta foto do depósito ("" se de nenhum)."""
+    for linha in _ler("SELECT modelo, fotos FROM estoque WHERE loja_id = ?", (LOJA_ID,)):
+        if ref.strip() in [u.strip() for u in str(linha["fotos"] or "").split(",")]:
+            return linha["modelo"]
+    return ""
+
+
 def fotos_do_carro(marca: str, modelo: str, ano: int) -> list[str]:
-    """Gera (uma vez) as fotos de teste do carro e devolve as URLs file:///."""
-    pasta = pasta_temporaria() / "fotos"
-    pasta.mkdir(parents=True, exist_ok=True)
-    urls = []
-    for n in range(1, FOTOS_POR_CARRO + 1):
-        arquivo = pasta / f"{_slug(modelo)}_{n}.png"
-        if not arquivo.exists():
-            arquivo.write_bytes(gerar_imagem_de_texto(f"{marca} {modelo} {ano}\nfoto {n} de {FOTOS_POR_CARRO}"))
-        urls.append(arquivo.resolve().as_uri())
-    return urls
+    """Gera as fotos de teste do carro, passa pelo preparo único e guarda no depósito
+    temporário. Devolve as referências (como as de qualquer loja)."""
+    from app import fotos
+    apontar_deposito_temporario()
+    return [fotos.guardar(LOJA_ID, gerar_imagem_de_texto(f"{marca} {modelo} {ano}\nfoto {n} de {FOTOS_POR_CARRO}"))
+            for n in range(1, FOTOS_POR_CARRO + 1)]
 
 
 _LOJA_DEMO = False     # M2: --loja-demo (a rodada usa a loja de demonstração no banco temporário)
@@ -429,7 +439,8 @@ def preparar_loja(mudancas: dict | None = None, recados: list | None = None) -> 
     from app.demo import CONFIG_DEMO, criar_loja_demo
     # Banco TEMPORÁRIO: a loja 1 vira demo (criar_loja_demo recusa loja que não é demo).
     _sql("UPDATE lojas SET config = ? WHERE id = ?", (json.dumps({"demo": True}), LOJA_ID))
-    criar_loja_demo(loja_id=LOJA_ID, indexar=False, com_historico=False, pasta_fotos=pasta_temporaria() / "demo_fotos")
+    apontar_deposito_temporario()
+    criar_loja_demo(loja_id=LOJA_ID, indexar=False, com_historico=False)
     _sql("UPDATE lojas SET config = ? WHERE id = ?",
          (json.dumps(_mesclar(CONFIG_DEMO, mudancas or {}), ensure_ascii=False), LOJA_ID))
     lojas.limpar_cache()
@@ -445,7 +456,7 @@ def montar_loja_ficticia(mudancas: dict | None = None, recados: list | None = No
              "VALUES (?, ?, ?, ?, ?)", (LOJA_ID, nome, papel, telegram, whatsapp))
     for carro in ESTOQUE:
         marca, modelo, ano = carro[0], carro[1], carro[2]
-        fotos = "" if modelo in CARROS_SEM_FOTO else ",".join(fotos_do_carro(marca, modelo, ano))
+        fotos = "" if modelo in CARROS_SEM_FOTO else ", ".join(fotos_do_carro(marca, modelo, ano))
         _sql("INSERT INTO estoque (loja_id, marca, modelo, ano, km, cor, cambio, preco, status, fotos) "
              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (LOJA_ID, *carro, fotos))
     lojas.limpar_cache()
@@ -1146,7 +1157,7 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
                  (para_banco(relogio), ultimo, LOJA_ID, lead_id))
             _sql("UPDATE handoffs SET criado_em = ? WHERE id > ? AND loja_id = ? AND lead_id = ?",
                  (para_banco(relogio), ultimo_chamado, LOJA_ID, lead_id))
-            await enviar_resultado(canal, lead_id, resultado)
+            await enviar_resultado(canal, lead_id, resultado, loja_id=LOJA_ID)
             for tipo, conteudo in canal.enviadas[desde:]:
                 (turno.fotos if tipo == "midia" else turno.bolhas).append(conteudo)
             for h in handoffs_abertos(lead_id)[antes:]:
@@ -1291,12 +1302,14 @@ def checar_fotos_e_rajada(res: "ResultadoRoteiro") -> None:
         ok = len(fotos) == deve["fotos"]
         (res.ok if ok else res.falhas).append(f"fotos enviadas: {len(fotos)} (esperado {deve['fotos']})")
     if deve.get("fotos_de"):
-        alvo = _slug(deve["fotos_de"]) + "_"
-        erradas = [f for f in fotos if not f.rsplit("/", 1)[-1].startswith(alvo)]
+        # Maratona Fotos: o nome da foto no depósito é aleatório; o carro vem do estoque.
+        alvo = _slug(deve["fotos_de"])
+        erradas = [f for f in fotos if _slug(modelo_da_foto(f)) != alvo]
         if not fotos:
             res.falhas.append(f"nenhuma foto do {deve['fotos_de']} saiu")
         elif erradas:
-            res.promessas.append(f"foto de outro carro enviada: {', '.join(e.rsplit('/', 1)[-1] for e in erradas)}")
+            res.promessas.append("foto de outro carro enviada: "
+                                 + ", ".join(modelo_da_foto(e) or "carro desconhecido" for e in erradas))
         else:
             res.ok.append(f"{len(fotos)} foto(s), todas do {deve['fotos_de']}")
     if deve.get("respostas") is not None:
@@ -1557,7 +1570,7 @@ async def rodar_roteiro(roteiro: dict, grafo, rodada: "Rodada") -> ResultadoRote
     async def _depois_do_turno(turno, resultado, desde, antes):
         if rodada.tentativas_reais:
             raise EnvioRealBloqueado("; ".join(rodada.tentativas_reais))
-        await enviar_resultado(canal, lead_id, resultado)
+        await enviar_resultado(canal, lead_id, resultado, loja_id=LOJA_ID)
         _registrar_envios(turno, desde, antes)
         turno.silenciado = resultado.silenciado
         if resultado.texto == MENSAGEM_ERRO:

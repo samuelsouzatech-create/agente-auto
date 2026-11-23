@@ -24,6 +24,8 @@ from app.core.turno import (
     executar_turno_imagem,
 )
 from app.api.enviar_whatsapp import enviar_resposta_humanizada, enviar_foto_whatsapp
+from app import fotos
+from app.envio_fotos import enviar_fotos_e_texto
 from app.api.receber_audio import transcrever_audio, pegar_uso_da_transcricao
 from app.console import id_no_console, texto_no_console   # N1
 from app.limites_midia import MidiaGrandeDemais   # N2
@@ -160,11 +162,27 @@ async def processar_mensagem(numero: str, texto: str, id_audio: str = None,
         if resultado.silenciado or not resultado.texto:
             return
         await sinalizar_leitura(loja_id, numero)
-        await enviar_resposta_humanizada(numero, resultado.texto, atraso, loja_id=loja_id)
-        for url in resultado.midias:
-            await enviar_foto_whatsapp(numero, url, loja_id=loja_id)
+        await _enviar_resultado(numero, resultado, atraso, loja_id)
     finally:
         await liberar_lock(numero, token, loja_id=loja_id)
+
+
+async def _enviar_resultado(numero: str, resultado, atraso: float, loja_id: int) -> list[str]:
+    """Maratona Fotos: fotos primeiro (só do depósito, pelo endereço https público, que só a
+    tomada nuvem tem; sem ele, é falha honesta), depois o texto. Foto falhada: a trava de
+    app/envio_fotos.py corrige o texto e abre o chamado."""
+    async def _foto(ref: str) -> bool:
+        url = fotos.endereco_publico(loja_id, ref)
+        if not url:
+            return False
+        return await enviar_foto_whatsapp(numero, url, loja_id=loja_id)
+
+    async def _texto(texto: str) -> None:
+        await enviar_resposta_humanizada(numero, texto, atraso, loja_id=loja_id)
+
+    return await enviar_fotos_e_texto(loja_id=loja_id, lead_id=numero, texto=resultado.texto,
+                                      refs=list(resultado.midias or []), enviar_foto=_foto,
+                                      enviar_texto=_texto)
 
 
 async def processar_imagem(numero: str, id_midia: str, legenda: str = "",
@@ -193,9 +211,7 @@ async def processar_imagem(numero: str, id_midia: str, legenda: str = "",
         if resultado.silenciado or not resultado.texto:
             return
         await sinalizar_leitura(loja_id, numero)
-        await enviar_resposta_humanizada(numero, resultado.texto, atraso, loja_id=loja_id)
-        for url in resultado.midias:
-            await enviar_foto_whatsapp(numero, url, loja_id=loja_id)
+        await _enviar_resultado(numero, resultado, atraso, loja_id)
     finally:
         await liberar_lock(numero, token, loja_id=loja_id)
 

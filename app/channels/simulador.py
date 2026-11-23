@@ -52,6 +52,14 @@ class CanalSimulador(Canal):
         self.enviadas.append(("midia", url))
         return True
 
+    async def enviar_foto(self, lead_id: str, loja_id: int, ref: str) -> bool:
+        """Simulador: nada sai; anota a foto do depósito (só as desta loja)."""
+        from app import fotos
+        if fotos.chave_da_ref(loja_id, ref) is None:
+            return False
+        self.enviadas.append(("midia", ref))
+        return True
+
     async def enviar_template(self, lead_id: str, modelo, valores: dict) -> ResultadoEnvio:
         try:
             texto = preencher(modelo, valores)

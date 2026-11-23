@@ -181,7 +181,11 @@ def test_mesma_conversa_igual_nos_tres_canais(monkeypatch, redis_falso):
     tb = importar("app.api.telegram_bot")
     texto_llm = "Temos o **Civic 2019**!\n\n*   Automático\n*   48 mil km"
     esperado = "Temos o Civic 2019!\n\n- Automático\n- 48 mil km"
-    urls = ["http://f/civic1.jpg", "http://f/civic2.jpg"]
+    # Maratona Fotos: as fotos são do depósito; o WhatsApp manda pelo endereço público (nuvem).
+    from app import fotos as _fotos
+    urls = [_fotos.guardar(1, _png()), _fotos.guardar(1, _png())]
+    monkeypatch.setattr(_fotos, "endereco_publico", lambda loja, ref: "https://nuvem.exemplo/" + ref.rsplit("/", 1)[-1])
+    publicas = ["https://nuvem.exemplo/" + u.rsplit("/", 1)[-1] for u in urls]
     enviadas_wa, fotos_wa = [], []
 
     async def resposta(numero, texto, atraso=0, **kw):
@@ -202,7 +206,7 @@ def test_mesma_conversa_igual_nos_tres_canais(monkeypatch, redis_falso):
                                            grafo=GrafoRoteiro(texto_llm, urls)))
 
     assert enviadas_wa == [esperado] and resposta_tg == esperado and sim.texto == esperado
-    assert fotos_wa == urls and fotos_tg == urls and sim.midias == urls
+    assert fotos_wa == publicas and fotos_tg == urls and sim.midias == urls
     canais = {lead: {m["canal"] for m in historico_do_lead(lead, 1)} for lead in ("A", "B", "C")}
     assert canais == {"A": {"whatsapp"}, "B": {"telegram"}, "C": {"simulador"}}
 
@@ -367,14 +371,17 @@ def test_whatsapp_em_silencio_nao_marca_lida(monkeypatch, redis_falso):
 
 # ------------------------------------------------ contrato dos canais
 
-def test_enviar_resultado_manda_bolhas_e_depois_fotos():
+def test_enviar_resultado_manda_fotos_e_depois_bolhas():
+    # Maratona Fotos: primeiro as fotos (do depósito), depois o texto (a trava precisa saber antes).
+    from app import fotos as _fotos
     from app.channels.base import enviar_resultado
     from app.channels.simulador import CanalSimulador
     from app.core.turno import ResultadoTurno
     canal = CanalSimulador()
-    r = ResultadoTurno(texto="Primeira.\n\nSegunda.", midias=["http://f/1.jpg"])
-    asyncio.run(enviar_resultado(canal, "lead", r))
-    assert canal.enviadas == [("texto", "Primeira."), ("texto", "Segunda."), ("midia", "http://f/1.jpg")]
+    ref = _fotos.guardar(1, _png())
+    r = ResultadoTurno(texto="Primeira.\n\nSegunda.", midias=[ref])
+    asyncio.run(enviar_resultado(canal, "lead", r, loja_id=1))
+    assert canal.enviadas == [("midia", ref), ("texto", "Primeira."), ("texto", "Segunda.")]
 
 
 def test_enviar_resultado_silenciado_nao_envia_nada():
@@ -382,7 +389,7 @@ def test_enviar_resultado_silenciado_nao_envia_nada():
     from app.channels.simulador import CanalSimulador
     from app.core.turno import ResultadoTurno
     canal = CanalSimulador()
-    asyncio.run(enviar_resultado(canal, "lead", ResultadoTurno(silenciado=True)))
+    asyncio.run(enviar_resultado(canal, "lead", ResultadoTurno(silenciado=True), loja_id=1))
     assert canal.enviadas == []
 
 
@@ -414,3 +421,11 @@ def test_telegram_le_texto_audio_e_foto():
     assert (a.tipo, a.id_midia) == ("audio", "F1")
     [f] = canal.ler_webhook(update(photo=[SimpleNamespace(file_id="P1")]))   # L5b: foto é lida
     assert (f.tipo, f.tipo_original, f.id_midia) == ("imagem", "image", "P1")
+
+
+def _png() -> bytes:
+    import io
+    from PIL import Image
+    saida = io.BytesIO()
+    Image.new("RGB", (40, 30), (200, 10, 10)).save(saida, format="PNG")
+    return saida.getvalue()

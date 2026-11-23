@@ -16,9 +16,7 @@ from __future__ import annotations
 
 import json
 import random
-import re
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from app.chaves import exigir_loja
 from app.relogio import agora_utc, para_banco
@@ -27,7 +25,6 @@ from banco import conectar
 NOME_DEMO = "Recife Seminovos Demo"
 SEMENTE = 2026
 DIAS_DE_HISTORICO = 30
-PASTA_FOTOS = Path(__file__).resolve().parents[1] / "demo_fotos"   # fora do git (.gitignore)
 
 CONFIG_DEMO = {
     "demo": True,
@@ -120,57 +117,10 @@ _CORES = {"Prata": (190, 190, 195), "Preto": (40, 40, 45), "Branco": (235, 235, 
           "Marrom": (110, 80, 50)}
 
 
-# ------------------------------------------------------------ fotos da demo pelo painel (Q2)
-# O banco continua guardando o caminho do arquivo (o simulador e a bancada mostram as fotos por
-# ele, mesmo sem a API ligada). A API do painel mostra cada foto por um endereço próprio, só de
-# arquivos desta pasta, e na edição troca o endereço de volta pelo arquivo.
-
-ENDERECO_FOTOS = "/api/v1/demo/fotos/"
-_NOME_FOTO = re.compile(r"^[a-z0-9][a-z0-9-]{0,150}\.png$")
-
-
-def arquivo_da_foto(nome: str, pasta: Path | None = None) -> Path | None:
-    """O arquivo da foto da demo, ou None. Recusa qualquer nome fora do padrão, com "..",
-    barra ou caminho, e qualquer coisa que resolva fora da pasta de fotos."""
-    nome = str(nome or "")
-    if not _NOME_FOTO.match(nome):
-        return None
-    base = (pasta or PASTA_FOTOS).resolve()
-    arquivo = (base / nome).resolve()
-    if arquivo.parent != base or not arquivo.is_file():
-        return None
-    return arquivo
-
-
-def endereco_da_foto(caminho: str, pasta: Path | None = None) -> str | None:
-    """Caminho de arquivo de foto da demo -> endereço na API; None se não for foto da demo."""
-    try:
-        arquivo = Path(str(caminho)).resolve()
-    except (OSError, ValueError):
-        return None
-    base = (pasta or PASTA_FOTOS).resolve()
-    if arquivo.parent != base or not _NOME_FOTO.match(arquivo.name):
-        return None
-    return ENDERECO_FOTOS + arquivo.name
-
-
-def caminho_da_foto(endereco: str, pasta: Path | None = None) -> str | None:
-    """Endereço da API (ENDERECO_FOTOS + nome) -> caminho do arquivo; None se não for válido."""
-    texto = str(endereco or "")
-    if not texto.startswith(ENDERECO_FOTOS):
-        return None
-    arquivo = arquivo_da_foto(texto[len(ENDERECO_FOTOS):], pasta)
-    return str(arquivo) if arquivo else None
-
-
-def foto_ilustrativa(marca: str, modelo: str, ano: int, cor: str, pasta: Path | None = None) -> str:
+def desenhar_foto_ilustrativa(marca: str, modelo: str, ano: int, cor: str) -> bytes:
     """Desenha uma silhueta simples do carro (Pillow), com modelo, cor e a faixa FOTO ILUSTRATIVA.
-    Gera uma vez por carro; devolve o caminho do arquivo. Nunca baixa nada da internet."""
-    pasta = pasta or PASTA_FOTOS
-    pasta.mkdir(parents=True, exist_ok=True)
-    arquivo = pasta / f"{_slug(f'{marca} {modelo} {ano} {cor}')}.png"
-    if arquivo.exists():
-        return str(arquivo)
+    Devolve os bytes (PNG). Nunca baixa nada da internet."""
+    import io
     from PIL import Image, ImageDraw, ImageFont
     img = Image.new("RGB", (800, 450), (225, 235, 245))
     d = ImageDraw.Draw(img)
@@ -190,8 +140,23 @@ def foto_ilustrativa(marca: str, modelo: str, ano: int, cor: str, pasta: Path | 
     d.text((30, 25), f"{marca} {modelo} {ano} - {cor}", fill=(20, 20, 20), font=grande)
     d.rectangle((0, 395, 800, 450), fill=(200, 30, 30))
     d.text((250, 405), "FOTO ILUSTRATIVA", fill=(255, 255, 255), font=pequena)
-    img.save(arquivo, format="PNG")
-    return str(arquivo)
+    saida = io.BytesIO()
+    img.save(saida, format="PNG")
+    return saida.getvalue()
+
+
+def foto_da_demo(loja_id: int, marca: str, modelo: str, ano: int, cor: str) -> str:
+    """Maratona Fotos: a foto ilustrativa passa pelo preparo único e vai para o depósito, como a
+    de qualquer loja. Devolve a referência que fica no carro."""
+    from app import fotos
+    return fotos.guardar(loja_id, desenhar_foto_ilustrativa(marca, modelo, ano, cor))
+
+
+def _fotos_antigas(conexao, loja_id: int) -> list[str]:
+    refs = []
+    for linha in conexao.execute("SELECT fotos FROM estoque WHERE loja_id = ?", (loja_id,)):
+        refs.extend(u.strip() for u in str(linha["fotos"] or "").split(",") if u.strip())
+    return refs
 
 
 # ------------------------------------------------------------ criar e reiniciar
@@ -237,7 +202,7 @@ def _apagar_dados(conexao, loja_id: int) -> None:
 
 
 def criar_loja_demo(*, loja_id: int | None = None, agora: datetime | None = None, indexar: bool = True,
-                    com_historico: bool = True, pasta_fotos: Path | None = None) -> int:
+                    com_historico: bool = True) -> int:
     """Cria a loja demo (ou recria, se já existir uma loja demo). Devolve o id.
     loja_id: só para a bancada (usa a loja 1 do banco temporário). indexar=False: não chama o
     índice de busca (testes e bancada)."""
@@ -260,6 +225,7 @@ def criar_loja_demo(*, loja_id: int | None = None, agora: datetime | None = None
         else:
             conexao.execute("INSERT INTO lojas (id, nome, segmento, config) VALUES (?, ?, 'veiculos', ?)",
                             (alvo, NOME_DEMO, config))
+        antigas = _fotos_antigas(conexao, alvo)
         _apagar_dados(conexao, alvo)
         conexao.execute("DELETE FROM canais WHERE loja_id = ?", (alvo,))     # só o simulador (sem canal real)
         for nome, papel in EQUIPE_DEMO:
@@ -267,18 +233,20 @@ def criar_loja_demo(*, loja_id: int | None = None, agora: datetime | None = None
         for titulo, texto in POLITICAS_DEMO:
             conexao.execute("INSERT INTO conhecimento (loja_id, titulo, texto) VALUES (?, ?, ?)", (alvo, titulo, texto))
         for marca, modelo, ano, km, cor, cambio, preco in ESTOQUE_DEMO:
-            foto = foto_ilustrativa(marca, modelo, ano, cor, pasta_fotos)
+            foto = foto_da_demo(alvo, marca, modelo, ano, cor)
             conexao.execute("INSERT INTO estoque (loja_id, marca, modelo, ano, km, cor, cambio, preco, status, fotos) "
                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'disponivel', ?)",
                             (alvo, marca, modelo, ano, km, cor, cambio, preco, foto))
         conexao.commit()
     finally:
         conexao.close()
-    from app import lojas
+    from app import fotos, lojas
+    for ref in antigas:                       # as fotos da demo anterior saem do depósito
+        fotos.apagar(alvo, ref)
     lojas.limpar_cache()
     _no_ar(alvo, agora)
     if com_historico:
-        _historico(alvo, agora, pasta_fotos)
+        _historico(alvo, agora)
     if indexar:
         try:
             from app.conhecimento import reindexar_loja
@@ -297,22 +265,21 @@ def _no_ar(loja_id: int, agora: datetime) -> None:
         colocar_no_ar(loja_id, agora)
 
 
-def reiniciar_demo(loja_id: int, *, agora: datetime | None = None, indexar: bool = True,
-                   pasta_fotos: Path | None = None) -> int:
+def reiniciar_demo(loja_id: int, *, agora: datetime | None = None, indexar: bool = True) -> int:
     """Apaga e recria SÓ a loja demo. Recusa qualquer outra loja. Grava no Registro (exige ator)."""
     from app.registro import conferir_ator, registrar
     loja_id = exigir_loja(loja_id)
     if not e_demo(loja_id):
         raise LojaNaoEDemo(f"a loja {loja_id} não está marcada como demo; nada foi apagado")
     conferir_ator(loja_id)
-    criar_loja_demo(loja_id=loja_id, agora=agora, indexar=indexar, pasta_fotos=pasta_fotos)
+    criar_loja_demo(loja_id=loja_id, agora=agora, indexar=indexar)
     registrar("reiniciar_demo", loja_id, None, {"loja": NOME_DEMO}, alvo=f"loja:{loja_id}")
     return loja_id
 
 
 # ------------------------------------------------------------ histórico de 30 dias
 
-def _historico(loja_id: int, agora: datetime, pasta_fotos: Path | None) -> None:
+def _historico(loja_id: int, agora: datetime) -> None:
     """Leads, conversas, chamados, visitas, remarketing e custo de 30 dias (semente fixa) e vendas
     pelo caminho único (registrar_venda), que já agenda o pós-venda."""
     rng = random.Random(SEMENTE)
@@ -377,10 +344,10 @@ def _historico(loja_id: int, agora: datetime, pasta_fotos: Path | None) -> None:
         conexao.commit()
     finally:
         conexao.close()
-    _vendas(loja_id, agora, rng, pasta_fotos)
+    _vendas(loja_id, agora, rng)
 
 
-def _vendas(loja_id: int, agora: datetime, rng: random.Random, pasta_fotos: Path | None) -> None:
+def _vendas(loja_id: int, agora: datetime, rng: random.Random) -> None:
     from app.ator import como_sistema
     from app.relogio import dia_local
     from app.lojas import carregar_loja
@@ -388,7 +355,7 @@ def _vendas(loja_id: int, agora: datetime, rng: random.Random, pasta_fotos: Path
     loja = carregar_loja(loja_id)
     with como_sistema("Demo", "job"):
         for i, (marca, modelo, ano, km, cor, cambio, preco, forma, meses) in enumerate(VENDIDOS_DEMO):
-            foto = foto_ilustrativa(marca, modelo, ano, cor, pasta_fotos)
+            foto = foto_da_demo(loja_id, marca, modelo, ano, cor)
             conexao = conectar()
             try:
                 carro_id = conexao.execute(

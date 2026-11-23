@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Léo — API do painel do cliente
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Contrato v1 (C1 do Plano Mestre). Escrito antes do código: a API real (C2) tem de obedecer a este arquivo,
     e o front pode ser feito contra os dados falsos de docs/api/mocks/.
@@ -443,12 +443,12 @@ paths:
   /demo/fotos/{arquivo}:
     get:
       tags: [Estoque]
-      summary: Foto ilustrativa de carro da loja de demonstração (v1.1)
+      summary: Foto ilustrativa da loja de demonstração (v1.1; DESATIVADA na v1.2)
+      deprecated: true
       x-papeis: [dono, gestor]
       description: |
-        Só para loja de demonstração (outra loja: 404). Só arquivos da pasta de fotos da demo, com nome
-        simples; qualquer outro nome (com "..", barra ou caminho) dá 404. Na loja demo, os carros trazem
-        em "fotos" este endereço, e ele é aceito de volta ao editar o carro.
+        Desativada na v1.2 (Maratona Fotos): responde sempre 404. A demo grava as fotos no depósito, como
+        qualquer loja, e o painel usa GET /fotos/{nome}. A rota fica no contrato porque a v1 só cresce.
       parameters:
         - {name: arquivo, in: path, required: true, schema: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,150}\.png$'}}
       responses:
@@ -456,6 +456,26 @@ paths:
           description: A imagem.
           content:
             image/png:
+              schema: {type: string, format: binary}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+  /fotos/{nome}:
+    get:
+      tags: [Estoque]
+      summary: Foto de um carro do estoque, do depósito (v1.2)
+      x-papeis: [dono, gestor]
+      description: |
+        A foto é sempre procurada na loja da sessão: foto de outra loja não existe (404). Nome só no
+        formato do depósito (aleatório, .jpg); qualquer outro: 404. É o endereço que os carros trazem em
+        "fotos" quando o depósito é local; com o depósito na nuvem, os carros trazem o endereço https público.
+      parameters:
+        - {name: nome, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{20,64}\.jpg$'}}
+      responses:
+        '200':
+          description: A foto (JPEG, sem metadados).
+          content:
+            image/jpeg:
               schema: {type: string, format: binary}
         '401': {$ref: '#/components/responses/NaoAutenticado'}
         '403': {$ref: '#/components/responses/SemPermissao'}
@@ -1004,7 +1024,7 @@ components:
         preco: {$ref: '#/components/schemas/Preco'}
         status: {type: string, enum: [disponivel, reservado, indisponivel, vendido]}
         status_rotulo: {type: string}
-        fotos: {type: array, items: {type: string, format: uri-reference}, description: 'Por URL na v1; upload fica para depois (A4). Na loja de demonstração (v1.1), o endereço relativo da própria API (/api/v1/demo/fotos/...).'}
+        fotos: {type: array, items: {type: string, format: uri-reference}, description: 'v1.2: fotos do depósito, na ordem (a primeira é a capa), no máximo 20. Endereço /api/v1/fotos/<nome>.jpg (depósito local) ou https público (depósito na nuvem).'}
         interessados: {type: integer, description: 'Pessoas interessadas agora (um carro de interesse por cliente). Não é histórico de perguntas.'}
         pode_editar: {type: boolean, description: Falso para carro vendido.}
     CarroEntrada:
@@ -1019,7 +1039,7 @@ components:
         cambio: {type: string, maxLength: 40}
         preco: {type: number, exclusiveMinimum: 0}
         status: {type: string, enum: [disponivel, reservado, indisponivel], description: '"vendido" só por registrar-venda.'}
-        fotos: {type: array, items: {type: string, format: uri-reference}, maxItems: 20, description: 'Links https; na loja de demonstração também o endereço da própria API (/api/v1/demo/fotos/...).'}
+        fotos: {type: array, items: {type: string, format: uri-reference}, maxItems: 20, description: 'v1.2: endereços de fotos desta loja que o painel recebeu (ficam como estão) e links https de fora, que são baixados e passam pelo preparo (viram foto do depósito; nada de link guardado). Foto que não deu para baixar: 422 em campos.fotos.'}
     CarroEdicao:
       type: object
       required: [dados]

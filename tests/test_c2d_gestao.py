@@ -65,13 +65,15 @@ def test_estoque_cadastrar_editar_e_conflito(cliente, dono):
     assert r.status_code == 201, r.text
     _validar("/estoque", "post", r)
     carro = r.json()
-    esperado = {**CARRO}
-    novo = {**CARRO, "preco": 61900}
+    # Maratona Fotos: o link colado virou foto do depósito; "esperado" é o que a tela mostrou.
+    assert len(carro["fotos"]) == 1 and carro["fotos"][0].startswith("/api/v1/fotos/")
+    esperado = {**CARRO, "fotos": carro["fotos"]}
+    novo = {**CARRO, "fotos": carro["fotos"], "preco": 61900}
     r = cliente.put(P + f"/estoque/{carro['id']}", json={"dados": novo, "esperado": esperado},
                     headers=dono)
     assert r.status_code == 200, r.text
     assert r.json()["preco"]["valor"] == 61900
-    r = cliente.put(P + f"/estoque/{carro['id']}", json={"dados": CARRO, "esperado": esperado},
+    r = cliente.put(P + f"/estoque/{carro['id']}", json={"dados": esperado, "esperado": esperado},
                     headers=dono)
     assert r.status_code == 409, r.text
 

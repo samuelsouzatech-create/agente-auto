@@ -152,25 +152,30 @@ def test_chamado_de_outra_loja_nao_conta_como_aviso_ao_vendedor():
 def test_envio_vira_registro_com_bolhas_fotos_e_aviso_ao_vendedor():
     from tools import acionar_handoff
 
+    from app import fotos
+    guardadas = []
+
     def responder(texto, loja_id, lead_id):
         acionar_handoff.func(motivo="cliente pediu desconto", resumo="r", lead_id=lead_id, loja_id=loja_id)
+        # Maratona Fotos: o Léo só envia foto do depósito (nunca link de terceiros).
+        guardadas.append(fotos.guardar(loja_id, rb.gerar_imagem_de_texto("Civic")))
         return [
             AIMessage(content="", tool_calls=[{"name": "enviar_fotos", "args": {}, "id": "f1"},
                                               {"name": "acionar_handoff", "args": {}, "id": "h1"}]),
             ToolMessage(content="Fotos.", tool_call_id="f1", name="enviar_fotos",
-                        artifact={"tipo": "fotos", "urls": ["https://exemplo/civic.jpg"]}),
+                        artifact={"tipo": "fotos", "urls": [guardadas[-1]]}),
             ToolMessage(content="Handoff acionado.", tool_call_id="h1", name="acionar_handoff"),
             AIMessage(content="Olha as fotos! Vou passar seu pedido para a equipe."),
         ]
 
     rodada = rodar([roteiro(deve={"tools": ["enviar_fotos"], "handoff": "sim"})], GrafoFalso(responder))
     turno = rodada.resultados[0].turnos[0]
-    assert turno.bolhas and turno.fotos == ["https://exemplo/civic.jpg"]
+    assert turno.bolhas and turno.fotos == guardadas
     assert turno.tools == ["enviar_fotos", "acionar_handoff"]
     assert turno.avisos_vendedor == ["cliente pediu desconto"]
     assert rodada.resultados[0].status == rb.PASSOU
     texto = rb.montar_relatorio(rodada)
-    assert "**Cliente:** oi" in texto and "**Léo:**" in texto and "civic.jpg" in texto
+    assert "**Cliente:** oi" in texto and "**Léo:**" in texto and guardadas[0].rsplit("/", 1)[-1] in texto
 
 
 def test_tentativa_de_envio_real_aborta_a_rodada():

@@ -23,11 +23,10 @@ from app.api_painel.carros import (TAMANHO_PADRAO, interessados, montar_carro, m
 from app.api_painel.erros import ErroApi
 from app.api_painel.modulos import ESTOQUE, escrita, leitura
 from app.ator import como
-from app.demo import ENDERECO_FOTOS, caminho_da_foto, e_demo
+from app import fotos as _fotos
+from app.estoque import FotosInvalidas
 
 MAX_TEXTO = 60
-MAX_FOTOS = 20
-MAX_URL = 500
 ANO_MINIMO = 1950
 MAX_KM = 2_000_000
 MAX_PRECO = 10_000_000
@@ -63,30 +62,6 @@ def _texto(valor) -> str:
     return " ".join(str(valor or "").split())
 
 
-def _foto_ruim(url: str) -> bool:
-    return (not url.startswith(("https://", "http://")) or "," in url or " " in url
-            or len(url) > MAX_URL)
-
-
-def _fotos_para_gravar(fotos: list, loja_id: int) -> list | None:
-    """Q2: na loja demo, o endereço da própria API (foto da demo) volta a ser o arquivo.
-    Links de fora seguem a regra de sempre. None se alguma foto for recusada."""
-    demo = None
-    saida = []
-    for u in fotos:
-        if u.startswith(ENDERECO_FOTOS):
-            demo = e_demo(loja_id) if demo is None else demo
-            caminho = caminho_da_foto(u) if demo else None
-            if caminho is None:
-                return None
-            saida.append(caminho)
-        elif _foto_ruim(u):
-            return None
-        else:
-            saida.append(u)
-    return saida
-
-
 def validar(entrada: CarroEntrada, loja_id: int) -> dict:
     if entrada.status == estoque.VENDIDO:
         raise ErroApi("invalido", {"status": "Use Registrar venda."}, USE_VENDA)
@@ -109,16 +84,21 @@ def validar(entrada: CarroEntrada, loja_id: int) -> dict:
     if entrada.status not in estoque.OPCOES_STATUS:
         campos["status"] = "Escolha Disponível, Reservado ou Indisponível."
     fotos = [_texto(u) for u in entrada.fotos if _texto(u)]
-    gravar = _fotos_para_gravar(fotos, loja_id) if len(fotos) <= MAX_FOTOS else None
-    if gravar is None:
-        campos["fotos"] = f"Até {MAX_FOTOS} links, cada um começando com https://."
-    else:
-        fotos = gravar
+    if len(fotos) > _fotos.MAX_FOTOS_POR_CARRO:
+        campos["fotos"] = _fotos.MSG_DEMAIS
+    if any("," in u for u in fotos):
+        campos["fotos"] = _fotos.MSG_LINK
     if campos:
         raise ErroApi("invalido", campos)
+    # Maratona Fotos: as fotos passam pelo preparo único dentro de app/estoque.py (endereço de
+    # foto desta loja vira a referência do depósito; link https de fora é baixado e preparado).
     return {**textos, "ano": entrada.ano, "km": entrada.km, "cambio": entrada.cambio,
             "preco": float(entrada.preco), "status": entrada.status,
-            "fotos": ", ".join(fotos)}
+            "fotos": _fotos.juntar(fotos)}
+
+
+def _erro_das_fotos(erro: FotosInvalidas) -> ErroApi:
+    return ErroApi("invalido", {"fotos": str(erro)}, str(erro))
 
 
 def _carro_da_loja(loja_id: int, carro_id: int) -> dict:
@@ -145,6 +125,8 @@ def cadastrar(entrada: CarroEntrada, sessao: dict = Depends(escrita(ESTOQUE))):
     with _como(sessao):
         try:
             novo = estoque.adicionar_carro(**dados, loja_id=loja_id)
+        except FotosInvalidas as erro:
+            raise _erro_das_fotos(erro) from None
         except estoque.StatusInvalido as erro:
             raise ErroApi("invalido", {"status": str(erro)}, str(erro)) from None
     return _resposta(loja_id, novo)
@@ -169,6 +151,8 @@ def editar(id: int, entrada: CarroEdicao, sessao: dict = Depends(escrita(ESTOQUE
     with _como(sessao):
         try:
             estoque.atualizar_carro(id, **dados, loja_id=loja_id, esperado=esperado)
+        except FotosInvalidas as erro:
+            raise _erro_das_fotos(erro) from None
         except estoque.CarroMudou:
             raise ErroApi("conflito", mensagem=CARRO_MUDOU) from None
         except estoque.StatusInvalido as erro:

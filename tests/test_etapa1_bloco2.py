@@ -68,6 +68,14 @@ def _ler(sql, parametros=()):
 
 
 def _novo_carro(loja_id, marca, modelo, ano, preco, fotos=""):
+    # Maratona Fotos: o Léo só envia foto do depósito; "fotos" aqui vira uma foto de verdade lá.
+    if fotos:
+        import io
+        from PIL import Image
+        from app import fotos as _fotos
+        saida = io.BytesIO()
+        Image.new("RGB", (40, 30), (90, 90, 90)).save(saida, format="PNG")
+        fotos = _fotos.guardar(loja_id, saida.getvalue())
     return _executar(
         "INSERT INTO estoque (loja_id, marca, modelo, ano, km, cor, cambio, preco, status, fotos) "
         "VALUES (?, ?, ?, ?, 30000, 'Branco', 'Automático', ?, 'disponivel', ?)",

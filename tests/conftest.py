@@ -50,6 +50,28 @@ def banco_temporario(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def deposito_de_fotos_temporario(monkeypatch, tmp_path_factory):
+    """Maratona Fotos: TODO teste tem o próprio depósito de fotos (tomada local, pasta
+    temporária) e nunca acessa a internet. Fica separado do banco_temporario porque alguns
+    arquivos antigos redefinem aquela preparação; esta vale sempre."""
+    monkeypatch.setenv("FOTOS_DEPOSITO", "local")
+    monkeypatch.setenv("FOTOS_PASTA", str(tmp_path_factory.mktemp("fotos_deposito")))
+    from app import fotos as _fotos
+
+    def _baixar_falso(url, transporte=None):
+        # Domínio ".example" devolve uma foto falsa; qualquer outro é link que não abre.
+        # (O baixador de verdade é testado à parte: app.fotos._baixar_link com transporte falso.)
+        from urllib.parse import urlsplit
+        partes = urlsplit(str(url))
+        if partes.scheme == "https" and (partes.hostname or "").endswith(".example"):
+            return _foto_de_teste()
+        raise _fotos.FotoRecusada(_fotos.MSG_LINK)
+
+    monkeypatch.setattr(_fotos, "baixar_link", _baixar_falso)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def ator_de_teste():
     """Todo teste tem um autor; assim os testes antigos não precisam mudar."""
     with ator.como("Teste", "operador", "painel"):
@@ -86,3 +108,12 @@ def trava_do_s5(request, monkeypatch):
     if request.node.path.name in ANTES_DO_S5:
         monkeypatch.setattr(permissoes, "_loja_no_ar", lambda loja_id: False)
     yield
+
+
+def _foto_de_teste() -> bytes:
+    """Uma foto PNG pequena (Maratona Fotos), para os testes que colam link de foto."""
+    import io
+    from PIL import Image
+    saida = io.BytesIO()
+    Image.new("RGB", (64, 48), (30, 120, 200)).save(saida, format="PNG")
+    return saida.getvalue()
