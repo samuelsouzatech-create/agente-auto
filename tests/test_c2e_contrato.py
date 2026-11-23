@@ -210,6 +210,8 @@ def test_cada_rota_real_responde_no_formato_do_contrato(envios):
         r = c.get(PREFIXO + "/v/" + "x" * 43, follow_redirects=False)   # C3
         assert r.status_code == 302 and "/link-invalido?motivo=" in r.headers["location"]
         vistos.add(("GET", "/v/{token}"))
+        # Q2: a loja 1 daqui não é demo -> 404 no formato do contrato (o 200 está em test_painel_demo2)
+        chamar("GET", "/demo/fotos/{arquivo}", (404,), url="/demo/fotos/carro-1.png")
         chamar("POST", "/auth/logout", (204,), headers=h)
 
     faltou = _da_api() - vistos

@@ -9,6 +9,9 @@ Regras:
   - a mensagem é gravada como direcao='vendedor' (autor = nome);
   - o envio usa as credenciais DESTA loja (app/credenciais.py). Sem
     credencial, o envio é recusado: nada sai pelo número de outra loja.
+  - simulador (Maratona Painel 2, Q2): só na loja de demonstração a resposta é aceita, e
+    apenas GRAVADA no histórico (o simulador app.py mostra). Nunca sai para canal nenhum.
+    Em qualquer outra loja, o simulador continua recusado.
 """
 import asyncio
 
@@ -18,6 +21,7 @@ from app.mensagens import salvar_mensagem
 from app.permissoes import exigir_pode_agir
 
 CANAIS_COM_ENVIO = ("whatsapp", "telegram")
+CANAL_SIMULADOR = "simulador"
 LIMITE_CARACTERES = 4000
 
 
@@ -52,14 +56,22 @@ def enviar_pelo_painel(loja_id: int, canal: str, lead_id: str, texto: str, vende
         raise EnvioRecusado("Mensagem vazia.")
     if len(texto) > LIMITE_CARACTERES:
         raise EnvioRecusado(f"Mensagem longa demais (máximo {LIMITE_CARACTERES} caracteres).")
+    simulado = False
     if canal not in CANAIS_COM_ENVIO:
-        raise EnvioRecusado("O simulador não recebe mensagens do painel. Teste pelo Telegram.")
+        from app.demo import e_demo          # aqui dentro: evita import circular
+        if canal == CANAL_SIMULADOR and e_demo(loja_id):
+            simulado = True                  # Q2: na demo, só grava (o simulador mostra)
+        else:
+            raise EnvioRecusado("O simulador não recebe mensagens do painel. Teste pelo Telegram.")
     if estado_do_handoff(lead_id, loja_id) != "humano_assumiu":
         raise EnvioRecusado("Assuma a conversa antes de responder. Assim o assistente fica "
                             "em silêncio e vocês não falam ao mesmo tempo.")
     dono = quem_assumiu(lead_id, loja_id)
     if dono and dono != vendedor:
         raise EnvioRecusado(f"Esta conversa está com {dono}.")
+    if simulado:
+        salvar_mensagem(lead_id, "vendedor", texto, canal=canal, loja_id=loja_id, autor=vendedor)
+        return
     try:
         ok = asyncio.run(_despachar(loja_id, canal, lead_id, texto))
     except EnvioRecusado:

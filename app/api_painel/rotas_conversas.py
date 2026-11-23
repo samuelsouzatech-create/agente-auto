@@ -29,6 +29,7 @@ from app.api_painel.conversa import (FORA_DA_JANELA, fatos, lead_valido, montar_
 from app.api_painel.carros import montar_carros_para_venda
 from app.api_painel.dependencias import exigir_csrf, exigir_papel
 from app.api_painel.erros import ErroApi
+from app.demo import e_demo
 from app.lojas import carregar_loja
 from app.relogio import agora_utc
 from app.registro import registrar
@@ -169,7 +170,8 @@ def responder(entrada: ResponderEntrada, alvo: tuple = Depends(escrever_conversa
     f = _fatos_ou_404(loja_id, lead)
     loja = carregar_loja(loja_id)
     agora = agora_utc()
-    motivo = motivo_para_nao_responder(f, janela_do_cartao(loja, loja_id, lead, f["canal"], agora), nome)
+    motivo = motivo_para_nao_responder(f, janela_do_cartao(loja, loja_id, lead, f["canal"], agora), nome,
+                                       demo=e_demo(loja_id))
     if motivo == FORA_DA_JANELA:
         raise ErroApi("janela_fechada")
     if motivo:

@@ -244,3 +244,21 @@ Só cresceu: campos novos opcionais e uma rota nova. Nada que existia mudou de f
   `anterior` é null antes do ano mínimo aceito. A tela não calcula datas.
 - Sem mudança de formato: `POST /auth/login` passa a responder 429 também quando a MESMA
   origem errou o login 20 vezes em 15 minutos (qualquer e-mail). O 429 já estava no contrato.
+
+### Acréscimos do Q2 (Maratona Painel 2, demo no painel novo)
+
+- `GET /demo/fotos/{arquivo}` (nova, ainda 1.1.0): a foto ilustrativa de um carro da loja de
+  demonstração. Só dono e gerente, só em loja demo (outra loja: 404), só arquivos da pasta de fotos
+  da demo com nome simples (`^[a-z0-9][a-z0-9-]{0,150}\.png$`); qualquer outro nome dá 404.
+  Responde `image/png` (sem dado falso: não é JSON; o `conferir_mocks.py` passou a exigir dado
+  falso só de resposta JSON).
+- `Carro.fotos` e `CarroEntrada.fotos`: `format: uri` virou `uri-reference` (aceita mais: todo
+  endereço completo continua valendo). Na loja demo, a API mostra as fotos como
+  `/api/v1/demo/fotos/<arquivo>.png` e aceita esse endereço de volta ao editar; o banco continua
+  guardando o arquivo (o simulador e a bancada usam o arquivo). Links de fora seguem a regra de
+  sempre (começar com `https://` ou `http://`).
+- `/saude`: na loja demo, e só nela, o simulador conta como canal ativo (luz verde, detalhe
+  "Atendendo pelo simulador (loja de demonstração)."); a lista `canais` não muda.
+- `POST /conversas/{lead}/responder`: na loja demo, conversa do simulador é aceita e a mensagem
+  é só gravada (o simulador mostra); nunca é enviada a canal nenhum. Fora da demo, o simulador
+  continua recusado ("O simulador não recebe mensagens do painel.").
