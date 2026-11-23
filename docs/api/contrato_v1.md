@@ -227,3 +227,20 @@ Ainda em aberto, para quando desenharmos o front: uma tela "Equipe", em que o do
 - O agendamento passa a guardar a data já resolvida (ex.: "sábado, 14/11, às 10:00"),
   e não mais o texto do cliente ("amanhã às 10h"). Sem migração: a coluna é texto livre.
 
+
+## Contrato 1.1.0 (Maratona Painel 2, Q1, 23/11/2026)
+
+Só cresceu: campos novos opcionais e uma rota nova. Nada que existia mudou de formato.
+
+- `Mensagem.automatica` (opcional): `{tipo_rotulo: "Retomada" | "Pós-venda" | "Reativação"}`
+  nas mensagens que o Léo mandou sozinho; `null` nas outras. Vem do `autor` que os jobs já
+  gravam (`remarketing`, `pos_venda`, `reativacao`), sem migração.
+- `GET /conversas/{lead}/carros-para-venda` (nova): dono, gestor, vendedor e vendedor do link
+  (só a conversa liberada). Lista os carros não vendidos da loja da sessão, o mais novo
+  primeiro, no formato `CarroParaVenda`. Vale com o módulo Estoque desligado (a venda é do
+  Atender). Conversa de outra loja: 404. Dados falsos `conversas_carros_para_venda__*`.
+- `Resultado.periodo.anterior` e `.seguinte` (opcionais): a data a pedir em `?data=` para ver o
+  período vizinho. `seguinte` é null enquanto o próximo período não começou (fuso da loja);
+  `anterior` é null antes do ano mínimo aceito. A tela não calcula datas.
+- Sem mudança de formato: `POST /auth/login` passa a responder 429 também quando a MESMA
+  origem errou o login 20 vezes em 15 minutos (qualquer e-mail). O 429 já estava no contrato.

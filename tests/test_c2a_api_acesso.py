@@ -358,6 +358,7 @@ def test_so_as_rotas_do_c2a_todas_em_api_v1():
                      ("GET", PREFIXO + "/saude"), ("GET", PREFIXO + "/atender"),   # C2b
                      ("GET", PREFIXO + "/conversas/{lead}"),                       # C2c
                      ("POST", PREFIXO + "/conversas/{lead}/assumir"),
+                     ("GET", PREFIXO + "/conversas/{lead}/carros-para-venda"),       # v1.1
                      ("POST", PREFIXO + "/conversas/{lead}/responder"),
                      ("POST", PREFIXO + "/conversas/{lead}/devolver"),
                      ("POST", PREFIXO + "/conversas/{lead}/registrar-venda"),

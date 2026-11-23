@@ -10,6 +10,11 @@ estas funções. Sem Streamlit.
 - Limite de tentativas por e-mail: MAX_TENTATIVAS erros em
   JANELA_TENTATIVAS_MIN minutos bloqueiam aquele e-mail até os erros saírem
   da janela. Login certo zera a contagem.
+- Limite por origem (painel na internet, revisão geral #5): MAX_LOGIN_ERRADO_ORIGEM
+  logins errados da mesma origem na janela bloqueiam aquela origem, para qualquer
+  e-mail (impede testar senhas em muitos e-mails do mesmo lugar). Fica na tabela
+  acessos com a chave "login:<origem>". Ainda não resolve o bloqueio de propósito
+  de um e-mail (ver docs/revisao_geral.md #5).
 - Toda tentativa vai para a tabela acessos (não para o Registro: na hora do
   login ainda não se sabe quem é a pessoa).
 - E-mail desconhecido gasta o mesmo tempo que uma senha errada, para ninguém
@@ -44,6 +49,8 @@ MAX_NOME = 80
 MAX_EMAIL = 254
 MAX_TENTATIVAS = 5
 JANELA_TENTATIVAS_MIN = 15
+MAX_LOGIN_ERRADO_ORIGEM = 20
+LOGIN_ERRADO_ORIGEM = "login_errado_origem"
 OK = "ok"
 BLOQUEADO = "bloqueado"
 FALHAS = ("senha_errada", "email_desconhecido", "sem_senha", "desativado")
@@ -235,6 +242,34 @@ def bloqueado_por_tentativas(email, agora=None) -> bool:
     finally:
         conexao.close()
     return erros >= MAX_TENTATIVAS
+
+
+def _chave_da_origem(origem) -> str:
+    return "login:" + str(origem or "desconhecida")[:200]
+
+
+def origem_bloqueada(origem, agora=None) -> bool:
+    """True se a origem errou o login MAX_LOGIN_ERRADO_ORIGEM vezes na janela."""
+    momento = agora or agora_utc()
+    conexao = conectar()
+    try:
+        erros = conexao.execute(
+            "SELECT COUNT(*) FROM acessos WHERE email = ? AND resultado = ? AND quando >= ? AND quando <= ?",
+            (_chave_da_origem(origem), LOGIN_ERRADO_ORIGEM,
+             para_banco(momento - timedelta(minutes=JANELA_TENTATIVAS_MIN)), para_banco(momento))).fetchone()[0]
+    finally:
+        conexao.close()
+    return erros >= MAX_LOGIN_ERRADO_ORIGEM
+
+
+def anotar_login_errado_da_origem(origem, agora=None) -> None:
+    conexao = conectar()
+    try:
+        conexao.execute("INSERT INTO acessos (usuario_id, email, quando, resultado) VALUES (NULL, ?, ?, ?)",
+                        (_chave_da_origem(origem), para_banco(agora or agora_utc()), LOGIN_ERRADO_ORIGEM))
+        conexao.commit()
+    finally:
+        conexao.close()
 
 
 def autenticar(email, senha, agora=None) -> dict | None:

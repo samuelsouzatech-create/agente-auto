@@ -8,6 +8,8 @@ Tudo offline, banco temporário do conftest.
 """
 import json
 
+import pytest
+
 from app import autenticacao
 from banco import conectar
 from scripts import criar_usuarios_demo as script
@@ -88,3 +90,35 @@ def test_com_loja_de_demonstracao_imprime_as_senhas_so_no_terminal(capsys, tmp_p
 def test_loja_que_nao_existe(capsys):
     assert script.main(["--loja", "99"]) == 1
     assert "não existe" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------ Q1 (Maratona Painel 2): canal real
+
+def _canal(loja_id, tipo, ativo=1):
+    _executar("INSERT INTO canais (loja_id, tipo, id_externo, ativo) VALUES (?, ?, ?, ?)",
+              (loja_id, tipo, f"{tipo}-{loja_id}", ativo))
+
+
+@pytest.mark.parametrize("tipo", ["whatsapp", "telegram", "instagram"])
+def test_loja_com_canal_real_ligado_e_recusada(capsys, tipo):
+    _loja_demo(2, nome="Loja de Verdade")
+    _executar("UPDATE lojas SET config = '{}' WHERE id = 2")
+    _canal(2, tipo)
+    assert script.main(["--loja", "2"]) == 1
+    assert "canal real" in capsys.readouterr().out
+    assert _linhas("SELECT COUNT(*) FROM usuarios WHERE loja_id = 2") == [(0,)]
+    with pytest.raises(script.LojaComCanalReal):
+        script.criar_usuarios(2)
+
+
+def test_canal_real_desligado_ou_simulador_nao_impede():
+    _loja_demo(2)
+    _canal(2, "whatsapp", ativo=0)
+    _canal(2, "simulador")
+    assert len(script.criar_usuarios(2)) == 3
+
+
+def test_loja_demo_sem_canal_continua_funcionando(capsys):
+    _loja_demo(3)
+    assert script.main(["--loja", "3"]) == 0
+    assert capsys.readouterr().out.count("senha:") == 3

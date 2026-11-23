@@ -172,6 +172,7 @@ def test_cada_rota_real_responde_no_formato_do_contrato(envios):
         _handoff(1, LEAD1, "aguardando_humano", _ha(20), motivo="Quer ver o carro")
         chamar("GET", "/atender", (200,))
         chamar("GET", conversa, (200,), url=f"/conversas/{LEAD1}")
+        chamar("GET", conversa + "/carros-para-venda", (200,), url=f"/conversas/{LEAD1}/carros-para-venda")
         chamar("POST", conversa + "/assumir", (200,), url=f"/conversas/{LEAD1}/assumir", headers=h)
         chamar("POST", conversa + "/responder", (200,), url=f"/conversas/{LEAD1}/responder",
                headers=h, json={"texto": "Oi, aqui é a Dona."})

@@ -34,6 +34,8 @@ JANELA_FECHADA_CONVERSA = (JANELA_FECHADA + " Só uma mensagem modelo aprovada p
                            "pode reabrir a conversa.")
 FORA_DA_JANELA = "Fora da janela de 24 h. O campo fica desligado até o cliente escrever de novo."
 INDISPONIVEL = "Indisponível agora."
+# Mesmo texto que o Acompanhamento usa (app/painel_envios.TIPOS).
+ROTULOS_AUTOMATICA = {"remarketing": "Retomada", "pos_venda": "Pós-venda", "reativacao": "Reativação"}
 CAMPOS_DO_CARTAO = ("origem", "carro", "pagamento", "troca", "prazo", "visita",
                     "motivo_do_chamado", "etiqueta", "etapa", "etapa_rotulo", "proximo_passo")
 
@@ -80,7 +82,16 @@ def montar_mensagem(loja, m: dict, agora=None) -> dict | None:
     return {"id": m["id"], "de": m["direcao"],
             "autor": m.get("autor") if m["direcao"] == "vendedor" else None,
             "tipo": tipo if tipo in TIPOS else "outro",
-            "texto": m.get("conteudo") or "", "canal": m.get("canal") or "", "quando": quando}
+            "texto": m.get("conteudo") or "", "canal": m.get("canal") or "", "quando": quando,
+            "automatica": automatica(m)}
+
+
+def automatica(m: dict) -> dict | None:
+    """v1.1: os jobs gravam a mensagem como direcao 'leo' com autor = tipo do envio."""
+    if m.get("direcao") != "leo":
+        return None
+    rotulo = ROTULOS_AUTOMATICA.get(str(m.get("autor") or ""))
+    return {"tipo_rotulo": rotulo} if rotulo else None
 
 
 def _acao(motivo) -> dict:
