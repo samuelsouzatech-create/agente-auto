@@ -31,7 +31,8 @@
       "quando": {
         "iso": "2026-11-06T21:31:00-03:00",
         "texto": "hoje 21:31"
-      }
+      },
+      "automatica": null
     },
     {
       "id": 102,
@@ -43,7 +44,8 @@
       "quando": {
         "iso": "2026-11-06T21:31:00-03:00",
         "texto": "hoje 21:31"
-      }
+      },
+      "automatica": null
     },
     {
       "id": 103,
@@ -55,7 +57,8 @@
       "quando": {
         "iso": "2026-11-06T21:38:00-03:00",
         "texto": "hoje 21:38"
-      }
+      },
+      "automatica": null
     },
     {
       "id": 104,
@@ -67,7 +70,8 @@
       "quando": {
         "iso": "2026-11-06T21:40:00-03:00",
         "texto": "hoje 21:40"
-      }
+      },
+      "automatica": null
     }
   ],
   "estado_do_chamado": "nenhum",

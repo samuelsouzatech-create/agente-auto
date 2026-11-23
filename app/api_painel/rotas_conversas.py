@@ -26,6 +26,7 @@ from app.api_painel.atender import ASSUMIDO, AGUARDANDO, janela_do_cartao
 from app.api_painel.conversa import (FORA_DA_JANELA, fatos, lead_valido, montar_conversa,
                                      montar_mensagem, motivo_para_nao_devolver,
                                      motivo_para_nao_responder)
+from app.api_painel.carros import montar_carros_para_venda
 from app.api_painel.dependencias import exigir_csrf, exigir_papel
 from app.api_painel.erros import ErroApi
 from app.lojas import carregar_loja
@@ -129,6 +130,14 @@ def _forma(entrada: VendaEntrada) -> str:
 def ver(alvo: tuple = Depends(ler_conversa)):
     sessao, lead = alvo
     return _conversa(sessao, lead)
+
+
+@router.get("/{lead}/carros-para-venda")
+def carros_para_venda(alvo: tuple = Depends(ler_conversa)):
+    """v1.1: a lista do Registrar venda. Só a loja da sessão; vale com o módulo Estoque desligado."""
+    sessao, lead = alvo
+    _fatos_ou_404(sessao["loja_id"], lead)
+    return montar_carros_para_venda(sessao["loja_id"])
 
 
 @router.post("/{lead}/assumir")

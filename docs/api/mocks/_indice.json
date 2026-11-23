@@ -436,5 +436,17 @@
     "metodo": "get",
     "status": "401",
     "tipo": "resposta"
+  },
+  "conversas_carros_para_venda__com_dados.json": {
+    "rota": "/conversas/{lead}/carros-para-venda",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "conversas_carros_para_venda__vazio.json": {
+    "rota": "/conversas/{lead}/carros-para-venda",
+    "metodo": "get",
+    "status": "200",
+    "tipo": "resposta"
   }
 }

@@ -58,6 +58,15 @@ def _dia_pedido(loja, data, agora) -> date:
     return dia
 
 
+def periodos_vizinhos(inicio: date, fim: date, hoje: date) -> dict:
+    """v1.1: a data a pedir para ver o período anterior e o seguinte (a tela não calcula datas).
+    Seguinte só se já começou (no fuso da loja); anterior só dentro dos anos aceitos."""
+    antes = inicio - timedelta(days=1)
+    depois = fim + timedelta(days=1)
+    return {"anterior": antes.isoformat() if antes.year >= ANO_MINIMO else None,
+            "seguinte": depois.isoformat() if depois <= hoje and depois.year <= ANO_MAXIMO else None}
+
+
 def _tempo(segundos, texto) -> dict:
     return {"segundos": None if segundos is None else float(segundos), "texto": texto}
 
@@ -72,7 +81,8 @@ def montar_resultado(loja_id: int, visao=SEMANA, data=None, agora=None) -> dict:
     r = resultado_do_periodo(loja_id, inicio, fim)
     return {
         "periodo": {"inicio": r["inicio"], "fim": r["fim"],
-                    "rotulo": rotulo_do_periodo(visao, inicio, fim)},
+                    "rotulo": rotulo_do_periodo(visao, inicio, fim),
+                    **periodos_vizinhos(inicio, fim, hora_local(loja, agora).date())},
         "conversas_atendidas": r["conversas_atendidas"],
         "fora_do_horario": r["fora_do_horario"],
         "primeira_resposta": _tempo(r["primeira_resposta_s"], r["primeira_resposta_texto"]),

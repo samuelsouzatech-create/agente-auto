@@ -719,6 +719,47 @@
         ]
       }
     },
+    "/api/v1/conversas/{lead}/carros-para-venda": {
+      "get": {
+        "description": "v1.1: a lista do Registrar venda. Só a loja da sessão; vale com o módulo Estoque desligado.",
+        "operationId": "carros_para_venda_api_v1_conversas__lead__carros_para_venda_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead",
+            "required": true,
+            "schema": {
+              "title": "Lead",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Carros Para Venda",
+        "tags": [
+          "Atender"
+        ]
+      }
+    },
     "/api/v1/conversas/{lead}/devolver": {
       "post": {
         "operationId": "devolver_api_v1_conversas__lead__devolver_post",

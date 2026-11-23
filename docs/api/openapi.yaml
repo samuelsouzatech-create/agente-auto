@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Léo — API do painel do cliente
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Contrato v1 (C1 do Plano Mestre). Escrito antes do código: a API real (C2) tem de obedecer a este arquivo,
     e o front pode ser feito contra os dados falsos de docs/api/mocks/.
@@ -207,6 +207,22 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Conversa'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/SemPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+  /conversas/{lead}/carros-para-venda:
+    get:
+      tags: [Atender]
+      summary: Carros que podem ser escolhidos no Registrar venda (v1.1)
+      x-papeis: [dono, gestor, vendedor, vendedor_link]
+      description: Só os carros não vendidos da loja da sessão. Vale mesmo com o módulo Estoque desligado. O vendedor do link só alcança a conversa liberada.
+      parameters: [{$ref: '#/components/parameters/Lead'}]
+      responses:
+        '200':
+          description: Lista dos carros.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CarrosParaVenda'}
         '401': {$ref: '#/components/responses/NaoAutenticado'}
         '403': {$ref: '#/components/responses/SemPermissao'}
         '404': {$ref: '#/components/responses/NaoEncontrado'}
@@ -703,6 +719,14 @@ components:
         texto: {type: string}
         canal: {type: string}
         quando: {$ref: '#/components/schemas/Horario'}
+        automatica:
+          description: 'Opcional (v1.1). Mensagem que o Léo mandou sozinho (retomada, pós-venda ou reativação); null nas outras.'
+          oneOf:
+            - type: object
+              required: [tipo_rotulo]
+              properties:
+                tipo_rotulo: {type: string, enum: [Retomada, Pós-venda, Reativação]}
+            - type: 'null'
     AcaoPermitida:
       type: object
       required: [permitida]
@@ -807,6 +831,8 @@ components:
             inicio: {type: string, format: date}
             fim: {type: string, format: date}
             rotulo: {type: string, examples: ['2 a 8 de novembro']}
+            anterior: {type: [string, 'null'], format: date, description: 'Opcional (v1.1). Data a pedir para ver o período anterior; null se não houver.'}
+            seguinte: {type: [string, 'null'], format: date, description: 'Opcional (v1.1). Data a pedir para ver o período seguinte; null se ele ainda não começou.'}
         conversas_atendidas: {type: integer}
         fora_do_horario: {type: integer}
         primeira_resposta:
@@ -983,6 +1009,27 @@ components:
           description: Os valores que a tela mostrou. Se o carro mudou nesse meio tempo, responde 409.
           type: object
           additionalProperties: true
+    CarrosParaVenda:
+      type: object
+      required: [itens]
+      properties:
+        itens:
+          type: array
+          description: Carros não vendidos da loja, o mais novo primeiro.
+          items: {$ref: '#/components/schemas/CarroParaVenda'}
+    CarroParaVenda:
+      type: object
+      required: [id, marca, modelo, ano, preco, status, status_rotulo]
+      properties:
+        id: {type: integer}
+        marca: {type: string}
+        modelo: {type: string}
+        ano: {type: integer}
+        km: {type: integer}
+        cor: {type: string}
+        preco: {$ref: '#/components/schemas/Preco'}
+        status: {type: string, enum: [disponivel, reservado, indisponivel]}
+        status_rotulo: {type: string}
     EstoquePagina:
       allOf:
         - {$ref: '#/components/schemas/Paginacao'}

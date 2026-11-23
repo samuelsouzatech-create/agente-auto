@@ -142,7 +142,8 @@ def test_resultado_mes_pela_api(cliente):
     _validar("/resultado", "get", r)
     corpo = r.json()
     assert corpo["periodo"] == {"inicio": "2026-02-01", "fim": "2026-02-28",
-                                "rotulo": "fevereiro de 2026"}
+                                "rotulo": "fevereiro de 2026",
+                                "anterior": "2026-01-31", "seguinte": "2026-03-01"}
     assert len(corpo["por_dia"]) == 28
 
 

@@ -1,0 +1,60 @@
+{
+  "itens": [
+    {
+      "id": 12,
+      "marca": "Hyundai",
+      "modelo": "HB20 Comfort",
+      "ano": 2020,
+      "km": 48000,
+      "cor": "Prata",
+      "preco": {
+        "valor": 62900.0,
+        "texto": "R$ 62.900,00"
+      },
+      "status": "disponivel",
+      "status_rotulo": "Disponível"
+    },
+    {
+      "id": 14,
+      "marca": "Toyota",
+      "modelo": "Corolla XEi",
+      "ano": 2019,
+      "km": 61000,
+      "cor": "Branco",
+      "preco": {
+        "valor": 98500.0,
+        "texto": "R$ 98.500,00"
+      },
+      "status": "reservado",
+      "status_rotulo": "Reservado"
+    },
+    {
+      "id": 15,
+      "marca": "Chevrolet",
+      "modelo": "Onix LT",
+      "ano": 2021,
+      "km": 32000,
+      "cor": "Preto",
+      "preco": {
+        "valor": 71900.0,
+        "texto": "R$ 71.900,00"
+      },
+      "status": "disponivel",
+      "status_rotulo": "Disponível"
+    },
+    {
+      "id": 16,
+      "marca": "Hyundai",
+      "modelo": "Creta Comfort",
+      "ano": 2022,
+      "km": 21000,
+      "cor": "Cinza",
+      "preco": {
+        "valor": 112000.0,
+        "texto": "R$ 112.000,00"
+      },
+      "status": "indisponivel",
+      "status_rotulo": "Indisponível"
+    }
+  ]
+}

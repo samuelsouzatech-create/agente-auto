@@ -2,7 +2,9 @@
   "periodo": {
     "inicio": "2026-11-02",
     "fim": "2026-11-08",
-    "rotulo": "2 a 8 de novembro"
+    "rotulo": "2 a 8 de novembro",
+    "anterior": "2026-11-01",
+    "seguinte": "2026-11-09"
   },
   "conversas_atendidas": 0,
   "fora_do_horario": 0,

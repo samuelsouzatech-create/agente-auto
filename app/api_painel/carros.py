@@ -61,6 +61,22 @@ def montar_carro(carro: dict, contagem: dict) -> dict:
             "pode_editar": v["status"] != estoque.VENDIDO}
 
 
+def montar_carros_para_venda(loja_id: int) -> dict:
+    """v1.1: os carros que podem entrar no Registrar venda (não vendidos), o mais novo primeiro.
+    Independe do módulo Estoque: a venda é do Atender."""
+    carros = sorted(estoque.listar_estoque(loja_id, incluir_vendidos=False), key=lambda c: -int(c["id"]))
+    itens = []
+    for c in carros:
+        v = valores_da_api(c)
+        if v["status"] == estoque.VENDIDO:
+            continue
+        itens.append({"id": int(c["id"]), "marca": v["marca"], "modelo": v["modelo"], "ano": v["ano"],
+                      "km": v["km"], "cor": v["cor"],
+                      "preco": {"valor": v["preco"], "texto": dinheiro(v["preco"])},
+                      "status": v["status"], "status_rotulo": ROTULOS_STATUS.get(v["status"], v["status"])})
+    return {"itens": itens}
+
+
 def _numero(valor, padrao: int, minimo: int, maximo: int) -> int:
     try:
         n = int(valor)

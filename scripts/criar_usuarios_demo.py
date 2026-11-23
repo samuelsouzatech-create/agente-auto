@@ -6,7 +6,8 @@ um dono, um gerente e um vendedor. Para quem testa a tela (leo-painel-web) com a
     .venv-teste\Scripts\python scripts\criar_usuarios_demo.py --loja 2   (outra loja fictícia)
 
 - Sem --loja, usa a loja de demonstração ("Recife Seminovos Demo"; crie antes com
-  scripts\criar_loja_demo.py). Com --loja, a loja precisa existir.
+  scripts\criar_loja_demo.py). Com --loja, a loja precisa existir e NÃO pode ter canal real
+  ligado (WhatsApp, Telegram ou Instagram): nesse caso nada é criado.
 - A senha é gerada aqui e aparece SÓ neste terminal. Não é gravada em arquivo nenhum.
 - Quem já existe (mesmo e-mail) é pulado: rodar de novo não troca a senha de ninguém.
   Para trocar, use scripts\login.py senha <número>.
@@ -24,6 +25,16 @@ if str(RAIZ) not in sys.path:
 
 PAPEIS = (("dono", "Dono Demo"), ("gestor", "Gerente Demo"), ("vendedor", "Vendedor Demo"))
 ATOR = "Script criar_usuarios_demo"
+CANAIS_REAIS = ("whatsapp", "telegram", "instagram")
+
+
+class LojaComCanalReal(ValueError):
+    """Pessoas de teste só entram na demo ou em loja fictícia sem canal real ligado."""
+
+
+def canais_reais_ligados(loja_id: int) -> list[str]:
+    from app.canais import listar_canais
+    return sorted({c["tipo"] for c in listar_canais(loja_id) if c["tipo"] in CANAIS_REAIS and c["ativo"]})
 
 
 def gerar_senha() -> str:
@@ -41,6 +52,9 @@ def criar_usuarios(loja_id: int) -> list[dict]:
     from app.autenticacao import criar_usuario_com_login
     from banco import conectar
 
+    ligados = canais_reais_ligados(loja_id)
+    if ligados:
+        raise LojaComCanalReal(f"a loja {loja_id} tem canal real ligado ({', '.join(ligados)})")
     saida = []
     with como(ATOR, "operador", "painel"):
         for papel, nome in PAPEIS:
@@ -84,7 +98,13 @@ def main(argv=None) -> int:
         print(f"A loja {loja_id} não existe.")
         return 1
     print(f"Loja {loja_id}: {loja.nome}")
-    for p in criar_usuarios(loja_id):
+    try:
+        feitos = criar_usuarios(loja_id)
+    except LojaComCanalReal:
+        print("Esta loja tem WhatsApp, Telegram ou Instagram ligado. Pessoas de teste só na loja de "
+              "demonstração ou numa loja fictícia sem canal real. Nada foi criado.")
+        return 1
+    for p in feitos:
         situacao = f"senha: {p['senha']}" if p["senha"] else "já existia (senha não mudou)"
         print(f"  {p['nome']:<14} {p['email']:<32} {situacao}")
     print("Anote as senhas agora: elas não ficam gravadas em lugar nenhum.")

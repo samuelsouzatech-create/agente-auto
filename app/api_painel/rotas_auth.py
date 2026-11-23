@@ -52,10 +52,14 @@ def _pessoa(usuario_id):
 
 
 @router.post("/login")
-def login(entrada: LoginEntrada, resposta: Response):
+def login(entrada: LoginEntrada, resposta: Response, request: Request):
     email = entrada.email.strip().lower()[:MAX_EMAIL]
+    origem = _origem(request)
+    if autenticacao.origem_bloqueada(origem):        # revisão geral #5: limite por origem
+        raise ErroApi("muitas_tentativas")
     achado = autenticacao.autenticar(email, entrada.senha)
     if achado is None:
+        autenticacao.anotar_login_errado_da_origem(origem)
         if autenticacao.bloqueado_por_tentativas(email):
             raise ErroApi("muitas_tentativas")
         raise ErroApi("credenciais_invalidas")

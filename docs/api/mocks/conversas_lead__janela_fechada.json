@@ -30,6 +30,22 @@
       "quando": {
         "iso": "2026-11-03T16:12:00-03:00",
         "texto": "ter 16:12"
+      },
+      "automatica": null
+    },
+    {
+      "id": 78,
+      "de": "leo",
+      "autor": null,
+      "tipo": "texto",
+      "texto": "Oi, Carlos! O Corolla XEi 2019 que você viu continua aqui. Quer marcar uma visita?",
+      "canal": "whatsapp",
+      "quando": {
+        "iso": "2026-11-03T16:12:00-03:00",
+        "texto": "ter 16:12"
+      },
+      "automatica": {
+        "tipo_rotulo": "Retomada"
       }
     }
   ],
