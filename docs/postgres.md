@@ -7,8 +7,8 @@ Quatro blocos em cadeia: PG0 → PG1 → PG2 → PG3. Branches `postgres-p0` (sa
 |-------|--------|----------|--------|--------|
 | PG0 documentos e E2-1 | postgres-p0 | feito | cd84e11 + diário | suíte 2.928 ok |
 | PG1 banco PostgreSQL | postgres-p1 | feito | 994c680 | suíte 2.962 ok no PostgreSQL |
-| PG2 memória e importação | postgres-p2 | feito | (ver abaixo) | suíte 2.977 ok no PostgreSQL |
-| PG3 teste de carga | postgres-p3 | a fazer | | |
+| PG2 memória e importação | postgres-p2 | feito | dcff02f | suíte 2.977 ok no PostgreSQL |
+| PG3 teste de carga | postgres-p3 | feito | (último commit da branch) | suíte 2.982 ok; carga 10 lojas: 0 perdidas, 0 cruzadas |
 
 ## PG0 — Conferência e documentos
 
@@ -240,3 +240,98 @@ nada, rodar de novo, mesmas tabelas e colunas) está em `tests/test_pg1_banco.py
   depois).
 - A `venv/` que roda o Léo de verdade ainda não tem os pacotes novos:
   `venv\Scripts\pip install -r requirements.txt` antes de ligar o Léo.
+
+## PG3 — Aguenta 10 lojas? (branch postgres-p3, saiu da postgres-p2)
+
+### Como rodar o teste de carga
+Fora da suíte rápida (marcador `carga`; o `pytest.ini` agora tira `api` e `carga` da suíte
+normal). Precisa do banco e do Redis ligados:
+```powershell
+docker compose up -d
+docker start redis-leo
+.venv-teste\Scripts\python -m pytest -m carga tests/test_pg3_carga.py -s
+```
+O resultado sai na tela e num arquivo em `logs/carga/` (fora do Git). Dá para mudar o tamanho com
+`CARGA_LOJAS` e `CARGA_LEADS` (padrão 10 e 10).
+
+### O que o teste faz
+- 10 lojas fictícias no banco de TESTE, cada uma com o próprio número de WhatsApp, no ar.
+- 10 clientes por loja (100). Cada um manda uma rajada de 3 mensagens seguidas e, enquanto o
+  Léo ainda responde, mais 2: **500 mensagens**, chegando ao mesmo tempo.
+- Todas passam pelo **mesmo caminho de verdade**: POST no webhook com assinatura → Redis
+  (duplicata, debounce, trava por lead) → `executar_turno` (guardas, banco, memória das conversas
+  no PostgreSQL) → envio. A IA é trocada por uma resposta falsa (0,1 a 0,3 s) que diz para qual
+  loja e cliente está respondendo. Nada sai para a Meta (o envio vai para uma lista).
+- Confere: toda mensagem do cliente gravada na loja e no cliente certos (perdidas), toda resposta
+  gravada e enviada para quem era (cruzadas), todo cliente respondido, erros.
+- Debounce do teste: 1,5 s (o de verdade é 8 s; só muda o tempo de espera).
+
+### Defeitos achados e consertados (com teste)
+1. **Redis recusando conexões (grave).** Primeira rodada: 327 erros "MaxConnectionsError", **325
+   mensagens perdidas** e 30 clientes sem resposta. A biblioteca do Redis (8.1) abre no máximo 100
+   conexões e, cheia, dá erro na hora. Conserto (`app/redis_cliente.py`): pool que **espera** uma
+   conexão livre (`REDIS_MAX_CONEXOES`, padrão 200; `REDIS_ESPERA_S`, padrão 20 s).
+2. **Mensagem perdida no fim da rajada (grave).** Segunda rodada: 0 erros, mas **13 mensagens
+   perdidas**, sempre a última da 2ª rajada. O "dono" da rajada lia o buffer, apagava o buffer e
+   apagava a hora em passos separados; sob carga, a mensagem seguinte chegava no meio, gravava a
+   hora dela, e o dono apagava essa hora: a mensagem nova "achava" que não era a vez dela e ficava
+   esquecida no Redis. Conserto (`app/redis_debounce.py`): ler e esvaziar o buffer numa
+   transação do Redis (nada entra no meio) e não apagar mais a hora (ela expira sozinha).
+3. **Turno com mensagem vazia.** Quando o buffer voltava vazio, o Léo rodava um turno com texto
+   vazio (apareceu como "mensagem vazia gravada"). Conserto: buffer vazio não vira turno.
+- `tests/test_pg3_consertos.py` (5, na suíte normal, offline): o Redis espera conexão livre e
+  não perde pedido com o pool cheio; buffer vazio não vira turno; buffer com texto continua igual;
+  a mensagem que chega quando o dono termina não se perde.
+
+### Números (10 lojas, 100 clientes, 500 mensagens; 3 rodadas depois dos consertos)
+| | rodada 1 | rodada 2 | rodada 3 |
+|---|---|---|---|
+| Mensagens perdidas | **0** | **0** | **0** |
+| Respostas cruzadas (loja ou cliente) | **0** | **0** | **0** |
+| Clientes sem resposta | 0 | 0 | 0 |
+| Erros (banco, Redis ou outros) | 0 | 0 | 0 |
+| Turnos do Léo / respostas enviadas (cada rajada pode virar 1 ou 2 turnos) | 116 / 116 | 111 / 111 | 109 / 109 |
+| Duração total | 15,8 s | 15,0 s | 14,9 s |
+| Tempo do turno: médio / pior | 1,86 s / 3,13 s | 2,27 s / 3,59 s | 2,11 s / 3,10 s |
+| Da última mensagem do cliente até a resposta: média / pior (com 1,5 s de debounce e a fila da trava) | 7,8 s / 10,4 s | 7,5 s / 9,6 s | 7,1 s / 9,8 s |
+| Conexões do pool: máximo / pico usado / pedidos esperando | 10 / 2 / 0 | 10 / 2 / 0 | 10 / 2 / 0 |
+| Conexões no PostgreSQL no pico (com as da memória e as do teste) | 5 | 4 | 4 |
+| Memória do processo antes → depois | 160 → 189 MB | 160 → 190 MB | 160 → 189 MB |
+Antes dos consertos (rodada 1): 325 perdidas, 327 erros, 30 sem resposta; (rodada 2): 13 perdidas.
+
+### Pendência (para o analista decidir)
+- **Turno fica lento com muitas lojas ao mesmo tempo (gravidade MÉDIA).** Com 4 clientes o turno
+  leva 0,35 s; com 100 clientes, cerca de 2 s (com a IA falsa de 0,1 a 0,3 s). O pool do banco nunca
+  passou de 2 conexões: o acesso ao banco dentro do turno é síncrono e roda dentro do laço
+  assíncrono do servidor, então os turnos andam praticamente um de cada vez. Nada se perde nem se
+  cruza, mas o tempo de resposta cresce com o número de lojas. Conserto provável: rodar a parte do
+  turno que usa o banco numa thread (como já é feito com a IA) ou usar o banco assíncrono. Bloco
+  próprio, com teste de carga antes e depois. Não fiz agora porque mexe no coração do turno.
+- **Memória do processo**: subiu ~30 MB com 100 conversas (cache das lojas, grafo, conexões).
+  Não parece vazamento (as três rodadas pararam em ~189 MB), mas vale medir no servidor.
+- **Cuidado de segurança visto no caminho:** o container `redis-leo` (antigo, não é do compose)
+  está aberto em `0.0.0.0:6379`, ou seja, para a rede toda, sem senha. No Docker do próximo bloco,
+  o Redis deve ficar só em 127.0.0.1 (como o banco). Não mexi nele.
+
+### Testes do PG3
+- Suíte inteira contra o PostgreSQL (3 partes): 851 + 1.137 + 994 = **2.982 passaram, 0 falhas**
+  (2.977 do PG2 + 5 dos consertos). O teste de carga fica fora dela (marcador `carga`).
+
+## Resumo da Maratona Postgres (para o Samuel)
+- **Branches, sem merge:** `postgres-p0` (cd84e11 + 8079bbf; suíte 2.928) → `postgres-p1`
+  (994c680; suíte 2.962 no PostgreSQL) → `postgres-p2` (dcff02f; 2.977) → `postgres-p3` (2.982).
+- **O que mudou:** o banco agora é PostgreSQL 17 no Docker, com uma camada de conexão só; a
+  memória das conversas também está no banco (continua depois de reiniciar); o `loja.db` antigo é
+  copiado por `scripts/importar_sqlite.py` (conferido nas 40 tabelas); a demo abre no painel;
+  E2-1 (limite diário da reativação) construído; 10 lojas ao mesmo tempo sem perder nem cruzar
+  mensagem, depois de 2 consertos no Redis.
+- **Antes de ligar o Léo de verdade:** `docker compose up -d` e
+  `venv\Scripts\pip install -r requirements.txt` (pacotes novos: psycopg, pool e a memória do
+  LangGraph). O `.env` ganhou `POSTGRES_SENHA`, `BANCO_PORTA` (5433 neste PC) e `BANCO_URL`.
+- **Falhou ou ficou de fora:** rodei o `criar_loja_demo` sem `--sem-indexar` e ele tentou usar o
+  Gemini (falhou; custo provável zero); a lentidão do turno com muitas lojas ficou como pendência;
+  o resto da aplicação no Docker é o próximo bloco.
+- **Decisões para o analista:** datas continuam texto; sem chaves estrangeiras; tradução
+  automática do SQL na camada; tabelas da memória fora da nossa numeração; número final do limite
+  diário (A8); como resolver a lentidão do turno; Redis do próximo bloco só em 127.0.0.1;
+  "a 22 já foi usada" no texto das decisões não confere (a próxima livre é a 22).

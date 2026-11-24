@@ -266,3 +266,6 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   seguem texto UTC e sem chaves estrangeiras (como no SQLite); a tranca por loja fica para Segurança.
 - 24/11/2026, PG2: memória das conversas no PostgreSQL (PostgresSaver, limite do L12 mantido);
   importação do loja.db conferida (40 tabelas). Chroma segue como está. Nenhuma decisão mudou.
+- 24/11/2026, PG3: 10 lojas ao mesmo tempo sem perder nem cruzar mensagem (depois de 2 consertos
+  no Redis). Nova pendência para decidir: o turno fica lento com muitas lojas (acesso ao banco
+  síncrono). Pedido para o bloco Docker: Redis só em 127.0.0.1.
