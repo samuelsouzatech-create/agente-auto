@@ -274,3 +274,7 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
 - 24/11/2026, DK1: tudo sobe com `docker compose up -d` (Caddy na frente; só a porta dele aberta,
   em 127.0.0.1 no PC; Redis com senha e só em 127.0.0.1, como pedido no PG3). Nenhuma decisão mudou.
   Operador e simulador (sem login) ficam sempre só no computador (no servidor: túnel SSH).
+- 24/11/2026, DK2: o Streamlit do cliente **não** foi aposentado: o painel novo não tem
+  Configuração, Conhecimento nem Usuários (existem no operador). Decidir se o operador cobre isso no
+  piloto (o plano mestre aceita "no painel novo ou no operador"). A suíte passou a usar a gaveta 15
+  do Redis (não suja mais o Redis de uso).

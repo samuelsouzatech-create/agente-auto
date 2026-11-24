@@ -11,7 +11,7 @@ dados fictícios. `.env`, senhas e tokens nunca aparecem aqui nem no Git.
 |-------|--------|----------|--------|
 | DK0 mapa das peças | docker-d0 | feito | suíte 2.982 ok (851 + 1.137 + 994) |
 | DK1 tudo sobe com um comando | docker-d1 | feito | suíte 3.002 ok; demo pelo HTTPS local 10/10 |
-| DK2 aposentar o Streamlit do cliente | docker-d2 | | |
+| DK2 aposentar o Streamlit do cliente | docker-d2 | **não apagado**: faltam 3 telas no painel novo (lista no DK2); conserto do Redis nos testes | suíte 3.006 ok (783 + 1.229 + 994) |
 | DK3 turno lento com muitas lojas | docker-d3 | | |
 
 ## DK0 — Mapa das peças (como roda hoje, antes do Docker)
@@ -189,3 +189,63 @@ docker rm redis-leo
   vezes seguidas sozinho e a parte 3 inteira passou de novo (994). É um teste **instável que já
   existia** (depende das estatísticas do banco no momento); não tem relação com o Docker. Não
   mexi nele (fora do escopo): fica para o analista.
+
+## DK2 — Aposentar o painel Streamlit do cliente (branch docker-d2, saiu da docker-d1)
+
+**Resultado: NÃO apaguei.** Faltam coisas no `leo-painel-web` (lista abaixo). Como o pedido
+manda, o item parou aqui e a maratona seguiu para o DK3. O painel do operador não foi tocado.
+O `painel.py` também **não entrou no Docker** (o compose do DK1 não tem serviço para ele): quem
+precisar dele roda como antes, fora do Docker (`$env:LOJA_ID="N"` e
+`streamlit run painel.py --server.port 8503`).
+
+### Conferência tela por tela (painel Streamlit do cliente × leo-painel-web)
+| Tela do Streamlit (`paginas/`) | O que faz | No leo-painel-web? |
+|---|---|---|
+| Fila de handoff (`handoff.py`) | quem espera vendedor, cores por tempo, Assumir, Devolver ao Léo | **sim**: Atender (esperando / com vendedor, assumir, devolver) |
+| Conversas (`conversas.py`) | ler a conversa, assumir a qualquer momento, responder, devolver, Reativar contato, Registrar venda | **sim**: conversa, responder, devolver, reativar contato, registrar venda (rotas `/conversas/...`) |
+| Resultados (`resultados.py`) | lista de leads com o resultado (compareceu, comprou, perdeu), "esconder os que já têm resultado" | **quase**: Leads mostra a etapa (venda registrada, não seguiu...) e Resultado traz os números. Não existem "compareceu" nem "perdeu" como etapa, nem o filtro "esconder". Desde o P2 o resultado só é gravado pelo Registrar venda, então isso parece não fazer falta; **o analista confirma**. |
+| Retomadas e pós-venda (`envios.py`) | modo, uso do mês, pausar/retomar, fila, histórico, "não enviar"/"não procurar mais"/desfazer, resultado do mês, **quem pausou e retomou (histórico)** | **quase tudo**: Acompanhamento tem modo, pausa, uso, próximos, histórico, bloqueios e resultado do mês. **Falta o histórico de quem pausou e retomou** (a API só mostra a pausa atual). |
+| Estoque (`estoque.py`) | cadastrar, editar, status, fotos, mostrar vendidos | **sim**: Estoque (cadastrar, editar, fotos do depósito) |
+| **Configuração (`configuracao.py`)** | os campos de configuração que são do CLIENTE (versão, "a confirmar", histórico de mudanças) | **NÃO EXISTE** (nem tela nem rota na API) |
+| **Conhecimento (`conhecimento.py`)** | escrever, editar e apagar os documentos que o Léo consulta (financiamento, troca, garantia, test-drive) | **NÃO EXISTE** (nem tela nem rota na API) |
+| **Usuários (`usuarios.py`)** | cadastrar, editar e desativar vendedores e gestores, com o número do chat do Telegram (quem recebe o aviso) | **NÃO EXISTE** (nem tela nem rota na API) |
+
+### O que falta para aposentar (para o analista decidir)
+1. **Configuração da loja pelo dono** (campos do cliente): tela + rotas novas na API (contrato
+   cresce; mocks).
+2. **Conhecimento** (documentos do Léo): tela + rotas. Cuidado: salvar reindexa a base, o que
+   usa o Gemini (embeddings).
+3. **Usuários** (equipe e Telegram de cada um): tela + rotas. Mexe com login e permissões (só
+   dono? gerente?).
+4. Histórico de "quem pausou e retomou" no Acompanhamento (campo novo opcional).
+5. Confirmar que "compareceu"/"perdeu" e o filtro "esconder com resultado" podem sair.
+
+**Nota:** o plano mestre (critério do painel novo, linha ~935) diz "tudo o que o Streamlit do
+cliente faz continua possível **(no painel novo ou no operador)**". Os itens 1, 2 e 3 existem no
+**painel do operador** (Configuração da loja, Conhecimento e Equipe). Pelo plano mestre, então,
+daria para aposentar **se** o combinado for que o Samuel (operador) faz isso pelas lojas. O
+pedido desta maratona foi mais estrito ("existe no leo-painel-web"), por isso não apaguei.
+**Pergunta para o Samuel/analista:** o lojista precisa mexer sozinho em configuração,
+conhecimento e equipe, ou o operador faz por ele no piloto?
+
+### Problema achado: a suíte sujava o Redis de verdade (consertado nesta branch)
+- Na suíte do DK2, `test_m3_n3_servidor.py::test_webhook_anota_antes_de_responder_200` falhou
+  sempre. Causa: desde o DK1 o Redis do compose fica **sempre ligado**, e a suíte gravava na
+  gaveta de uso dele (duplicatas, rajadas, travas: **1.701 chaves** de teste). A rodada do DK1
+  deixou "a mensagem wamid.n3 já foi vista", e na rodada seguinte o webhook a tratou como
+  repetida. Antes do Docker isso não aparecia porque o `redis-leo` vivia desligado e o código
+  caía no caminho "sem Redis".
+- 1ª tentativa: apontar a suíte para um Redis desligado. Isolou, mas cada tentativa de conexão
+  recusada leva ~2 s no Windows e a parte 2 da suíte levou **68 minutos** (era 7).
+- **Conserto (`tests/conftest.py`)**: a suíte usa a **gaveta 15** do mesmo Redis (o Léo usa a
+  0), esvaziada no começo de cada rodada, como o banco `_teste` do PostgreSQL. `REDIS_URL_TESTE`
+  troca o endereço, se precisar. O conftest recusa rodar se a gaveta de teste for a de uso. Só o
+  teste de carga (`-m carga`) usa o `REDIS_URL` de uso. Conferido: depois da suíte, a gaveta 0
+  ficou com **0 chaves**; duas rodadas seguidas passam.
+- As 1.701 chaves de teste que tinham ficado no Redis local (criado no DK1, só com dados
+  passageiros) foram apagadas (`FLUSHALL`).
+- `tests/test_dk2_redis_de_teste.py` (novo): a suíte usa a gaveta de teste; o endereço troca só
+  a gaveta; só o teste de carga usa a de uso; recusa testar na gaveta de uso.
+
+### Testes do DK2
+- Suíte inteira nesta branch: ver a tabela do começo.
