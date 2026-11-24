@@ -96,20 +96,14 @@ def precos_da_conversa(historico) -> set:
 
 
 def precos_do_estoque(loja_id, dados) -> set:
-    """Preço do carro de interesse e da alternativa, como está no estoque DESTA loja."""
+    """Preço do item de interesse e da alternativa, como está no CATÁLOGO desta loja (SG2: o
+    catálogo do ramo; para carro, o estoque, com a mesma consulta de antes)."""
+    from app.catalogo import catalogo_da_loja
     ids = [i for i in (dados.get("veiculo_id"), dados.get("alternativa_id")) if i]
     if not ids:
         return set()
     loja_id = exigir_loja(loja_id)
-    marcas = ",".join("?" * len(ids))
-    conexao = conectar()
-    try:
-        linhas = conexao.execute(
-            f"SELECT preco FROM estoque WHERE loja_id = ? AND id IN ({marcas})",
-            (loja_id, *ids)).fetchall()
-    finally:
-        conexao.close()
-    return {int(round(float(l["preco"]) * 100)) for l in linhas if l["preco"] is not None}
+    return catalogo_da_loja(loja_id).precos(loja_id, ids)
 
 
 # L10: os toques têm de ser diferentes de verdade (abertura e semelhança).

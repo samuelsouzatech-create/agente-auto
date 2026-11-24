@@ -1,0 +1,5 @@
+[
+  {"id": 101, "nome": "Apartamento 2 quartos em Boa Viagem", "bairro": "Boa Viagem", "quartos": 2, "preco": 420000, "situacao": "disponivel"},
+  {"id": 102, "nome": "Casa 3 quartos em Casa Forte", "bairro": "Casa Forte", "quartos": 3, "preco": 780000, "situacao": "disponivel"},
+  {"id": 103, "nome": "Studio no Recife Antigo", "bairro": "Recife Antigo", "quartos": 1, "preco": 260000, "situacao": "vendido"}
+]

@@ -70,3 +70,23 @@ não faz nada (é o padrão neutro).
 ## O que ainda é de carro no motor
 A lista LEGADO de `tests/test_catraca_ramo.py` diz arquivo por arquivo, com o porquê. O diário do
 SG1 (`docs/maratona4.md`) traz o mapa completo, inclusive o que a catraca não olha.
+
+## Catálogo (SG2)
+O motor pergunta ao catálogo do ramo (`app/catalogo.py`: `catalogo_da_loja(loja_id)`), nunca à
+tabela de um ramo. O ramo entrega `segmentos/<ramo>/catalogo.py` com a constante `CATALOGO`:
+
+| Método | Devolve | Quem usa no motor |
+|---|---|---|
+| `buscar(loja_id, *, item_id=0, marca="", modelo="", texto="", so_com_fotos=False, so_disponiveis=True)` | lista de `Item` | `tools/enviar_fotos.py` |
+| `detalhar(loja_id, item_id)` | `Item` ou `None` (qualquer situação) | remarketing (item de interesse) |
+| `disponivel(loja_id, item_id)` | sim/não | — (IG2) |
+| `fotos(loja_id, item)` | referências do depósito | `tools/enviar_fotos.py` |
+| `parecido(loja_id, item)` | `Item` ou `None` | remarketing (vendido → parecido) |
+| `precos(loja_id, ids)` | preços em centavos | filtro de preço do remarketing |
+| `citados_no_texto(loja_id, texto)` | itens cujo nome aparece no texto (inclusive vendidos) | IG2 (legenda do post) |
+
+`Item`: `id`, `nome` (como o cliente lê), `disponivel`, `preco`, `detalhe`, `fotos_ref`,
+`situacao`, `dados` (o resto, do jeito do ramo). Ramo sem catálogo: `CATALOGO_VAZIO` (não acha nada).
+Veículos: o catálogo é o estoque, com as MESMAS consultas que o motor fazia; a tabela estoque, a
+API `/estoque` e o painel não mudaram. A venda continua apontando para o carro (`vendas.veiculo_id`),
+sem migração.

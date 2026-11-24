@@ -287,45 +287,33 @@ def _nome_do_carro(linha) -> str:
     return f'{linha["marca"]} {linha["modelo"]} {linha["ano"]}'
 
 
-def _alternativa(conexao, loja_id: int, carro) -> dict | None:
-    """Carro disponível parecido com o vendido: mesma loja, preço até 20% de
-    diferença; mesmo modelo primeiro, depois mesma marca, depois o preço mais perto."""
-    if carro is None or carro["preco"] is None:
-        return None
-    preco = float(carro["preco"])
-    linha = conexao.execute(
-        "SELECT id, marca, modelo, ano FROM estoque "
-        "WHERE loja_id = ? AND status = 'disponivel' AND id != ? AND preco BETWEEN ? AND ? "
-        "ORDER BY (modelo = ?) DESC, (marca = ?) DESC, ABS(preco - ?) LIMIT 1",
-        (loja_id, carro["id"], preco * (1 - FAIXA_PRECO_ALTERNATIVA),
-         preco * (1 + FAIXA_PRECO_ALTERNATIVA), carro["modelo"], carro["marca"], preco),
-    ).fetchone()
-    return dict(linha) if linha else None
-
-
 def _dados_do_lead(loja_id: int, lead_id: str) -> dict:
+    """SG2: o item de interesse e o parecido vêm do CATÁLOGO do ramo (para carro, o estoque, com
+    as mesmas consultas e a mesma regra do parecido: preço até 20%, mesmo modelo, mesma marca)."""
+    from app.catalogo import catalogo_da_loja
+    catalogo = catalogo_da_loja(loja_id)
     conexao = conectar()
     try:
         lead = conexao.execute(
             "SELECT nome, interesse FROM leads WHERE loja_id = ? AND lead_id = ?",
             (loja_id, lead_id)).fetchone()
-        carro = conexao.execute(
-            "SELECT e.id, e.marca, e.modelo, e.ano, e.preco, e.status FROM interesse_veiculo i "
-            "JOIN estoque e ON e.id = i.veiculo_id AND e.loja_id = i.loja_id "
-            "WHERE i.loja_id = ? AND i.lead_id = ?", (loja_id, lead_id)).fetchone()
-        vendido = bool(carro) and carro["status"] != "disponivel"
-        alternativa = _alternativa(conexao, loja_id, carro) if vendido else None
+        interesse = conexao.execute(
+            "SELECT veiculo_id FROM interesse_veiculo WHERE loja_id = ? AND lead_id = ?",
+            (loja_id, lead_id)).fetchone()
     finally:
         conexao.close()
+    carro = catalogo.detalhar(loja_id, interesse["veiculo_id"]) if interesse else None
+    vendido = bool(carro) and carro.situacao != "disponivel"
+    alternativa = catalogo.parecido(loja_id, carro) if vendido else None
     return {
         "nome": (lead["nome"] or "").strip() if lead else "",
         "interesse": (lead["interesse"] or "").strip() if lead else "",
-        "veiculo_id": carro["id"] if carro else None,
-        "carro": _nome_do_carro(carro) if carro else "",
+        "veiculo_id": carro.id if carro else None,
+        "carro": carro.nome if carro else "",
         "carro_disponivel": bool(carro) and not vendido,
         "carro_vendido": vendido,
-        "alternativa": _nome_do_carro(alternativa) if alternativa else "",
-        "alternativa_id": alternativa["id"] if alternativa else None,
+        "alternativa": alternativa.nome if alternativa else "",
+        "alternativa_id": alternativa.id if alternativa else None,
     }
 
 

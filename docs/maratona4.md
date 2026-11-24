@@ -195,3 +195,50 @@ regras do motor; o motor não tem mais as guardas de carro; o contrato está esc
 catraca pega o que deve.
 - Suíte inteira contra o PostgreSQL, 3 partes: 802 + 1.242 + 976 = **3.020 passaram, 0 falhas**
   (3.002 do AR + 18 novos).
+
+## SG2 — Catálogo e um ramo de teste (branch segmentos-2, saiu da segmentos-1)
+
+### 1. Catálogo
+- `app/catalogo.py` (motor): a interface (`buscar`, `detalhar`, `disponivel`, `fotos`, `parecido`,
+  `precos`, `citados_no_texto`), o `Item` e o `catalogo_da_loja(loja_id)` (pelo gancho do ramo).
+  Tabela no `docs/pacote_de_ramo.md`.
+- `segmentos/veiculos/catalogo.py`: o estoque, **com as mesmas consultas** que o motor fazia direto.
+  A tabela `estoque`, a API `/estoque` e o contrato do painel **não mudaram**.
+- Passaram a falar com o catálogo: `tools/enviar_fotos.py` (busca e fotos), o filtro de preço do
+  remarketing (`app/filtro_remarketing.py`, preço do item de interesse e do parecido) e o
+  remarketing (`app/jobs/remarketing.py`: item de interesse e o parecido do vendido, mesma regra
+  dos 20%). Nenhum desses três tem mais `FROM estoque` (teste confere).
+- **Continuam lendo o estoque direto (anotado, não mudei):** `app/vendas.py` (o único caminho de
+  venda lê o carro e marca "vendido" na MESMA transação; passar pelo catálogo quebraria essa
+  transação), `app/implantacao.py` (checklist do operador: conta carros), `app/painel_leitura.py`
+  e `app/reativacao.py` (o que o painel/relatório mostra da venda), `app/estoque*.py`, `app/demo.py`
+  e a API do painel (contrato v1). Ficam para quando o estoque virar catálogo também na API.
+
+### 2. A venda continua apontando para o carro
+Sem migração: `vendas.veiculo_id` e `interesse_veiculo.veiculo_id` continuam como estão; o motor,
+quando precisa do item, pergunta ao catálogo pelo id. A migração 22 não foi usada.
+
+### 3. Ramo de teste fictício: `segmentos/_exemplo_imoveis/`
+- `prompt.md` curto (imobiliária), `imoveis.json` (3 imóveis: 2 disponíveis, 1 vendido),
+  `catalogo.py` (lê o JSON), `ferramentas.py` (`consultar_imoveis`) e **1 guarda própria**
+  (`guardas.py`: "documentação ok", "sem infiltração", "escritura garantida" viram "A documentação
+  e o estado do imóvel o corretor confirma com você.", pelo gancho `cortar_estado_inventado`).
+- **Escondido:** a pasta começa com `_`. `app/segmentos.py` só enxerga ramo oculto com
+  `RAMOS_OCULTOS_LIGADOS = True`, que só os testes ligam. `criar_loja(..., segmento="_exemplo_imoveis")`
+  é recusado fora dos testes (teste confere). Não vira produto.
+
+### 4. Testes do SG2 (`tests/test_sg2_catalogo_e_ramo_de_teste.py`, 14)
+- O ramo de teste não é opção para loja real; só com a chave dos testes; o operador não o lista.
+- Catálogo de carro = estoque e não mistura lojas; parecido e preços; itens citados num texto;
+  ramo sem catálogo usa o vazio; a ferramenta de fotos pergunta ao catálogo (espião); ferramentas e
+  guardas do motor sem `FROM estoque`.
+- Loja do ramo de teste, pelo `executar_turno` com IA falsa e o grafo de verdade: **busca no
+  catálogo** (`consultar_imoveis`; o prompt é da imobiliária e não tem `consultar_estoque`),
+  **abre chamado ao humano** (handoff `aguardando_humano`), **guarda própria** troca a frase, **faz
+  retomada** (o remarketing de verdade, envio falso; a próxima mensagem do cliente chega ao Léo com
+  "RETOMADA QUE VOCÊ MANDOU" no prompt).
+- **Nada de `segmentos/veiculos` é carregado:** um processo Python NOVO cria a loja de imóveis,
+  roda 2 turnos (catálogo, guarda, chamado) e, no fim, a lista de módulos carregados com
+  "veiculos" no nome está **vazia**.
+- **Duas lojas de ramos diferentes ao mesmo tempo** (4 turnos juntos, 2 de cada): cada uma usa a
+  sua ferramenta e o seu catálogo; nenhuma resposta nem mensagem cruza de loja.
