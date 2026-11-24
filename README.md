@@ -72,6 +72,12 @@ Agente de atendimento e qualificação de leads para lojas de veículos, constru
    python ingestao_rag.py
    ```
 
+## Docker (jeito normal de rodar, desde a Maratona Docker)
+
+`docker compose up -d` liga tudo (banco, Redis, webhook, API do painel, relógio, operador, tela
+nova e o porteiro HTTPS). Endereços, demo e problemas comuns: `docs/demo.md`. Detalhes: `docs/docker.md`.
+Os comandos abaixo continuam valendo para rodar uma peça fora do Docker.
+
 ## Painéis (só local, sem login)
 
 | Painel | Comando | Porta |

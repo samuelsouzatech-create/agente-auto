@@ -271,3 +271,6 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   síncrono). Pedido para o bloco Docker: Redis só em 127.0.0.1.
 - 24/11/2026, DK0 (Maratona Docker): mapa das peças em `docs/docker.md`. Nada mudou. Vistos: portas
   desencontradas na documentação (operador 8501 × 8502) e o webhook sem comando escrito.
+- 24/11/2026, DK1: tudo sobe com `docker compose up -d` (Caddy na frente; só a porta dele aberta,
+  em 127.0.0.1 no PC; Redis com senha e só em 127.0.0.1, como pedido no PG3). Nenhuma decisão mudou.
+  Operador e simulador (sem login) ficam sempre só no computador (no servidor: túnel SSH).

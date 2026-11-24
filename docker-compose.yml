@@ -1,12 +1,51 @@
-# Maratona Postgres (PG1): por enquanto só o banco. A aplicação entra no próximo bloco (Docker).
-# Subir:   docker compose up -d
-# Parar:   docker compose stop        (os dados ficam no volume "leo_banco")
-# A senha vem do .env (POSTGRES_SENHA); nunca escreva a senha aqui.
-# A porta fica só em 127.0.0.1 (nada de fora do computador entra). Padrão 5432; quem já usa a
-# 5432 põe BANCO_PORTA=5433 no .env.
+# Léo inteiro no Docker (Maratona Docker, DK1). Diário: docs/docker.md.
+#
+#   Subir tudo:      docker compose up -d          (a 1ª vez demora: monta as imagens)
+#   Ver a saúde:     docker compose ps             (todas "healthy")
+#   Parar:           docker compose stop           (os dados ficam nos volumes)
+#   Depois de mudar o código ou a tela:  docker compose up -d --build
+#
+# Senhas só no .env (POSTGRES_SENHA, REDIS_SENHA); nunca aqui.
+# Porta aberta: só a do porteiro (Caddy, HTTPS). No computador ela fica em 127.0.0.1;
+# no servidor, PORTEIRO_IP=0.0.0.0 e LEO_DOMINIO=<domínio real> no .env.
+# Banco e Redis: porta só em 127.0.0.1 (para os testes e scripts deste computador), nunca na rede.
+# As peças internas (webhook, API, relógio, operador, simulador) não publicam porta nenhuma.
+#
+# Perfis (COMPOSE_PROFILES no .env): "demo" liga o simulador (usa a IA de verdade);
+# "telegram" liga o bot do Telegram (canal real). Sem perfil, nenhum dos dois sobe.
+
+x-leo: &leo
+  build:
+    context: .
+  image: leo-app:dk1
+  restart: unless-stopped
+  env_file:
+    - path: ${LEO_ENV_ARQUIVO:-.env}
+      required: true
+  environment: &leo-ambiente
+    BANCO_URL: postgresql://leo:${POSTGRES_SENHA:?coloque POSTGRES_SENHA no .env}@postgres:5432/leo
+    REDIS_URL: redis://:${REDIS_SENHA:?coloque REDIS_SENHA no .env}@redis:6379/0
+    FOTOS_PASTA: /app/fotos_deposito
+    PAINEL_ORIGEM: https://${LEO_DOMINIO:-localhost}
+    PAINEL_URL: https://${LEO_DOMINIO:-localhost}
+    API_PUBLICA_URL: https://${LEO_DOMINIO:-localhost}
+  volumes:
+    - leo_chroma:/app/chroma_db
+    - leo_fotos:/app/fotos_deposito
+    - leo_logs:/app/logs
+  networks:
+    - interna
+  depends_on: &leo-depende
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    migrar:
+      condition: service_completed_successfully
+
 services:
   postgres:
-    image: postgres:17
+    image: postgres:17.12
     restart: unless-stopped
     environment:
       POSTGRES_USER: leo
@@ -16,12 +55,162 @@ services:
       - "127.0.0.1:${BANCO_PORTA:-5432}:5432"
     volumes:
       - leo_banco:/var/lib/postgresql/data
+    networks:
+      - interna
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U leo -d leo"]
       interval: 5s
       timeout: 3s
       retries: 20
 
+  redis:
+    image: redis:7.4.7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_SENHA: ${REDIS_SENHA:?coloque REDIS_SENHA no .env}
+      REDISCLI_AUTH: ${REDIS_SENHA}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_SENHA\" --appendonly yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORTA:-6379}:6379"
+    volumes:
+      - leo_redis:/data
+    networks:
+      - interna
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Cria as tabelas e aplica as migrações (roda uma vez a cada "up" e sai).
+  migrar:
+    <<: *leo
+    restart: "no"
+    command: ["python", "-c", "import banco; banco.criar_tabelas()"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  webhook:
+    <<: *leo
+    command: ["uvicorn", "app.api.webhook:app", "--host", "0.0.0.0", "--port", "8000",
+              "--proxy-headers", "--forwarded-allow-ips", "172.28.0.10"]
+    healthcheck:
+      test: ["CMD", "python", "docker/saude.py", "http", "http://127.0.0.1:8000/"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 60s
+
+  api-painel:
+    <<: *leo
+    command: ["uvicorn", "app.api_painel.main:app", "--host", "0.0.0.0", "--port", "8001",
+              "--proxy-headers", "--forwarded-allow-ips", "172.28.0.10"]
+    healthcheck:
+      test: ["CMD", "python", "docker/saude.py", "http", "http://127.0.0.1:8001/api/v1/saude"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 60s
+
+  relogio:
+    <<: *leo
+    command: ["python", "-m", "app.jobs.runner"]
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD", "python", "docker/saude.py", "relogio"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 90s
+
+  operador:
+    <<: *leo
+    command: ["streamlit", "run", "operador.py", "--server.port", "8502", "--server.address", "0.0.0.0",
+              "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+    healthcheck:
+      test: ["CMD", "python", "docker/saude.py", "http", "http://127.0.0.1:8502/_stcore/health"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 60s
+
+  simulador:
+    <<: *leo
+    profiles: ["demo"]
+    command: ["streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0",
+              "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+    healthcheck:
+      test: ["CMD", "python", "docker/saude.py", "http", "http://127.0.0.1:8501/_stcore/health"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 60s
+
+  telegram:
+    <<: *leo
+    profiles: ["telegram"]
+    command: ["python", "-m", "app.api.telegram_bot"]
+    healthcheck:
+      test: ["CMD", "python", "docker/saude.py", "redis"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 60s
+
+  # Porteiro HTTPS (Caddy) com a tela leo-painel-web já compilada.
+  porteiro:
+    build:
+      context: .
+      dockerfile: docker/porteiro.Dockerfile
+      additional_contexts:
+        tela: ${TELA_PASTA:-../leo-painel-web}
+    image: leo-porteiro:dk1
+    restart: unless-stopped
+    environment:
+      LEO_DOMINIO: ${LEO_DOMINIO:-localhost}
+    ports:
+      - "${PORTEIRO_IP:-127.0.0.1}:${PORTEIRO_PORTA:-443}:443"
+      - "${PORTEIRO_IP:-127.0.0.1}:${PORTEIRO_PORTA_HTTP:-80}:80"
+      - "127.0.0.1:8502:8502"   # operador (sem login): só neste computador
+      - "127.0.0.1:8501:8501"   # simulador (perfil demo): só neste computador
+    volumes:
+      - leo_caddy_dados:/data
+      - leo_caddy_config:/config
+    networks:
+      interna:
+        ipv4_address: 172.28.0.10
+    depends_on:
+      api-painel:
+        condition: service_healthy
+      webhook:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  interna:
+    name: leo_interna
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
 volumes:
   leo_banco:
     name: leo_banco
+  leo_redis:
+    name: leo_redis
+  leo_chroma:
+    name: leo_chroma
+  leo_fotos:
+    name: leo_fotos
+  leo_logs:
+    name: leo_logs
+  leo_caddy_dados:
+    name: leo_caddy_dados
+  leo_caddy_config:
+    name: leo_caddy_config

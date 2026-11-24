@@ -18,6 +18,7 @@ Sem Redis, o runner NÃO liga (--sem-trava existe só para teste local).
 from __future__ import annotations
 
 import argparse
+import signal
 import time
 import traceback
 from datetime import datetime
@@ -51,6 +52,18 @@ def _pegar_trava(intervalo: int):
                       "Ligue o Redis (Docker) ou use --sem-trava só para teste.")
 
 
+def _parar_com_sigterm() -> None:
+    """DK1 (Docker): o Docker para o relógio com SIGTERM, não com Ctrl+C. Sem isto o processo
+    morria sem passar pelo "finally" e a trava ficava no Redis: o relógio novo recusava ligar
+    até a trava vencer. Agora SIGTERM vira Ctrl+C: marca "parado" e solta a trava."""
+    def _ao_receber(_sinal, _quadro):
+        raise KeyboardInterrupt
+    try:
+        signal.signal(signal.SIGTERM, _ao_receber)
+    except ValueError:          # fora da linha principal (alguns testes): nada a fazer
+        pass
+
+
 def _na_vez(ultimo, intervalo) -> bool:
     return ultimo is None or time.monotonic() - ultimo >= intervalo
 
@@ -66,6 +79,7 @@ def main(argv=None) -> int:
     parser.add_argument("--sem-reativacao", action="store_true", help="não roda a reativação")
     args = parser.parse_args(argv)
     intervalo = max(5, args.intervalo)
+    _parar_com_sigterm()
 
     banco.criar_tabelas()
     trava = None
