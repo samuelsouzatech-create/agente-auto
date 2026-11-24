@@ -78,13 +78,18 @@ Agente de atendimento e qualificação de leads para lojas de veículos, constru
 nova e o porteiro HTTPS). Endereços, demo e problemas comuns: `docs/demo.md`. Detalhes: `docs/docker.md`.
 Os comandos abaixo continuam valendo para rodar uma peça fora do Docker.
 
-## Painéis (só local, sem login)
+## Peças fora do Docker (portas iguais às do Docker)
 
-| Painel | Comando | Porta |
+| Peça | Comando | Porta |
 |---|---|---|
-| Operador | `python -m streamlit run operador.py --server.port 8501` | 8501 |
-| Cliente  | `$env:LOJA_ID="1"` e depois `python -m streamlit run painel.py --server.port 8502` | 8502 |
+| Painel do operador (só local, sem login) | `python -m streamlit run operador.py --server.port 8502` | 8502 |
+| Simulador (demo; usa a IA de verdade) | `python -m streamlit run app.py --server.port 8501` | 8501 |
+| Webhook (WhatsApp; recebe as mensagens da Meta) | `python -m uvicorn app.api.webhook:app --host 127.0.0.1 --port 8000` | 8000 |
+| API do painel novo | `python -m uvicorn app.api_painel.main:app --host 127.0.0.1 --port 8001` | 8001 |
 | Relógio (avisos e retomadas) | `python -m app.jobs.runner` (precisa do Redis ligado no Docker) | — |
+
+Atrás de um proxy (como o porteiro do Docker), o webhook e a API recebem também
+`--proxy-headers --forwarded-allow-ips <ip do proxy>` (nunca `*`).
 
 ### Painel do operador (`operador.py`)
 
@@ -93,13 +98,14 @@ Os comandos abaixo continuam valendo para rodar uma peça fora do Docker.
 - Precisa de `OPERADOR_NOME` no `.env`; sem ele, o painel não abre.
 - Listas longas aparecem em páginas de 50, com "Anterior" e "Próxima".
 
-### Painel do cliente (`painel.py`)
+### Painel do cliente
 
-- Mostra só a loja de `LOJA_ID` e recusa abrir sem ela.
-- Tem 8 telas e continua no ar até o painel em React substituí-lo.
-- Campos de plano (módulos, teto de custo, limites) só o operador altera: a regra está no `salvar_config`, não só na tela.
+O lojista usa o painel novo (repositório `leo-painel-web`, com login), servido pelo porteiro
+HTTPS do Docker. O antigo painel Streamlit do cliente (`painel.py`) foi aposentado na Maratona 4
+(bloco AR): pela decisão D11 do plano mestre, no piloto o operador faz Configuração,
+Conhecimento e Equipe pelo lojista, no painel do operador.
 
-Nenhum dos dois painéis pode ir para a internet até existir login.
+O painel do operador não pode ir para a internet: ele não tem login (no servidor, só por túnel SSH).
 
 ## Testes
 

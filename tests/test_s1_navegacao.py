@@ -11,7 +11,7 @@ from streamlit.testing.v1 import AppTest
 
 import paginas.menu as menu
 from paginas.menu import (
-    CLIENTE, GERAL, LOJA, OPERADOR, PAGINA_INICIAL, arquivos,
+    GERAL, LOJA, OPERADOR, PAGINA_INICIAL, arquivos,
 )
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -60,12 +60,12 @@ def test_nova_loja_e_janela_e_nao_pagina_do_menu():
 
 
 def test_menu_novo_nao_repete_tela_antiga():
-    assert not set(TELAS_DO_MENU) & set(arquivos(CLIENTE) + arquivos(OPERADOR))
+    assert not set(TELAS_DO_MENU) & set(arquivos(OPERADOR))
 
 
 def test_enderecos_nao_se_repetem():
     enderecos = [i[3] if len(i) > 3 else Path(i[0]).stem
-                 for grupos in (GERAL, LOJA, OPERADOR, CLIENTE)
+                 for grupos in (GERAL, LOJA, OPERADOR)
                  for itens in grupos.values() for i in itens]
     assert len(enderecos) == len(set(enderecos))
 
@@ -90,12 +90,9 @@ def test_montar_operador_tem_so_geral_e_loja(monkeypatch):
             assert p.opcoes.get("url_path"), p.arquivo
 
 
-def test_montar_do_cliente_continua_igual(monkeypatch):
-    monkeypatch.setattr(menu.st, "Page", PaginaFalsa)
-    paginas = [p for lista in menu.montar(CLIENTE).values() for p in lista]
-    assert [p.arquivo for p in paginas] == arquivos(CLIENTE)
-    assert [p.opcoes["default"] for p in paginas] == [True] + [False] * (len(paginas) - 1)
-    assert all("url_path" not in p.opcoes for p in paginas)
+def test_painel_do_cliente_saiu_do_menu():
+    # AR (Maratona 4): o painel Streamlit do cliente foi aposentado.
+    assert not hasattr(menu, "CLIENTE") and not hasattr(menu, "montar")
 
 
 # ============================================ arquivos
@@ -130,9 +127,9 @@ def test_entrada_do_operador():
     assert fonte.index("definir_ator_da_sessao()") < fonte.index("navegacao.run()")
 
 
-def test_painel_do_cliente_nao_ve_o_painel_novo():
-    fonte = (RAIZ / "painel.py").read_text(encoding="utf-8")
-    assert "montar_operador" not in fonte and "paginas.operador" not in fonte
+def test_painel_do_cliente_aposentado():
+    # AR (Maratona 4): painel.py saiu; o operador continua inteiro.
+    assert not (RAIZ / "painel.py").exists()
 
 
 # ============================================ as telas abrem

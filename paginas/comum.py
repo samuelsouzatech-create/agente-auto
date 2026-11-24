@@ -1,8 +1,9 @@
-"""Peças compartilhadas pelas páginas dos DOIS painéis.
+"""Peças compartilhadas pelas páginas do painel do operador (Streamlit).
 
-Quem decide a loja é a ENTRADA, a cada rerun, antes de a página rodar:
-  painel.py   (cliente)  -> loja fixa, vinda de LOJA_ID. Sem seletor.
+AR (Maratona 4): o painel Streamlit do cliente (painel.py) foi aposentado; o lojista usa o
+painel novo (leo-painel-web). Quem decide a loja é a ENTRADA, a cada rerun, antes da página:
   operador.py (operador) -> seletor de loja (paginas/operador_sessao.py).
+O papel "cliente" continua como o de MENOS poder: sem a marca de operador, a tela para.
 
 P6: a entrada também define QUEM está agindo (definir_ator_da_sessao), a
 cada rerun, antes de a página rodar. As funções de app/ leem o ator.
@@ -33,12 +34,6 @@ def formatar_brl(valor):
 
 
 # ------------------------------------------------------------ sessão
-def iniciar_sessao_cliente(loja_id: int) -> None:
-    """Painel do cliente: papel e loja vêm da ENTRADA (LOJA_ID), nunca da tela."""
-    st.session_state["_papel"] = PAPEL_CLIENTE
-    st.session_state["_loja_cliente"] = int(loja_id)
-
-
 def iniciar_sessao_operador() -> None:
     st.session_state["_papel"] = PAPEL_OPERADOR
 
@@ -52,7 +47,7 @@ def loja_atual() -> int:
     if papel_atual() == PAPEL_CLIENTE:
         loja = st.session_state.get("_loja_cliente")
         if loja is None:
-            st.error("🔒 Loja não definida. Abra pelo painel.py com LOJA_ID.")
+            st.error("🔒 Loja não definida. Abra pelo painel do operador.")
             st.stop()
         return loja
     return st.session_state["loja_id"]
@@ -80,7 +75,7 @@ def usuario_atual() -> str:
 
 def definir_ator_da_sessao() -> None:
     """P6: quem está agindo nesta execução da tela. Chamada pela entrada
-    (operador.py e painel.py) a cada rerun, antes da página, e pelos pedaços
+    (operador.py) a cada rerun, antes da página, e pelos pedaços
     que se atualizam sozinhos (st.fragment)."""
     nome = usuario_atual()
     if papel_atual() == PAPEL_OPERADOR:

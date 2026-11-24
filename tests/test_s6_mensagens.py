@@ -418,8 +418,8 @@ def test_tela_e_dados_nao_falam_com_o_banco_nem_com_os_jobs():
     assert "streamlit" not in dados and "app.jobs" not in dados
 
 
-def test_tela_antiga_continua_e_o_plano_manda_remover_no_s10():
-    from paginas.menu import CLIENTE, arquivos
-    assert "paginas/envios.py" in arquivos(CLIENTE)
+def test_tela_antiga_saiu_e_o_plano_mandava_remover():
+    # AR (Maratona 4): a tela antiga (paginas/envios.py, painel do cliente) saiu.
+    assert not (RAIZ / "paginas" / "envios.py").exists()
     plano = (RAIZ / "docs" / "plano_mestre.md").read_text(encoding="utf-8")
     assert "Obrigatório no S10 (anotado no S6" in plano

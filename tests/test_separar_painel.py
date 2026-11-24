@@ -1,5 +1,7 @@
 """
 Separação do painel: cliente x operador (documento do analista). Duas lojas, sem rede.
+AR (Maratona 4): o painel Streamlit do cliente (painel.py, app/acesso.py e as telas dele) foi
+aposentado. Ficam as regras de app/ (campos do cliente x operador, isolamento por loja).
 Inclui o ponto 9: vendedor assume enquanto a IA pensa.
 """
 import ast
@@ -12,7 +14,6 @@ from langchain_core.messages import AIMessage
 
 import banco
 from app import conhecimento, usuarios
-from app.acesso import PainelSemLoja, loja_do_cliente
 from app.config_tela import CAMPOS, campos_do, grupos_do
 from app.core.turno import executar_turno
 from app.estoque import OPCOES_CAMBIO, OPCOES_STATUS, adicionar_carro, listar_estoque
@@ -23,7 +24,7 @@ from app.lojas import (
 )
 from app.mensagens import historico_do_lead, listar_conversas, listar_leads, salvar_mensagem
 from app.resultados import OPCOES_RESULTADO, registrar_resultado, resultado_do_lead
-from paginas.menu import CLIENTE, OPERADOR, arquivos
+from paginas.menu import OPERADOR, arquivos
 from tools import acionar_handoff
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -94,30 +95,6 @@ def test_tela_do_cliente_nao_tem_campo_do_operador():
     assert "Módulos" in grupos_do("operador")
 
 
-# ============================================ LOJA_ID
-@pytest.mark.parametrize("ambiente", [{}, {"LOJA_ID": ""}, {"LOJA_ID": "abc"},
-                                      {"LOJA_ID": "0"}, {"LOJA_ID": "99"}])
-def test_painel_do_cliente_sem_loja_valida_recusa(ambiente):
-    with pytest.raises(PainelSemLoja):
-        loja_do_cliente(ambiente)
-
-
-def test_loja_desativada_recusa(loja_b):
-    conexao = banco.conectar()
-    conexao.execute("UPDATE lojas SET ativo = 0 WHERE id = ?", (loja_b,))
-    conexao.commit()
-    conexao.close()
-    with pytest.raises(PainelSemLoja):
-        loja_do_cliente({"LOJA_ID": str(loja_b)})
-    assert loja_do_cliente({"LOJA_ID": " 1 "}) == 1
-
-
-def test_entrada_do_cliente_exige_loja_e_nao_tem_seletor():
-    fonte = (RAIZ / "painel.py").read_text(encoding="utf-8")
-    assert "loja_do_cliente()" in fonte and "st.stop()" in fonte
-    assert "escolher_loja" not in fonte and "operador_sessao" not in fonte
-
-
 # ============================================ isolamento de dados
 class IndiceFalso:
     def __init__(self):
@@ -150,7 +127,7 @@ def test_com_loja_id_1_nada_da_loja_2_aparece(loja_b, monkeypatch):
         registrar_resultado(f"so-{sufixo}", OPCOES_RESULTADO[0], motivo="", vendedor="v",
                             loja_id=loja_id)
 
-    loja = loja_do_cliente({"LOJA_ID": "1"})
+    loja = 1
     assert [c["modelo"] for c in listar_estoque(loja_id=loja, incluir_vendidos=True)] == ["CarroUm"]
     assert {c["lead_id"] for c in listar_conversas(loja)} == {"5581", "so-Um"}
     assert {l["lead_id"] for l in listar_leads(loja)} == {"5581", "so-Um"}
@@ -174,8 +151,8 @@ def _imports(caminho: Path) -> set[str]:
     return nomes
 
 
-ARQUIVOS_CLIENTE = ["painel.py", "paginas/comum.py", "paginas/menu.py",
-                    "paginas/form_config.py", *arquivos(CLIENTE)]
+# AR: sobram as peças compartilhadas (elas não podem puxar o operador para dentro).
+ARQUIVOS_CLIENTE = ["paginas/comum.py", "paginas/menu.py", "paginas/form_config.py"]
 
 
 @pytest.mark.parametrize("arquivo", ARQUIVOS_CLIENTE)
@@ -191,13 +168,11 @@ def test_menus_nao_se_misturam():
     for arquivo in ("paginas/custos.py", "paginas/lojas_canais.py", "paginas/plano.py",
                     "paginas/importar_base.py"):
         assert not (RAIZ / arquivo).exists(), arquivo
-        assert arquivo not in arquivos(CLIENTE)
 
 
-@pytest.mark.parametrize("arquivo", ["painel.py", "operador.py", "paginas/comum.py",
+@pytest.mark.parametrize("arquivo", ["operador.py", "paginas/comum.py",
                                      "paginas/menu.py", "paginas/form_config.py",
-                                     "paginas/operador_sessao.py",
-                                     "paginas/configuracao.py"])
+                                     "paginas/operador_sessao.py"])
 def test_arquivos_compilam(arquivo):
     py_compile.compile(str(RAIZ / arquivo), doraise=True)
 

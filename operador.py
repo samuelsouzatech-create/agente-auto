@@ -7,8 +7,11 @@ S10b: as telas antigas saíram; o visual (paginas/operador/estilo.py) é
 aplicado aqui, uma vez só; o botão Nova loja vem antes do seletor de loja,
 para aparecer mesmo quando ainda não existe nenhuma loja.
 
-Rodar:
-    python -m streamlit run operador.py --server.port 8501
+Rodar (fora do Docker; no Docker ele já sobe em https://localhost:8502):
+    python -m streamlit run operador.py --server.port 8502
+Portas (iguais às do Docker): operador 8502, simulador 8501 (streamlit run app.py
+--server.port 8501), webhook 8000 (python -m uvicorn app.api.webhook:app --host 127.0.0.1
+--port 8000), API do painel novo 8001.
 
 Quem está usando vem do .env (OPERADOR_NOME). Sem ele, o painel não abre.
 Sem login: só local. Não exponha na internet.

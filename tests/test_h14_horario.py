@@ -61,7 +61,7 @@ def test_dentro_do_expediente_nada_muda(agora):
 
 
 @pytest.mark.parametrize("arquivo", ["app/api_painel/atender.py", "app/visao_geral.py",
-                                     "app/jobs/alertas.py", "paginas/handoff.py"])
+                                     "app/jobs/alertas.py"])   # AR: paginas/handoff.py saiu
 def test_atender_atencao_avisos_e_fila_usam_a_mesma_conta(arquivo):
     assert "minutos_no_expediente(" in (RAIZ / arquivo).read_text(encoding="utf-8")
 

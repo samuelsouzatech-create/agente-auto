@@ -2,8 +2,7 @@
 PG3 (Maratona Postgres): o Léo aguenta 10 lojas ao mesmo tempo? Teste de CARGA, offline.
 
 Fica FORA da suíte rápida (marcador "carga"). Para rodar (banco e Redis ligados):
-    docker compose up -d
-    docker start redis-leo            (ou outro Redis no REDIS_URL do .env)
+    docker compose up -d              (o Redis do compose; o teste usa a gaveta 14, nunca a 0)
     .venv-teste\\Scripts\\python -m pytest -m carga tests/test_pg3_carga.py -s
 
 O que ele faz:

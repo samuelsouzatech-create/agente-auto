@@ -358,7 +358,7 @@ def test_ator_da_loja_1_nao_pausa_a_loja_2():
 # ------------------------------------------------------------ telas
 
 def test_entradas_definem_o_ator_antes_da_pagina():
-    for nome in ("operador.py", "painel.py"):
+    for nome in ("operador.py",):   # AR: painel.py saiu
         texto = (RAIZ / nome).read_text(encoding="utf-8")
         assert "definir_ator_da_sessao()" in texto
         assert texto.index("definir_ator_da_sessao()") < texto.index("navegacao.run()")

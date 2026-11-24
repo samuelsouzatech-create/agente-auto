@@ -123,14 +123,14 @@ def test_arquivos_novos_de_app_sem_streamlit():
 # ------------------------------------------------------------ telas
 
 def test_campo_seu_nome_sumiu():
-    for caminho in (RAIZ / "paginas" / "comum.py", RAIZ / "operador.py", RAIZ / "painel.py"):
+    for caminho in (RAIZ / "paginas" / "comum.py", RAIZ / "operador.py"):
         texto = caminho.read_text(encoding="utf-8")
         assert "campo_nome" not in texto
         assert "Seu nome" not in texto
 
 
 def test_entradas_mostram_quem_esta_agindo():
-    for nome in ("operador.py", "painel.py"):
+    for nome in ("operador.py",):   # AR: painel.py saiu
         texto = (RAIZ / nome).read_text(encoding="utf-8")
         assert "mostrar_quem_esta_agindo()" in texto
         assert texto.index("definir_ator_da_sessao()") < texto.index("navegacao.run()")

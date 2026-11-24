@@ -256,11 +256,10 @@ def test_carencia_padrao_7_e_so_o_operador_muda():
 
 # ------------------------------------------------------------ telas e atendimento
 
-def test_tela_tem_os_botoes_e_nao_fala_com_o_banco():
-    texto = (RAIZ / "paginas" / "envios.py").read_text(encoding="utf-8")
-    for frase in ("Não enviar esta mensagem", "Não procurar mais", "Desfazer"):
-        assert frase in texto
-    assert "conectar" not in texto and "import banco" not in texto
+def test_tela_antiga_de_envios_saiu_no_ar():
+    # AR (Maratona 4): a tela (painel Streamlit do cliente) saiu; os bloqueios continuam no painel
+    # novo (Acompanhamento) e nas regras de app/bloqueios.py, testadas acima.
+    assert not (RAIZ / "paginas" / "envios.py").exists()
 
 
 def test_atendimento_nao_usa_bloqueios():

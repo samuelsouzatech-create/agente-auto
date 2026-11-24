@@ -154,8 +154,6 @@ def test_eventos_de_sistema_existem_e_nao_sao_acoes_de_pessoa():
 
 # ------------------------------------------------------------ tela
 
-def test_fila_de_handoff_define_o_ator_dentro_do_fragmento():
-    texto = (RAIZ / "paginas" / "handoff.py").read_text(encoding="utf-8")
-    corpo = texto.split("def mostrar_fila", 1)[1]
-    assert "definir_ator_da_sessao()" in corpo
-    assert corpo.index("definir_ator_da_sessao()") < corpo.index("assumir_handoff(")
+def test_fila_de_handoff_antiga_saiu_no_ar():
+    # AR (Maratona 4): a Fila de handoff era do painel Streamlit do cliente (aposentado).
+    assert not (RAIZ / "paginas" / "handoff.py").exists()
