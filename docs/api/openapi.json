@@ -28,6 +28,23 @@
         "title": "BloqueioEntrada",
         "type": "object"
       },
+      "Body_enviar_fotos_api_v1_estoque__id__fotos_post": {
+        "properties": {
+          "arquivos": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Arquivos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "arquivos"
+        ],
+        "title": "Body_enviar_fotos_api_v1_estoque__id__fotos_post",
+        "type": "object"
+      },
       "CarroEdicao": {
         "properties": {
           "dados": {
@@ -133,6 +150,17 @@
         "title": "EsqueciSenhaEntrada",
         "type": "object"
       },
+      "FotoPorLinkEntrada": {
+        "properties": {
+          "link": {
+            "default": "",
+            "title": "Link",
+            "type": "string"
+          }
+        },
+        "title": "FotoPorLinkEntrada",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -160,6 +188,20 @@
           }
         },
         "title": "LoginEntrada",
+        "type": "object"
+      },
+      "OrdemDasFotosEntrada": {
+        "properties": {
+          "fotos": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Fotos",
+            "type": "array"
+          }
+        },
+        "title": "OrdemDasFotosEntrada",
         "type": "object"
       },
       "PausarEntrada": {
@@ -1115,6 +1157,205 @@
           }
         },
         "summary": "Editar",
+        "tags": [
+          "Estoque"
+        ]
+      }
+    },
+    "/api/v1/estoque/{id}/fotos": {
+      "post": {
+        "operationId": "enviar_fotos_api_v1_estoque__id__fotos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_enviar_fotos_api_v1_estoque__id__fotos_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enviar Fotos",
+        "tags": [
+          "Estoque"
+        ]
+      }
+    },
+    "/api/v1/estoque/{id}/fotos/link": {
+      "post": {
+        "operationId": "adicionar_por_link_api_v1_estoque__id__fotos_link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FotoPorLinkEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Adicionar Por Link",
+        "tags": [
+          "Estoque"
+        ]
+      }
+    },
+    "/api/v1/estoque/{id}/fotos/ordem": {
+      "put": {
+        "operationId": "mudar_ordem_api_v1_estoque__id__fotos_ordem_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrdemDasFotosEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mudar Ordem",
+        "tags": [
+          "Estoque"
+        ]
+      }
+    },
+    "/api/v1/estoque/{id}/fotos/{nome}": {
+      "delete": {
+        "operationId": "apagar_foto_api_v1_estoque__id__fotos__nome__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "nome",
+            "required": true,
+            "schema": {
+              "title": "Nome",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apagar Foto",
         "tags": [
           "Estoque"
         ]

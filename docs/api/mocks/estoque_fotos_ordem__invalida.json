@@ -1,0 +1,7 @@
+{
+  "codigo": "invalido",
+  "mensagem": "A lista de fotos não confere com as fotos do carro. Recarregue a página e tente de novo.",
+  "campos": {
+    "fotos": "Lista diferente das fotos do carro."
+  }
+}

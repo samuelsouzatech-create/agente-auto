@@ -28,8 +28,8 @@ ATUALIZAR_EM_SEGUNDOS = 20          # contrato, regra 10
 MAX_HOJE = 200
 _LOTE = 400
 JANELA_FECHADA = "Faz mais de 24 h que o cliente não escreve."
-SEM_MENSAGEM = "O cliente ainda não escreveu por este canal."
-CANAL_SEM_RESPOSTA = "Este canal não aceita resposta pelo painel."
+SEM_MENSAGEM = "O cliente ainda não escreveu."
+CANAL_SEM_RESPOSTA = "Não dá para responder esta conversa pelo painel."
 AGUARDANDO, ASSUMIDO, NENHUM = "aguardando", "humano_assumiu", "nenhum"
 
 

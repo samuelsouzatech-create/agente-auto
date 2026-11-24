@@ -23,7 +23,7 @@ from app.relogio import agora_utc
 
 TIPOS = ("whatsapp", "telegram", "instagram")
 FAIXA_EM_TESTE = "Sua loja está em teste: o Léo só responde aos números de teste."
-DETALHE_DEMO = "Atendendo pelo simulador (loja de demonstração)."
+DETALHE_DEMO = "Loja de demonstração: atendendo as conversas de teste."
 
 
 def _juntar(rotulos) -> str:
@@ -71,7 +71,7 @@ def montar_saude(loja_id: int, agora=None) -> dict:
         detalhe_canais = f"Atendendo {_juntar(ligados)}." if ligados else ""
 
     if not ligados:
-        luz, titulo, detalhe = "vermelha", "Léo fora do ar", "Nenhum canal está ativo."
+        luz, titulo, detalhe = "vermelha", "Léo fora do ar", "Nenhum WhatsApp, Telegram ou Instagram está ligado."
     elif em_teste:
         luz, titulo, detalhe = "amarela", "Léo com atenção", "Sua loja está em teste."
     elif pausa["ativa"]:

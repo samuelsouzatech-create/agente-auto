@@ -335,12 +335,17 @@ def _historico(loja_id: int, agora: datetime) -> None:
                                     (lead, loja_id, nome, rng.choice(["visita", "test-drive"]),
                                      (inicio + timedelta(days=2)).strftime("%d/%m às 10:00"), quando(5)))
                 elif sorteio < 0.60 and dia > 3:                              # remarketing (simulado)
+                    texto_retomada = f"Oi, {nome}! O {carro['modelo']} ainda está aqui. Quer marcar uma visita?"
                     conexao.execute(
                         "INSERT INTO remarketing_envios (loja_id, lead_id, canal, toque, veiculo_id, categoria, estado, "
                         "contexto, criado_em) VALUES (?, ?, 'simulador', 1, ?, 'livre', 'simulado', ?, ?)",
-                        (loja_id, lead, carro["id"], json.dumps({"texto": f"Oi, {nome}! O {carro['modelo']} ainda está aqui. "
-                                                                          "Quer marcar uma visita?"}, ensure_ascii=False),
+                        (loja_id, lead, carro["id"], json.dumps({"texto": texto_retomada}, ensure_ascii=False),
                          para_banco(inicio + timedelta(days=2))))
+                    # Maratona Fotos, F2: a retomada também fica no histórico do cliente (autor
+                    # "remarketing", como os jobs gravam), para o painel mostrar "Mensagem automática".
+                    conexao.execute("INSERT INTO mensagens (lead_id, loja_id, canal, direcao, tipo, conteudo, autor, "
+                                    "criado_em) VALUES (?, ?, 'simulador', 'leo', 'texto', ?, 'remarketing', ?)",
+                                    (lead, loja_id, texto_retomada, para_banco(inicio + timedelta(days=2))))
         conexao.commit()
     finally:
         conexao.close()

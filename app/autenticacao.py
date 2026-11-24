@@ -7,9 +7,10 @@ estas funções. Sem Streamlit.
   para o Registro; o Registro só diz "senha trocada".
 - Senha forte: pelo menos MIN_SENHA caracteres, fora da lista de comuns e
   sem ser quase tudo o mesmo caractere.
-- Limite de tentativas por e-mail: MAX_TENTATIVAS erros em
-  JANELA_TENTATIVAS_MIN minutos bloqueiam aquele e-mail até os erros saírem
-  da janela. Login certo zera a contagem.
+- Limite de tentativas por e-mail + origem (Maratona Fotos, F2; revisão #5): MAX_TENTATIVAS
+  erros do mesmo e-mail vindos da MESMA origem em JANELA_TENTATIVAS_MIN minutos bloqueiam
+  aquele e-mail para aquela origem. Erro vindo de outro lugar não bloqueia o dono. Login
+  certo zera a contagem. Quem não informa a origem (terminal, scripts) é a origem "local".
 - Limite por origem (painel na internet, revisão geral #5): MAX_LOGIN_ERRADO_ORIGEM
   logins errados da mesma origem na janela bloqueiam aquela origem, para qualquer
   e-mail (impede testar senhas em muitos e-mails do mesmo lugar). Fica na tabela
@@ -50,6 +51,7 @@ MAX_EMAIL = 254
 MAX_TENTATIVAS = 5
 JANELA_TENTATIVAS_MIN = 15
 MAX_LOGIN_ERRADO_ORIGEM = 20
+ORIGEM_LOCAL = "local"            # terminal, scripts e telas que rodam no próprio computador
 LOGIN_ERRADO_ORIGEM = "login_errado_origem"
 OK = "ok"
 BLOQUEADO = "bloqueado"
@@ -227,7 +229,14 @@ def definir_senha(usuario_id: int, senha: str) -> bool:
 
 # ------------------------------------------------------------ login
 
-def bloqueado_por_tentativas(email, agora=None) -> bool:
+def _chave_tentativa(email_limpo: str, origem) -> str:
+    """Maratona Fotos, F2 (revisão #5, parte média): os erros contam por e-mail + origem."""
+    return f"tentativa:{str(origem or ORIGEM_LOCAL)[:200]}|{email_limpo}"
+
+
+def bloqueado_por_tentativas(email, agora=None, *, origem=ORIGEM_LOCAL) -> bool:
+    """MAX_TENTATIVAS erros deste e-mail VINDOS DESTA ORIGEM na janela bloqueiam. Erro vindo de
+    outro lugar não bloqueia o dono. Login certo zera a contagem (de todas as origens)."""
     email_limpo = str(email or "").strip().lower()[:MAX_EMAIL]
     momento = agora or agora_utc()
     desde = para_banco(momento - timedelta(minutes=JANELA_TENTATIVAS_MIN))
@@ -238,7 +247,8 @@ def bloqueado_por_tentativas(email, agora=None) -> bool:
             f"SELECT COUNT(*) FROM acessos WHERE email = ? AND quando >= ? AND quando <= ? "
             f"AND resultado IN ({marcas}) AND id > COALESCE((SELECT MAX(id) FROM acessos "
             f"WHERE email = ? AND resultado = ?), 0)",
-            (email_limpo, desde, para_banco(momento), *FALHAS, email_limpo, OK)).fetchone()[0]
+            (_chave_tentativa(email_limpo, origem), desde, para_banco(momento), *FALHAS,
+             email_limpo, OK)).fetchone()[0]
     finally:
         conexao.close()
     return erros >= MAX_TENTATIVAS
@@ -272,14 +282,15 @@ def anotar_login_errado_da_origem(origem, agora=None) -> None:
         conexao.close()
 
 
-def autenticar(email, senha, agora=None) -> dict | None:
+def autenticar(email, senha, agora=None, *, origem=ORIGEM_LOCAL) -> dict | None:
     """Devolve os dados da pessoa se e-mail e senha conferem; senão None.
-    Nunca diz o motivo para quem tentou (o motivo fica na tabela acessos)."""
+    Nunca diz o motivo para quem tentou (o motivo fica na tabela acessos).
+    origem: de onde veio o pedido (a API passa o endereço; terminal e scripts usam "local")."""
     email_limpo = str(email or "").strip().lower()[:MAX_EMAIL]
     senha_texto = senha if isinstance(senha, str) else ""
     momento = para_banco(agora or agora_utc())
     sql_acesso = "INSERT INTO acessos (usuario_id, email, quando, resultado) VALUES (?, ?, ?, ?)"
-    if bloqueado_por_tentativas(email_limpo, agora):
+    if bloqueado_por_tentativas(email_limpo, agora, origem=origem):
         conexao = conectar()
         try:
             conexao.execute(sql_acesso, (None, email_limpo, momento, BLOQUEADO))
@@ -299,6 +310,8 @@ def autenticar(email, senha, agora=None) -> dict | None:
             resultado = (OK if u["ativo"] else "desativado") if certa else "senha_errada"
         conexao.execute(sql_acesso, (u["id"] if u is not None else None, email_limpo,
                                      momento, resultado))
+        if resultado != OK:                    # a contagem do bloqueio é por e-mail + origem
+            conexao.execute(sql_acesso, (None, _chave_tentativa(email_limpo, origem), momento, resultado))
         if resultado == OK:
             conexao.execute("UPDATE usuarios SET ultimo_acesso = ? WHERE id = ?", (momento, u["id"]))
             if _hasher.check_needs_rehash(u["senha_hash"]):
@@ -316,7 +329,7 @@ def autenticar(email, senha, agora=None) -> dict | None:
 # ------------------------------------------------------------ troca pela própria pessoa (C2a)
 
 def trocar_senha(usuario_id: int, senha_atual, senha_nova, manter_sessao=None,
-                 agora=None) -> int:
+                 agora=None, *, origem=ORIGEM_LOCAL) -> int:
     """A própria pessoa troca a senha (painel da loja, C2a). Diferente de
     definir_senha (o operador redefine): aqui é preciso saber a senha atual.
 
@@ -337,11 +350,13 @@ def trocar_senha(usuario_id: int, senha_atual, senha_nova, manter_sessao=None,
         conferir_ator(u["loja_id"])               # sem ator, nada acontece (nem a tentativa)
         if not u["ativo"] or not u["email"] or not u["senha_hash"]:
             raise DadosInvalidos("Esta pessoa não tem acesso ativo.")
-        if bloqueado_por_tentativas(u["email"], agora):
+        if bloqueado_por_tentativas(u["email"], agora, origem=origem):
             raise MuitasTentativas("Muitas tentativas seguidas. Espere alguns minutos e tente de novo.")
         atual = senha_atual if isinstance(senha_atual, str) else ""
         if not _verificar(u["senha_hash"], atual):
             conexao.execute(sql_acesso, (usuario_id, u["email"], momento, "senha_errada"))
+            conexao.execute(sql_acesso, (None, _chave_tentativa(u["email"], origem), momento,
+                                         "senha_errada"))
             conexao.commit()
             raise SenhaAtualErrada("A senha atual não confere.")
         validar_senha(senha_nova)

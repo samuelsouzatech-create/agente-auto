@@ -198,3 +198,99 @@ def marcar_status(carro_id, status, loja_id):
     finally:
         conexao.close()
     return f"Status alterado para '{status}'."
+
+
+# ------------------------------------------------------------ fotos do carro (Maratona Fotos, F2)
+# Enviar (arquivo), adicionar por link, apagar e mudar a ordem. Tudo passa por atualizar_carro:
+# o preparo, o Registro ("alterar_carro") e a limpeza do depósito ficam num lugar só.
+
+class CarroNaoEncontrado(LookupError):
+    """Carro (ou foto) que não existe NESTA loja."""
+
+
+def _carro_para_fotos(carro_id, loja_id) -> dict:
+    carro = buscar_carro(carro_id, loja_id)
+    if carro is None:
+        raise CarroNaoEncontrado("Não encontramos esse carro.")
+    if carro["status"] == VENDIDO:
+        raise StatusInvalido(MENSAGEM_JA_VENDIDO)
+    return carro
+
+
+def _regravar_fotos(carro: dict, refs: list, loja_id) -> None:
+    from app import fotos as _fotos
+    atualizar_carro(carro["id"], carro["marca"], carro["modelo"], carro["ano"], carro["km"], carro["cor"],
+                    carro["cambio"], carro["preco"], carro["status"], _fotos.juntar(refs), loja_id=loja_id)
+
+
+def adicionar_fotos(carro_id, arquivos, *, loja_id) -> tuple[list, list]:
+    """arquivos: [(nome, bytes)]. Cada um passa pelo preparo; os recusados não impedem os outros.
+    Devolve (referências do carro na ordem, [(nome, mensagem)] recusados). Nenhum entrou: FotosInvalidas."""
+    from app import fotos as _fotos
+    carro = _carro_para_fotos(carro_id, loja_id)
+    atuais = _fotos.separar(carro["fotos"])
+    novas, recusadas = [], []
+    for nome, dados in arquivos:
+        if len(atuais) + len(novas) >= _fotos.MAX_FOTOS_POR_CARRO:
+            recusadas.append((nome, _fotos.MSG_DEMAIS))
+            continue
+        try:
+            novas.append(_fotos.guardar(loja_id, dados))
+        except _fotos.FotoRecusada as erro:
+            recusadas.append((nome, str(erro)))
+    if not novas:
+        raise FotosInvalidas(recusadas[0][1] if recusadas else _fotos.MSG_NAO_E_IMAGEM)
+    try:
+        _regravar_fotos(carro, atuais + novas, loja_id)
+    except BaseException:
+        _apagar_fotos(loja_id, novas)
+        raise
+    return atuais + novas, recusadas
+
+
+def adicionar_foto_por_link(carro_id, link, *, loja_id) -> list:
+    from app import fotos as _fotos
+    carro = _carro_para_fotos(carro_id, loja_id)
+    atuais = _fotos.separar(carro["fotos"])
+    if len(atuais) >= _fotos.MAX_FOTOS_POR_CARRO:
+        raise FotosInvalidas(_fotos.MSG_DEMAIS)
+    if not str(link or "").strip().startswith("https://"):
+        raise FotosInvalidas(_fotos.MSG_LINK)
+    try:
+        nova = _fotos.guardar_de_link(loja_id, str(link).strip())
+    except _fotos.FotoRecusada as erro:
+        raise FotosInvalidas(str(erro)) from None
+    try:
+        _regravar_fotos(carro, atuais + [nova], loja_id)
+    except BaseException:
+        _apagar_fotos(loja_id, [nova])
+        raise
+    return atuais + [nova]
+
+
+def apagar_foto(carro_id, nome, *, loja_id) -> list:
+    """Tira a foto do carro (e do depósito). Foto que não é deste carro: CarroNaoEncontrado."""
+    from app import fotos as _fotos
+    carro = _carro_para_fotos(carro_id, loja_id)
+    atuais = _fotos.separar(carro["fotos"])
+    alvo = _fotos.ref_de(loja_id, nome) if _fotos.NOME.match(str(nome or "")) else None
+    if alvo not in atuais:
+        raise CarroNaoEncontrado("Essa foto não é deste carro.")
+    ficam = [r for r in atuais if r != alvo]
+    _regravar_fotos(carro, ficam, loja_id)
+    return ficam
+
+
+MENSAGEM_ORDEM = "A lista de fotos não confere com as fotos do carro. Recarregue a página e tente de novo."
+
+
+def ordenar_fotos(carro_id, enderecos, *, loja_id) -> list:
+    """Mesmas fotos do carro, na ordem nova (endereços que o painel mostrou)."""
+    from app import fotos as _fotos
+    carro = _carro_para_fotos(carro_id, loja_id)
+    atuais = _fotos.separar(carro["fotos"])
+    nova = [_fotos.ref_do_endereco(loja_id, e) for e in (enderecos or [])]
+    if None in nova or sorted(nova) != sorted(atuais) or len(set(nova)) != len(nova):
+        raise FotosInvalidas(MENSAGEM_ORDEM)
+    _regravar_fotos(carro, nova, loja_id)
+    return nova

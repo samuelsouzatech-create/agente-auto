@@ -385,6 +385,10 @@ def test_so_as_rotas_do_c2a_todas_em_api_v1():
                      ("POST", PREFIXO + "/estoque"),
                      ("PUT", PREFIXO + "/estoque/{id}"),
                      ("GET", PREFIXO + "/fotos/{nome}"),                          # Maratona Fotos
+                     ("POST", PREFIXO + "/estoque/{id}/fotos"),                   # F2
+                     ("POST", PREFIXO + "/estoque/{id}/fotos/link"),
+                     ("PUT", PREFIXO + "/estoque/{id}/fotos/ordem"),
+                     ("DELETE", PREFIXO + "/estoque/{id}/fotos/{nome}"),
                      ("GET", PREFIXO + "/demo/fotos/{arquivo}"),                    # Q2
                      ("GET", PREFIXO + "/leads"),                          # C2: leituras
                      ("GET", PREFIXO + "/resultado"),

@@ -440,6 +440,104 @@ paths:
         '404': {$ref: '#/components/responses/NaoEncontrado'}
         '409': {$ref: '#/components/responses/Conflito'}
         '422': {$ref: '#/components/responses/Invalido'}
+  /estoque/{id}/fotos:
+    post:
+      tags: [Estoque]
+      summary: Enviar fotos de um carro (arquivo; uma ou várias de uma vez) (v1.2)
+      x-papeis: [dono, gestor]
+      description: |
+        Cada arquivo passa pelo preparo (confere que é foto, gira, reduz, tira metadados) e vai para o
+        depósito, no fim da lista. A tela manda uma foto por pedido, para mostrar o progresso.
+        Se alguma for recusada, as outras entram e a recusada aparece em "recusadas". Se nenhuma entrar,
+        422 com a mensagem pronta. No máximo 20 fotos por carro. Carro vendido: 422.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {$ref: '#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [arquivos]
+              properties:
+                arquivos: {type: array, items: {type: string, format: binary}, maxItems: 20}
+      responses:
+        '201':
+          description: Fotos do carro, na ordem.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FotosDoCarro'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /estoque/{id}/fotos/link:
+    post:
+      tags: [Estoque]
+      summary: Adicionar foto por link (baixada e preparada; vira foto do depósito) (v1.2)
+      x-papeis: [dono, gestor]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {$ref: '#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FotoPorLinkEntrada'}
+      responses:
+        '201':
+          description: Fotos do carro, na ordem.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FotosDoCarro'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /estoque/{id}/fotos/ordem:
+    put:
+      tags: [Estoque]
+      summary: Mudar a ordem das fotos (a primeira é a capa) (v1.2)
+      x-papeis: [dono, gestor]
+      description: 'Manda as MESMAS fotos do carro, na ordem nova. Lista diferente (faltando ou sobrando) dá 422.'
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {$ref: '#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OrdemDasFotosEntrada'}
+      responses:
+        '200':
+          description: Fotos do carro, na ordem nova.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FotosDoCarro'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+        '422': {$ref: '#/components/responses/Invalido'}
+  /estoque/{id}/fotos/{nome}:
+    delete:
+      tags: [Estoque]
+      summary: Apagar uma foto do carro (sai do depósito) (v1.2)
+      x-papeis: [dono, gestor]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {name: nome, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{20,64}\.jpg$'}}
+        - {$ref: '#/components/parameters/Csrf'}
+      responses:
+        '200':
+          description: Fotos que ficaram, na ordem.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FotosDoCarro'}
+        '401': {$ref: '#/components/responses/NaoAutenticado'}
+        '403': {$ref: '#/components/responses/ModuloOuPermissao'}
+        '404': {$ref: '#/components/responses/NaoEncontrado'}
+        '422': {$ref: '#/components/responses/Invalido'}
   /demo/fotos/{arquivo}:
     get:
       tags: [Estoque]
@@ -1040,6 +1138,33 @@ components:
         preco: {type: number, exclusiveMinimum: 0}
         status: {type: string, enum: [disponivel, reservado, indisponivel], description: '"vendido" só por registrar-venda.'}
         fotos: {type: array, items: {type: string, format: uri-reference}, maxItems: 20, description: 'v1.2: endereços de fotos desta loja que o painel recebeu (ficam como estão) e links https de fora, que são baixados e passam pelo preparo (viram foto do depósito; nada de link guardado). Foto que não deu para baixar: 422 em campos.fotos.'}
+    FotosDoCarro:
+      type: object
+      required: [fotos]
+      properties:
+        fotos:
+          type: array
+          description: Endereços das fotos do depósito, na ordem (a primeira é a capa).
+          items: {type: string, format: uri-reference}
+        recusadas:
+          type: array
+          description: Fotos deste envio que não entraram, cada uma com a mensagem pronta.
+          items:
+            type: object
+            required: [arquivo, mensagem]
+            properties:
+              arquivo: {type: string}
+              mensagem: {type: string}
+    FotoPorLinkEntrada:
+      type: object
+      required: [link]
+      properties:
+        link: {type: string, maxLength: 2000}
+    OrdemDasFotosEntrada:
+      type: object
+      required: [fotos]
+      properties:
+        fotos: {type: array, items: {type: string}, maxItems: 20}
     CarroEdicao:
       type: object
       required: [dados]

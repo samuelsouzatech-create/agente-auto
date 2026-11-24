@@ -182,18 +182,33 @@ else:
 # M2 (Demo, D3): só aparece na loja marcada como demo. Apaga e recria o estado inicial dela.
 if loja.get("demo"):
     from app.demo import LojaNaoEDemo, reiniciar_demo
+    from app.pessoas_de_teste import LojaComCanalReal, criar_pessoas_de_teste
 
     st.divider()
     st.subheader("Loja de demonstração")
     st.caption("Volta a loja de demonstração ao estado inicial: apaga as conversas, chamados e vendas "
                "feitos durante a demonstração e recria o histórico. Só vale para esta loja.")
     confirmar = st.checkbox("Entendi: as conversas desta demonstração serão apagadas.", key=f"demo_conf_{loja.id}")
+    # Maratona Fotos, F2: as senhas novas aparecem UMA vez (ficam só na memória desta sessão
+    # da tela até serem mostradas; nunca em arquivo nem no log).
+    _chave_senhas = f"demo_senhas_{loja.id}"
+    _senhas = st.session_state.pop(_chave_senhas, None)
+    if _senhas:
+        st.success("Pessoas de teste do painel novo (anote agora: estas senhas não aparecem de novo):")
+        for _p in _senhas:
+            st.code(f"{_p['nome']}: {_p['email']}  senha: {_p['senha']}" if _p["senha"]
+                    else f"{_p['nome']}: {_p['email']}  (já existia; a senha não mudou)", language=None)
     if st.button("Reiniciar demo", disabled=not confirmar, key=f"demo_reiniciar_{loja.id}"):
         try:
             with st.spinner("Recriando a loja de demonstração..."):
                 reiniciar_demo(loja.id)
+                pessoas = criar_pessoas_de_teste(loja.id, "Painel do operador (reiniciar demo)")
         except LojaNaoEDemo:
             st.error("Esta loja não é de demonstração. Nada foi apagado.")
+        except LojaComCanalReal:
+            st.error("A demo foi reiniciada, mas esta loja tem WhatsApp, Telegram ou Instagram ligado: "
+                     "as pessoas de teste não foram criadas.")
         else:
+            st.session_state[_chave_senhas] = pessoas
             avisar("Demo reiniciada: a loja voltou ao estado inicial.")
             st.rerun()
