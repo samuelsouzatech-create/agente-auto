@@ -1110,3 +1110,24 @@ Plano Mestre de Execução — Léo: painéis, pendências da Etapa 2, Etapas 3 
 
 Page 35 of 35 
 
+## Mudanças depois de 1/11 (acrescentado em 23/11/2026, Maratona Postgres, PG0)
+
+Nada acima foi apagado. Esta seção registra o que mudou em relação ao plano original.
+
+- **Ordem:** depois das Etapas 1 e 2 vieram a Fase Cérebro (fechada com ressalva em 21/11), as
+  maratonas 2 e 3, a API do painel (contrato v1 até a versão 1.2.0) e o painel do cliente em
+  React (`leo-painel-web`, tags `painel-v1`, `painel-v1.1`, `painel-v1.2`).
+- **Migrações:** foram usadas 1 a 17, 19 e 20. A 18 não existe e não será usada; a 21 continua
+  reservada ao Instagram.
+- **Fotos do estoque:** o campo de links por linha deu lugar ao envio de arquivo pelo painel e
+  a um depósito próprio (tomada local ou nuvem S3), com preparo único (Maratona Fotos, tag
+  `agente-fotos`).
+- **Login:** os 5 erros de senha contam por e-mail + origem (revisão #5, parte média).
+- **E2-1 (limite diário da reativação):** não tinha sido feito; feito no PG0 com o campo
+  `remarketing.limite_diario_reativacao` (dono: operador, assunto Plano e limites, padrão 30).
+  O número definitivo continua na decisão A8.
+- **Banco:** passa de SQLite para **PostgreSQL 17** (Maratona Postgres, PG1 a PG3), com uma
+  camada única de conexão e a memória das conversas também no Postgres.
+- **Próximos blocos, em ordem:** Postgres → Docker e aposentar o painel Streamlit do cliente →
+  segurança → hospedagem com R2 → teste ponta a ponta. Detalhe em
+  `docs/estado_do_projeto_2026-11-23.md`.

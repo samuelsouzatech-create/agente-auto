@@ -19,3 +19,8 @@ argon2-cffi==25.1.0
 # N1: fotos ilustrativas da loja demo (app/demo.py) e imagens da bancada
 pillow==12.3.0
 pillow-heif==1.8.1
+# Maratona Postgres (PG1): banco PostgreSQL 17, uma camada de conexão com pool (banco.py)
+psycopg[binary]==3.3.9
+psycopg-pool==3.3.3
+# PG2: memória das conversas do LangGraph no PostgreSQL
+langgraph-checkpoint-postgres==3.2.1

@@ -19,7 +19,7 @@ from typing import Annotated, TypedDict
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.prebuilt import tools_condition
 from langchain_core.messages import ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -217,41 +217,62 @@ construtor.add_conditional_edges("agente", tools_condition, {
 })
 construtor.add_edge("ferramentas", "agente")
 
-class MemoriaLimitada(MemorySaver):
-    """L12: a memória de conversas não cresce para sempre (o servidor fica ligado por dias).
-    Conversa parada há mais de HORAS_SEM_USO sai da memória; acima de MAX_CONVERSAS, saem as
-    mais antigas. Sem perda: com a memória vazia, o turno manda o histórico do banco (Bloco 4B)."""
+class MemoriaLimitada(PostgresSaver):
+    """Memória das conversas no PostgreSQL (PG2, Maratona Postgres): a conversa continua depois
+    de reiniciar o processo. L12: a memória não cresce para sempre. Conversa parada há mais de
+    HORAS_SEM_USO sai; acima de MAX_CONVERSAS, saem as mais antigas. Sem perda: com a memória
+    vazia, o turno manda o histórico do banco (Bloco 4B). A poda roda no máximo a cada
+    PODAR_A_CADA_S segundos (ela consulta o banco). Apagar uma conversa: delete_thread(thread).
+    A conexão vem do banco.py (pool da memória), sempre o banco da BANCO_URL em uso."""
 
     HORAS_SEM_USO = 24
     MAX_CONVERSAS = 2000
+    PODAR_A_CADA_S = 300
 
-    def __init__(self, *args, relogio=time.monotonic, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *, relogio=time.time):
+        super().__init__(None)
         self._relogio = relogio
-        self._ultimo_uso: dict[str, float] = {}
+        self._ultima_poda: float | None = None
+
+    @property
+    def conn(self):
+        import banco
+        return banco.pool_da_memoria()
+
+    @conn.setter
+    def conn(self, _valor):            # o PostgresSaver tenta guardar a conexão: ela vem do banco.py
+        pass
 
     def put(self, config, checkpoint, metadata, new_versions):
         salvo = super().put(config, checkpoint, metadata, new_versions)
-        thread = (config.get("configurable") or {}).get("thread_id")
-        if thread is not None:
-            self._ultimo_uso[thread] = self._relogio()
+        agora = self._relogio()
+        if self._ultima_poda is None or agora - self._ultima_poda >= self.PODAR_A_CADA_S:
+            self._ultima_poda = agora
             self.podar()
         return salvo
+
+    def ultimos_usos(self) -> dict[str, float]:
+        """Conversa -> último uso (segundos desde 1970), pela data da última fotografia salva."""
+        with self._cursor() as cur:
+            cur.execute("SELECT thread_id, MAX(checkpoint->>'ts') AS ts FROM checkpoints "
+                        "WHERE checkpoint_ns = '' GROUP BY thread_id")
+            linhas = cur.fetchall()
+        return {l["thread_id"]: datetime.fromisoformat(l["ts"]).timestamp() for l in linhas if l["ts"]}
 
     def podar(self) -> int:
         """Tira da memória as conversas paradas e o excesso. Devolve quantas saíram."""
         agora = self._relogio()
-        sair = {t for t, quando in self._ultimo_uso.items() if agora - quando > self.HORAS_SEM_USO * 3600}
-        ficam = sorted((q, t) for t, q in self._ultimo_uso.items() if t not in sair)
+        usos = self.ultimos_usos()
+        sair = {t for t, quando in usos.items() if agora - quando > self.HORAS_SEM_USO * 3600}
+        ficam = sorted((q, t) for t, q in usos.items() if t not in sair)
         excesso = len(ficam) - self.MAX_CONVERSAS
         if excesso > 0:
             sair |= {t for _, t in ficam[:excesso]}
         for thread in sair:
             self.delete_thread(thread)
-            self._ultimo_uso.pop(thread, None)
         return len(sair)
 
 
-# Memória das conversas (em produção vira PostgresSaver - Etapa 5). L12: com limite.
+# Memória das conversas no PostgreSQL (PG2). L12: com limite.
 memoria = MemoriaLimitada()
 agente_grafo = construtor.compile(checkpointer=memoria)

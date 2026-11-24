@@ -344,17 +344,29 @@ def pasta_temporaria() -> Path:
     return _PASTA_TEMP
 
 
+_URL_DA_BANCADA: str | None = None
+_SEMENTE_DA_BANCADA: dict = {}
+
+
 def apontar_banco_temporario(pasta: Path | None = None) -> str:
-    """Cada roteiro ganha um banco novo. Nunca o banco real."""
-    pasta = pasta or pasta_temporaria()
-    fd, caminho = tempfile.mkstemp(suffix=".db", dir=pasta)
-    os.close(fd)
-    if Path(caminho).resolve() == BANCO_REAL:
-        raise RuntimeError("a bancada tentou usar o banco real")
-    banco.CAMINHO_BANCO = caminho
+    """Banco só da bancada (PostgreSQL, nome terminado em _bancada), criado na primeira vez e
+    esvaziado antes de cada roteiro: cada roteiro começa do zero. Nunca o banco real."""
+    global _URL_DA_BANCADA
+    if _URL_DA_BANCADA is None:
+        base = banco.url_do_banco()
+        nome = f"{banco.nome_do_banco(base)}_bancada"
+        if nome == banco.nome_do_banco(os.getenv("BANCO_URL") or ""):
+            raise RuntimeError("a bancada tentou usar o banco real")
+        url = banco.criar_banco_vazio(base, nome)
+        banco.apontar_para(url)
+        banco.criar_tabelas()
+        _SEMENTE_DA_BANCADA.update(banco.estado_inicial())
+        _URL_DA_BANCADA = url
+    else:
+        banco.apontar_para(_URL_DA_BANCADA)
+        banco.voltar_ao_estado_inicial(_SEMENTE_DA_BANCADA)
     lojas.limpar_cache()
-    banco.criar_tabelas()
-    return caminho
+    return _URL_DA_BANCADA
 
 
 def _sql(sql, parametros=()):
@@ -1059,8 +1071,10 @@ async def rodar_roteiro_job(roteiro: dict, grafo, rodada: "Rodada") -> Resultado
     apontar_banco_temporario()
     preparar_loja(_mesclar(CONFIG_JOB, roteiro.get("loja") or {}), roteiro.get("recados"))
     # Envio proativo só sai de loja "no ar" (P7). No banco temporário da bancada, só.
-    _sql("INSERT OR REPLACE INTO estado_lojas (loja_id, estado, no_ar_em, alterado_por) "
-         "VALUES (?, 'no_ar', CURRENT_TIMESTAMP, 'Bancada')", (LOJA_ID,))
+    _sql("INSERT INTO estado_lojas (loja_id, estado, no_ar_em, alterado_por) "
+         "VALUES (?, 'no_ar', CURRENT_TIMESTAMP, 'Bancada') ON CONFLICT (loja_id) DO UPDATE SET "
+         "estado = excluded.estado, no_ar_em = excluded.no_ar_em, alterado_por = excluded.alterado_por",
+         (LOJA_ID,))
     lojas.limpar_cache()
     lead_id = f"bancada-{_slug(roteiro['nome'])}"
     canal_lead = roteiro.get("canal") or "telegram"

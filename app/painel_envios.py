@@ -60,9 +60,9 @@ _FONTES = {
 
 
 def _conectar():
-    conexao = conectar()
-    conexao.create_function("fone_br", 1, normalizar_telefone_br)
-    return conexao
+    # fone_br é uma função do próprio banco (migração-base do PostgreSQL), igual a
+    # app/telefone.normalizar_telefone_br.
+    return conectar()
 
 
 def _utc(dt: datetime) -> datetime:
@@ -103,6 +103,14 @@ def situacao_do_modo(loja) -> dict[str, str]:
 def inicio_do_mes(loja, agora: datetime) -> datetime:
     hoje = dia_local(loja, _utc(agora))
     return datetime(hoje.year, hoje.month, 1, tzinfo=fuso(loja)).astimezone(timezone.utc)
+
+
+def uso_diario_reativacao(loja_id, agora: datetime) -> dict:
+    """E2-1: reativações enviadas hoje (dia da loja) e o limite do dia."""
+    from app.reativacao import usados_no_dia
+    loja = carregar_loja(exigir_loja(loja_id))
+    return {"usados": usados_no_dia(loja, agora, real=True),
+            "limite": loja.get("remarketing.limite_diario_reativacao")}
 
 
 def uso_do_limite(loja_id, agora: datetime) -> dict:

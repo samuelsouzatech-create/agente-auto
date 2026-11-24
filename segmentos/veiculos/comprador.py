@@ -38,7 +38,7 @@ def compras_do_lead(loja_id, lead_id, canal: str = "") -> list[dict]:
     fone = normalizar_telefone_br(lead_id) if canal in CANAIS_COM_TELEFONE else ""
     conexao = conectar()
     try:
-        conexao.create_function("fone_br", 1, normalizar_telefone_br)
+        # fone_br: função do próprio banco (migração-base do PostgreSQL).
         linhas = conexao.execute(
             "SELECT v.data_venda, v.forma_pagamento, v.meses_financiamento, "
             "e.marca, e.modelo, e.ano "

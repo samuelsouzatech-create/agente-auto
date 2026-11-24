@@ -353,8 +353,8 @@ def test_migracao_3():
     conexao = banco.conectar()
     try:
         assert banco.versao_schema(conexao) >= 3
-        col_h = {c["name"] for c in conexao.execute("PRAGMA table_info(handoffs)")}
-        col_m = {c["name"] for c in conexao.execute("PRAGMA table_info(mensagens)")}
+        col_h = {c["name"] for c in conexao.execute("SELECT ordinal_position AS cid, column_name AS name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'handoffs'")}
+        col_m = {c["name"] for c in conexao.execute("SELECT ordinal_position AS cid, column_name AS name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'mensagens'")}
     finally:
         conexao.close()
     assert {"origem", "reavisado_em", "gestor_avisado_em"} <= col_h

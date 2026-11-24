@@ -29,6 +29,9 @@ proxy_set_header Host $host;
 | Variável | Para quê |
 |---|---|
 | `PAINEL_ORIGEM` | Endereço do front, para o CORS (nunca `*`). |
+| `BANCO_URL` | Endereço do PostgreSQL com a senha (`postgresql://leo:SENHA@127.0.0.1:5432/leo`). Obrigatória: sem ela nada sobe. Nunca vai para o Git. |
+| `POSTGRES_SENHA`, `BANCO_PORTA` | Usadas pelo `docker compose` para criar o banco e escolher a porta (só em 127.0.0.1). |
+| `BANCO_POOL_MAX` (padrão 10), `BANCO_POOL_MIN` (1), `BANCO_POOL_ESPERA_S` (30) | Quantas conexões cada processo mantém abertas e quanto tempo espera por uma livre. |
 | `PAINEL_URL` | Para onde o link de senha e o link do vendedor levam. |
 | `API_PUBLICA_URL` | Endereço público da API. Sem ela, o aviso do Telegram sai sem link. |
 | `FOTOS_DEPOSITO` | Onde ficam as fotos do estoque: `local` (padrão) ou `nuvem`. Com `local`, o WhatsApp não consegue mandar foto (precisa de endereço https público): o Léo avisa o cliente e abre chamado. |

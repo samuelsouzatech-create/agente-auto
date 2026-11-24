@@ -14,9 +14,16 @@ import redis.asyncio as redis
 # URL de conexão. Local (Docker) por padrão; em produção vem do .env.
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+# PG3 (teste de carga com 10 lojas): o pool padrão da biblioteca abre no máximo 100 conexões e,
+# quando todas estão em uso, dá ERRO na hora (MaxConnectionsError) - a mensagem do cliente se
+# perdia. Agora o pedido ESPERA uma conexão livre (até REDIS_ESPERA_S segundos).
+REDIS_MAX_CONEXOES = int(os.getenv("REDIS_MAX_CONEXOES", "200"))
+REDIS_ESPERA_S = float(os.getenv("REDIS_ESPERA_S", "20"))
+
 # Cliente assíncrono, compartilhado pela aplicação.
 # decode_responses=True faz o Redis devolver str em vez de bytes (mais simples).
-redis_cliente = redis.from_url(REDIS_URL, decode_responses=True)
+redis_cliente = redis.Redis(connection_pool=redis.BlockingConnectionPool.from_url(
+    REDIS_URL, decode_responses=True, max_connections=REDIS_MAX_CONEXOES, timeout=REDIS_ESPERA_S))
 
 
 async def testar_conexao() -> bool:

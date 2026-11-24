@@ -191,9 +191,10 @@ def id_da_loja_demo() -> int | None:
 
 
 def _tabelas_da_loja(conexao) -> list[str]:
-    tabelas = [r["name"] for r in conexao.execute("SELECT name FROM sqlite_master WHERE type='table'")]
-    return [t for t in tabelas if t not in _NAO_APAGAR and
-            "loja_id" in {c["name"] for c in conexao.execute(f"PRAGMA table_info({t})")}]
+    linhas = conexao.execute(
+        "SELECT table_name FROM information_schema.columns WHERE table_schema = current_schema() "
+        "AND column_name = 'loja_id' ORDER BY table_name").fetchall()
+    return [r[0] for r in linhas if r[0] not in _NAO_APAGAR]
 
 
 def _apagar_dados(conexao, loja_id: int) -> None:

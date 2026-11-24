@@ -97,7 +97,8 @@ class Grafo:
 
 def test_turno_canal_real_nao_imprime_texto_nem_numero(capsys):
     from app.core.turno import executar_turno
-    _sql("INSERT OR REPLACE INTO estado_lojas (loja_id, estado) VALUES (1, 'no_ar')")
+    _sql("INSERT INTO estado_lojas (loja_id, estado) VALUES (1, 'no_ar') "
+         "ON CONFLICT (loja_id) DO UPDATE SET estado = excluded.estado")
     asyncio.run(executar_turno(1, "whatsapp", "5581999991234", "meu nome é Joana, tem Civic?", grafo=Grafo()))
     saida = capsys.readouterr().out
     assert "5581999991234" not in saida and "****1234" in saida

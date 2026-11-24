@@ -1,6 +1,5 @@
 import os
 import sys
-import sqlite3
 import tempfile
 import pytest
 
@@ -32,32 +31,9 @@ def relogio_fixo(monkeypatch):
     monkeypatch.setattr(relogio, "agora_utc", lambda: AGORA_FIXA)
 
 
-@pytest.fixture
-def banco_temporario(monkeypatch):
-    """Cria um banco SQLite temporário e isolado para cada teste.
-    Redireciona o CAMINHO_BANCO do módulo banco para esse arquivo,
-    cria as tabelas, entrega o caminho ao teste e apaga tudo no fim."""
-    # Cria um arquivo temporário para o banco
-    fd, caminho = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-
-    # Redireciona o módulo banco para usar esse arquivo
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", caminho)
-
-    # Cria as tabelas no banco temporário
-    criar_tabelas()
-
-    # Entrega o caminho ao teste
-    yield caminho
-
-    # Teardown: apaga o banco temporário depois do teste
-    if os.path.exists(caminho):
-        os.remove(caminho)
-
-
 def contar_linhas(caminho, tabela):
     """Função auxiliar: conta quantas linhas há numa tabela."""
-    conexao = sqlite3.connect(caminho)
+    conexao = banco.conectar()
     cursor = conexao.cursor()
     cursor.execute(f"SELECT COUNT(*) FROM {tabela}")
     total = cursor.fetchone()[0]
@@ -67,8 +43,7 @@ def contar_linhas(caminho, tabela):
 
 def buscar_lead(caminho, lead_id):
     """Função auxiliar: busca um lead pelo lead_id e retorna como dict."""
-    conexao = sqlite3.connect(caminho)
-    conexao.row_factory = sqlite3.Row
+    conexao = banco.conectar()
     cursor = conexao.cursor()
     cursor.execute("SELECT * FROM leads WHERE lead_id = ?", (lead_id,))
     linha = cursor.fetchone()
@@ -147,8 +122,7 @@ def test_agendar_visita_grava(banco_temporario):
     })
     assert contar_linhas(banco_temporario, "agendamentos") == 1
     # Confere que os dados foram realmente gravados, não só a linha criada
-    conexao = sqlite3.connect(banco_temporario)
-    conexao.row_factory = sqlite3.Row
+    conexao = banco.conectar()
     cursor = conexao.cursor()
     cursor.execute("SELECT * FROM agendamentos WHERE lead_id = ?", ("conversa-1",))
     linha = cursor.fetchone()
@@ -178,8 +152,7 @@ def test_agendar_visita_remarcar_nao_duplica(banco_temporario):
     # Deve existir UMA linha só...
     assert contar_linhas(banco_temporario, "agendamentos") == 1
     # ...e com o horário ATUALIZADO (o segundo).
-    conexao = sqlite3.connect(banco_temporario)
-    conexao.row_factory = sqlite3.Row
+    conexao = banco.conectar()
     cursor = conexao.cursor()
     cursor.execute("SELECT * FROM agendamentos WHERE lead_id = ?", ("conversa-rem",))
     linha = cursor.fetchone()
@@ -216,8 +189,7 @@ def test_acionar_handoff_nao_duplica_mesmo_lead(banco_temporario):
     # Uma linha só...
     assert contar_linhas(banco_temporario, "handoffs") == 1
     # ...com o motivo/resumo ATUALIZADOS (os do segundo pedido).
-    conexao = sqlite3.connect(banco_temporario)
-    conexao.row_factory = sqlite3.Row
+    conexao = banco.conectar()
     cursor = conexao.cursor()
     cursor.execute("SELECT * FROM handoffs WHERE lead_id = ?", ("conversa-hand",))
     linha = cursor.fetchone()

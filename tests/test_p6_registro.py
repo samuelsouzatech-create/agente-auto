@@ -49,32 +49,9 @@ def _linhas():
 
 def test_migracao_10_cria_a_tabela_e_o_indice():
     assert banco.VERSAO_SCHEMA >= 10
-    assert _contar("SELECT COUNT(*) FROM sqlite_master WHERE name = 'registro_acoes'") == 1
-    assert _contar("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' "
-                   "AND name = 'idx_registro_loja'") == 1
-
-
-def test_sobe_da_v9_sem_perder_dado(monkeypatch, tmp_path):
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", str(tmp_path / "v9.db"))
-    completas = dict(banco.MIGRACOES)
-    monkeypatch.setattr(banco, "MIGRACOES", {v: s for v, s in completas.items() if v <= 9})
-    banco.criar_tabelas()
-    conexao = conectar()
-    try:
-        conexao.execute(INSERIR_BLOQUEIO, (LEAD,))
-        conexao.execute("INSERT INTO pausas_envio (loja_id, acao, usuario, papel) "
-                        "VALUES (1, 'pausar', 'Ana', 'cliente')")
-        conexao.commit()
-        assert conexao.execute("PRAGMA user_version").fetchone()[0] == 9
-    finally:
-        conexao.close()
-
-    monkeypatch.setattr(banco, "MIGRACOES", completas)
-    banco.migrar()
-    assert _contar("PRAGMA user_version") == banco.VERSAO_SCHEMA
-    assert _contar("SELECT COUNT(*) FROM bloqueios_envio") == 1
-    assert _contar("SELECT COUNT(*) FROM pausas_envio") == 1
-    assert _contar("SELECT COUNT(*) FROM registro_acoes") == 0
+    assert _contar("SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'registro_acoes'") == 1
+    assert _contar("SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() "
+                   "AND indexname = 'idx_registro_loja'") == 1
 
 
 # ------------------------------------------------------------ ator

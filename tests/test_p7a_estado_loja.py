@@ -10,7 +10,6 @@ P7a do Plano Mestre: estado da loja (Em teste e No ar).
 Tudo offline, banco temporário do conftest (ator "Teste", operador, painel).
 """
 import json
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -64,46 +63,8 @@ def _duas_chaves(monkeypatch, *lojas_ids):
 def test_migracao_11_cria_as_tabelas():
     assert banco.VERSAO_SCHEMA >= 11
     for tabela in ("estado_lojas", "numeros_de_teste"):
-        assert _um("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+        assert _um("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?",
                    (tabela,)) == 1
-
-
-def test_sobe_da_v10_e_lojas_existentes_ficam_no_ar(monkeypatch, tmp_path):
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", str(tmp_path / "v10.db"))
-    completas = dict(banco.MIGRACOES)
-    monkeypatch.setattr(banco, "MIGRACOES", {v: s for v, s in completas.items() if v <= 10})
-    banco.criar_tabelas()
-    conexao = conectar()
-    try:
-        conexao.execute("INSERT INTO lojas (nome, segmento, config) VALUES ('Loja 2', 'veiculos', '{}')")
-        conexao.execute("INSERT INTO pausas_envio (loja_id, acao, usuario, papel) "
-                        "VALUES (1, 'pausar', 'Ana', 'cliente')")
-        conexao.commit()
-        assert conexao.execute("PRAGMA user_version").fetchone()[0] == 10
-    finally:
-        conexao.close()
-
-    monkeypatch.setattr(banco, "MIGRACOES", completas)
-    banco.migrar()
-    assert _um("PRAGMA user_version") == banco.VERSAO_SCHEMA
-    assert _um("SELECT COUNT(*) FROM lojas") == 2
-    assert _um("SELECT COUNT(*) FROM estado_lojas WHERE estado = 'no_ar' "
-               "AND no_ar_em IS NOT NULL") == 2
-    assert _um("SELECT COUNT(*) FROM pausas_envio") == 1
-
-
-def test_migracao_11_pode_rodar_de_novo_sem_mudar_o_estado():
-    loja2 = criar_loja("Loja 2")                 # nasce em teste
-    conexao = conectar()
-    try:
-        conexao.execute("PRAGMA user_version = 10")
-        conexao.commit()
-    finally:
-        conexao.close()
-    banco.migrar()                               # não pode quebrar
-    assert _um("PRAGMA user_version") == banco.VERSAO_SCHEMA
-    assert estado_da_loja(loja2) == "em_teste"   # não virou 'no ar' na repetição
-    assert estado_da_loja(1) == "no_ar"
 
 
 def test_loja_nova_nasce_em_teste():
@@ -116,7 +77,7 @@ def test_loja_nova_nasce_em_teste():
 def test_estado_invalido_e_recusado_pelo_banco():
     conexao = conectar()
     try:
-        with pytest.raises(sqlite3.IntegrityError):
+        with pytest.raises(banco.ErroDeIntegridade):
             conexao.execute("UPDATE estado_lojas SET estado = 'desligada' WHERE loja_id = 1")
     finally:
         conexao.close()

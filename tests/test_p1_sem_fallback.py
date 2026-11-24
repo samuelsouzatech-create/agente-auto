@@ -15,9 +15,7 @@ from banco import criar_tabelas
 
 @pytest.fixture
 def banco_temporario(monkeypatch):
-    fd, caminho = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", caminho)
+    caminho = banco.url_do_banco()   # PG1: o banco de teste já vem limpo (conftest)
     criar_tabelas()
     yield caminho
     if os.path.exists(caminho):

@@ -1,20 +1,23 @@
 # CLAUDE.md — Projeto Léo (agente-auto)
 
-Léo é um agente de IA de atendimento para lojas de veículos (WhatsApp, Instagram, Telegram), feito para vender a lojas de Recife. Stack: Python 3.13, FastAPI, LangGraph + Gemini, SQLite com migrações, Redis, Chroma, Streamlit (painéis) e API de painel em FastAPI (porta 8001, prefixo /api/v1).
+Léo é um agente de IA de atendimento para lojas de veículos (WhatsApp, Instagram, Telegram), feito para vender a lojas de Recife. Stack: Python 3.13, FastAPI, LangGraph + Gemini, banco com migrações, Redis, Chroma, Streamlit (painel do operador) e API de painel em FastAPI (porta 8001, prefixo /api/v1). O painel do cliente é o repositório `leo-painel-web` (React).
+
+**Banco:** a partir da Maratona Postgres (23/11/2026) o banco é **PostgreSQL 17** (diário em `docs/postgres.md`); o SQLite (`loja.db`) fica só como origem da importação. O próximo bloco põe a aplicação inteira no **Docker**.
 
 Você é o ajudante de código. Você escreve o código, um bloco por vez. Quem valida é o analista (outra IA), e quem faz merge é o Samuel. O Samuel é júnior e leigo em parte da engenharia: explique em português simples e vá direto ao ponto.
 
 ## Leia antes de começar um bloco
+- **Antes de qualquer bloco, leia `docs/decisoes_e_roteiro.md`. Se o seu trabalho contradizer uma decisão dali, PARE e avise o Samuel, não decida sozinho.**
 - `docs/plano_mestre.md` (como fazer cada bloco; numeração oficial de migrações na seção 17)
 - `docs/api/contrato_v1.md` e `docs/api/publicacao.md`
-- `estado_do_projeto_*.md` mais recente, se existir
+- `docs/estado_do_projeto_*.md` (ou na raiz) mais recente, se existir
 Se o código não for como a documentação diz: pare, anote o que viu e pergunte. Não improvise.
 
 ## Regras de código
 1. **Catraca de `loja_id`:** nenhuma função recebe `loja_id` com valor padrão. Existe um teste (`tests/test_catraca_loja.py`) que impede isso. Em rota de API, a loja vem só da sessão, nunca da URL nem do corpo.
 2. **Regra de negócio fica em `app/`.** Telas (Streamlit ou React) só mostram e enviam ações. Tela não calcula etapa, não converte horário e não valida regra.
 3. **Horário:** fonte única em `app/relogio.py`. O banco guarda UTC; tudo que o usuário vê sai no fuso da loja. Não duplique conta de horário.
-4. **Migrações:** só crie uma migração com o número previsto no plano (19 recados, 20 modo sombra; a do Instagram será a 21). Migrações nunca reusam número, nem um que ficou para trás (18 não existe e não será usado). Cada migração tem teste de subida a partir da versão anterior e nunca apaga dado. Se precisar de outra, pare e pergunte.
+4. **Migrações:** numeração real: 1 a 17, 19 (recados) e 20 (modo sombra). A 18 não existe e não será usada; a **21 está reservada ao Instagram**. Uma migração nova usa o próximo número livre previsto no plano. Migrações nunca reusam número. Cada migração tem teste de subida a partir da versão anterior e nunca apaga dado. Se precisar de outra, pare e pergunte.
 5. **Venda:** só existe um caminho, `registrar_venda`. Não crie outro.
 6. **Contrato da API v1 só cresce:** campo novo opcional, rota nova. Nunca renomear nem remover campo. Quem muda o contrato muda os dados falsos de `docs/api/mocks/`, e `docs/api/conferir_mocks.py` precisa passar.
 7. **Sem texto técnico nas telas:** nada de id, UTC, nome de arquivo, comando de terminal.
@@ -28,6 +31,7 @@ Se o código não for como a documentação diz: pare, anote o que viu e pergunt
 - **Horário da loja:** a fonte é o cadastro. Documento de conhecimento não repete horário.
 - **"Para de me mandar mensagem"** é checado em código antes da IA. Errar para o lado de parar é melhor.
 - **Foto do cliente** (`app/imagens.py`): a imagem nunca é guardada, só a descrição curta. Documento não é lido nem repetido: resposta fixa e chamado. Nunca valor pela foto.
+- **Foto do estoque** (`app/fotos.py`, `app/deposito.py`): só existe um caminho. O lojista envia o arquivo pelo painel (ou cola um link, que é baixado); toda foto passa pelo preparo único (sem metadados, reduzida, por loja) e fica no depósito (tomada local ou nuvem S3). O Léo, o painel e o simulador só usam fotos do depósito. Foto que falha no envio nunca é anunciada ao cliente como enviada.
 - **Mudança de prompt ou de comportamento exige rodada com IA real** (`-m api`) e o texto completo das respostas salvo no relatório. "Passou" sem ver o texto não prova nada. Não mude prompt só para fazer um caso passar sem avisar.
 
 ## Testes

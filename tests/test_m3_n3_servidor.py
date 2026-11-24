@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import json
 import os
-import sqlite3
 import sys
 import threading
 import time
@@ -34,22 +33,25 @@ def _sql(sql, parametros=()):
 def _no_ar(*lojas):
     _sql("INSERT OR IGNORE INTO lojas (id, nome, segmento, config) VALUES (2, 'Loja B', 'veiculos', '{}')")
     for loja in lojas:
-        _sql("INSERT OR REPLACE INTO estado_lojas (loja_id, estado) VALUES (?, 'no_ar')", (loja,))
+        _sql("INSERT INTO estado_lojas (loja_id, estado) VALUES (?, 'no_ar') "
+             "ON CONFLICT (loja_id) DO UPDATE SET estado = excluded.estado", (loja,))
 
 
 def _quando(horas_atras):
     return (AGORA - timedelta(hours=horas_atras)).strftime("%Y-%m-%d %H:%M:%S")
 
 
-# ------------------------------------------------------------ #14 SQLite
+# ------------------------------------------------------------ #14 (agora PostgreSQL)
 
-def test_conexao_em_wal_com_espera_de_5s():
+def test_conexao_vem_do_pool_do_postgres():
+    """PG1: o WAL e a espera de 5 s eram do SQLite. No PostgreSQL, várias conexões escrevem ao
+    mesmo tempo sem "database is locked"; o pool reaproveita as conexões."""
     conexao = banco.conectar()
     try:
-        assert conexao.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
-        assert conexao.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+        assert conexao.execute("SELECT 1").fetchone()[0] == 1
     finally:
         conexao.close()
+    assert banco.estatisticas_do_pool().get("pool_max") == banco.POOL_MAX
 
 
 def test_duas_escritas_ao_mesmo_tempo_nao_dao_database_is_locked():
@@ -58,13 +60,13 @@ def test_duas_escritas_ao_mesmo_tempo_nao_dao_database_is_locked():
     def segura_a_escrita():
         conexao = banco.conectar()
         try:
-            conexao.execute("BEGIN IMMEDIATE")
+            # PG1: a transação começa sozinha no primeiro comando (era BEGIN IMMEDIATE no SQLite).
             conexao.execute("INSERT INTO mensagens (lead_id, loja_id, canal, direcao, conteudo) "
                             "VALUES ('a', 1, 'whatsapp', 'cliente', 'primeira')")
             pronto.set()
             time.sleep(0.8)                  # a outra escrita chega enquanto esta segura a trava
             conexao.commit()
-        except sqlite3.Error as erro:
+        except banco.Erro as erro:
             erros.append(erro)
         finally:
             conexao.close()
@@ -76,7 +78,7 @@ def test_duas_escritas_ao_mesmo_tempo_nao_dao_database_is_locked():
             conexao.execute("INSERT INTO mensagens (lead_id, loja_id, canal, direcao, conteudo) "
                             "VALUES ('b', 2, 'whatsapp', 'cliente', 'segunda')")
             conexao.commit()
-        except sqlite3.Error as erro:
+        except banco.Erro as erro:
             erros.append(erro)
         finally:
             conexao.close()

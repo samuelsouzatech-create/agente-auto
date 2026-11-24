@@ -771,7 +771,7 @@ def _chamado_da_foto(loja_id: int, lead_id: str, motivo: str, resumo: str) -> No
         conexao.execute(
             "UPDATE handoffs SET motivo = COALESCE(motivo, '') || ' · ' || ? "
             "WHERE loja_id = ? AND lead_id = ? AND estado = 'aguardando_humano' "
-            "AND instr(COALESCE(motivo, ''), ?) = 0", (motivo, loja_id, lead_id, motivo))
+            "AND strpos(COALESCE(motivo, ''), ?) = 0", (motivo, loja_id, lead_id, motivo))
         conexao.commit()
     finally:
         conexao.close()

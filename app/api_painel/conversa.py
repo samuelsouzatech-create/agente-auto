@@ -48,8 +48,7 @@ def lead_valido(lead) -> str | None:
 
 def fatos(loja_id: int, lead: str) -> dict:
     """Mensagens (as últimas), chamado aberto e se o cliente existe NESTA loja."""
-    conexao = conectar()
-    conexao.execute("PRAGMA query_only = ON")
+    conexao = conectar(somente_leitura=True)
     try:
         linhas = conexao.execute(
             "SELECT id, direcao, tipo, conteudo, canal, autor, criado_em FROM mensagens "

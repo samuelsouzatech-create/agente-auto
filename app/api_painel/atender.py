@@ -54,8 +54,7 @@ def _carros(loja_id: int, leads) -> dict:
     saida = {}
     if not ids:
         return saida
-    conexao = conectar()
-    conexao.execute("PRAGMA query_only = ON")
+    conexao = conectar(somente_leitura=True)
     try:
         for i in range(0, len(ids), _LOTE):
             parte = ids[i:i + _LOTE]

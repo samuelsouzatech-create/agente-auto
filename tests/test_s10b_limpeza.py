@@ -52,20 +52,12 @@ def test_versao_do_streamlit_igual_ao_requirements():
     assert streamlit.__version__ == pedida
 
 
-def test_migracao_14_cria_indices():
-    with closing(conectar()) as c:
-        versao = c.execute("PRAGMA user_version").fetchone()[0]
-        nomes = {r[0] for r in c.execute(
-            "SELECT name FROM sqlite_master WHERE type='index'")}
-    assert versao >= 14
-    for i in ["idx_mensagens_loja_direcao", "idx_handoffs_loja_estado",
-              "idx_mensagens_direcao_canal", "idx_custos_data"]:
-        assert i in nomes, i
-
-
 def _plano(sql, args=()):
+    # PG1: no PostgreSQL, tabela vazia é lida inteira (mais barato). Desligar a leitura inteira
+    # nesta conexão mostra se o índice SERVE para a consulta, que é o que a decisão 3A pede.
     with closing(conectar()) as c:
-        linhas = c.execute("EXPLAIN QUERY PLAN " + sql, args).fetchall()
+        c.execute("SET LOCAL enable_seqscan = off")
+        linhas = c.execute("EXPLAIN " + sql, args).fetchall()
     return " ".join(str(tuple(r)) for r in linhas)
 
 

@@ -11,7 +11,6 @@ import asyncio
 import json
 import os
 import shutil
-import sqlite3
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -90,26 +89,15 @@ def test_migracao_v5_cria_tabelas_e_e_idempotente():
     banco.criar_tabelas()
     con = banco.conectar()
     assert banco.versao_schema(con) == banco.VERSAO_SCHEMA
-    tabelas = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    tabelas = {r[0] for r in con.execute("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema()")}
     con.close()
     for t in ("remarketing_envios", "vendas", "reguas", "regua_passos",
               "regua_execucoes", "modelos_loja", "interesse_veiculo"):
         assert t in tabelas
 
 
-def test_migracao_v5_pode_rodar_de_novo():
-    con = banco.conectar()
-    con.execute("PRAGMA user_version = 4")
-    con.commit()
-    con.close()
-    banco.migrar()                      # não pode quebrar
-    con = banco.conectar()
-    assert banco.versao_schema(con) == banco.VERSAO_SCHEMA
-    con.close()
-
-
 def test_tabelas_novas_exigem_loja():
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(banco.ErroDeIntegridade):
         _executar("INSERT INTO remarketing_envios (lead_id, canal, toque, estado) "
                   "VALUES ('5581', 'whatsapp', 1, 'simulado')")
 
@@ -119,7 +107,7 @@ def test_mesmo_toque_nao_se_repete_mas_lojas_sao_independentes(loja_b):
            "VALUES (?, '5581', 'whatsapp', 1, 'simulado')")
     _executar(sql, (1,))
     _executar(sql, (loja_b,))
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(banco.ErroDeIntegridade):
         _executar(sql, (1,))
 
 
@@ -128,7 +116,7 @@ def test_uma_regua_ativa_por_loja(loja_b):
     _executar(sql, (1, 1))
     _executar(sql, (1, 0))          # inativa: histórico, pode
     _executar(sql, (loja_b, 1))
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(banco.ErroDeIntegridade):
         _executar(sql, (1, 1))
 
 

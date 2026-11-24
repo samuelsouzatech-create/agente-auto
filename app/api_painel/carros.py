@@ -47,8 +47,7 @@ def fotos_para_o_painel(loja_id: int, texto) -> list:
 
 
 def interessados(loja_id: int) -> dict:
-    conexao = conectar()
-    conexao.execute("PRAGMA query_only = ON")
+    conexao = conectar(somente_leitura=True)
     try:
         linhas = conexao.execute(
             "SELECT veiculo_id, COUNT(*) AS n FROM interesse_veiculo WHERE loja_id = ? "

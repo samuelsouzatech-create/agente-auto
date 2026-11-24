@@ -6,10 +6,11 @@ P4 do Plano Mestre: funções de leitura dos painéis (app/painel_leitura.py).
 - Nada é gravado no banco.
 Tudo offline: banco temporário (conftest), sem IA.
 """
-import sqlite3
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+
+import banco
 
 from banco import conectar
 from app.chaves import LojaNaoInformada
@@ -380,9 +381,11 @@ def test_cartao_nao_mostra_dados_de_outra_loja():
 
 # ---------------------------------------------------------------- só leitura
 def _foto_do_banco():
+    """Todas as linhas de todas as tabelas (PG1: era o iterdump do SQLite)."""
     conexao = conectar()
     try:
-        return list(conexao.iterdump())
+        return {t: sorted(tuple(map(str, l)) for l in conexao.execute(f"SELECT * FROM {t}").fetchall())
+                for t in banco.tabelas()}
     finally:
         conexao.close()
 
@@ -400,7 +403,7 @@ def test_nada_e_gravado_no_banco():
 def test_conexao_de_leitura_recusa_escrita():
     conexao = _ler()
     try:
-        with pytest.raises(sqlite3.Error):
+        with pytest.raises(banco.Erro):
             conexao.execute("DELETE FROM mensagens")
     finally:
         conexao.close()

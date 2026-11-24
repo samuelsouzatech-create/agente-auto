@@ -3,6 +3,25 @@
 Tudo roda no seu computador. Nada sai para WhatsApp, Telegram ou cliente de verdade: a loja de
 demonstração ("Recife Seminovos Demo") é fictícia e só usa o simulador.
 
+## 0. Subir o banco (sempre, antes de tudo)
+
+Desde a Maratona Postgres o banco é PostgreSQL e roda no Docker. Abra o **Docker Desktop** e
+espere ele dizer que está ligado. Depois, no PowerShell, na pasta do projeto
+(`C:\Users\Samuel\agente-auto`):
+
+```powershell
+docker compose up -d
+```
+
+Na primeira vez (ou depois de apagar o banco), crie as tabelas:
+
+```powershell
+.venv-teste\Scripts\python -c "import banco; banco.criar_tabelas()"
+```
+
+Para conferir se o banco está ligado: `docker compose ps` (tem de aparecer "healthy").
+Para desligar no fim do dia: `docker compose stop` (os dados continuam guardados).
+
 ## 1. Preparar (uma vez, ou quando quiser começar do zero)
 
 Abra o PowerShell na pasta do projeto (`C:\Users\Samuel\agente-auto`) e rode, nesta ordem:
@@ -99,6 +118,8 @@ depois `.venv-teste\Scripts\python scripts\criar_usuarios_demo.py` para ter as p
 ## 5. Se algo der errado
 
 - "Nenhuma loja cadastrada": rode o passo 1.
+- "Não consegui falar com o PostgreSQL" ou "Falta a BANCO_URL": o banco não está ligado (passo
+  0) ou falta a linha `BANCO_URL` no `.env` (veja `.env.example`).
 - O Léo não responde: confira se o `.env` do projeto tem a chave do Gemini (não mostre a chave a ninguém).
 - Para fechar uma tela: no PowerShell dela, aperte Ctrl+C.
 - Grave um vídeo de reserva da demo completa, para o caso de o computador falhar na hora.

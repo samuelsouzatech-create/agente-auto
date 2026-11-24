@@ -1,6 +1,5 @@
 """Etapa 1, Bloco 1: migração, lead único por loja e configuração por loja."""
 import json
-import sqlite3
 
 import pytest
 
@@ -21,7 +20,7 @@ def _sem_meta(config):
 def test_migracao_cria_tabelas_e_semeia_loja_1():
     con = banco.conectar()
     assert banco.versao_schema(con) == banco.VERSAO_SCHEMA
-    tabelas = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    tabelas = {r[0] for r in con.execute("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema()")}
     con.close()
     for t in ("lojas", "canais", "usuarios", "optouts", "uso_custos",
               "precos", "conhecimento", "config_historico"):
@@ -44,33 +43,8 @@ def test_mesmo_telefone_em_duas_lojas_vira_dois_leads():
     con.execute("INSERT INTO leads (lead_id, loja_id, nome) VALUES ('5581', 1, 'Ana')")
     con.execute("INSERT INTO leads (lead_id, loja_id, nome) VALUES ('5581', ?, 'Ana')", (loja_b,))
     con.commit()
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(banco.ErroDeIntegridade):
         con.execute("INSERT INTO leads (lead_id, loja_id) VALUES ('5581', 1)")
-    con.close()
-
-
-def test_migracao_preserva_os_dados_do_banco_antigo(tmp_path, monkeypatch):
-    caminho = tmp_path / "antigo.db"
-    con = sqlite3.connect(caminho)
-    con.execute("""CREATE TABLE leads (id INTEGER PRIMARY KEY AUTOINCREMENT,
-        lead_id TEXT UNIQUE, loja_id INTEGER NOT NULL DEFAULT 1, nome TEXT,
-        interesse TEXT, forma_pagamento TEXT, tem_troca TEXT, prazo TEXT,
-        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-    con.execute("INSERT INTO leads (lead_id, nome) VALUES ('5581999', 'Ana')")
-    con.commit()
-    con.close()
-
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", str(caminho))
-    lojas.limpar_cache()
-    banco.criar_tabelas()
-
-    con = banco.conectar()
-    lead = con.execute("SELECT * FROM leads WHERE lead_id = '5581999'").fetchone()
-    assert lead["nome"] == "Ana" and lead["loja_id"] == 1
-    con.execute("INSERT INTO lojas (id, nome) VALUES (2, 'B')")
-    con.execute("INSERT INTO leads (lead_id, loja_id) VALUES ('5581999', 2)")  # não pode falhar
-    con.commit()
     con.close()
 
 

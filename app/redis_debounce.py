@@ -32,7 +32,14 @@ async def acumular_e_esperar(lead_id: str, texto: str, loja_id: int | None = Non
     if hora_atual is None or float(hora_atual) != hora_desta:
         return None
 
-    partes = await redis_cliente.lrange(chave_buffer, 0, -1)
-    await redis_cliente.delete(chave_buffer)
-    await redis_cliente.delete(chave_hora)
-    return " ".join(partes)
+    # PG3 (teste de carga): ler e esvaziar o buffer num passo só (transação do Redis). Antes eram
+    # passos separados e, sob carga, a mensagem que chegava no meio deles se perdia. A hora NÃO
+    # é apagada: ela expira sozinha (TTL) e a mensagem seguinte sempre escreve a dela por cima.
+    # Apagar a hora aqui apagava a hora da mensagem que acabou de chegar, e ela era esquecida.
+    async with redis_cliente.pipeline(transaction=True) as passo:
+        passo.lrange(chave_buffer, 0, -1)
+        passo.delete(chave_buffer)
+        partes, _ = await passo.execute()
+    texto_juntado = " ".join(p for p in partes if p and p.strip())
+    # PG3: buffer vazio (ele expirou ou se perdeu) não vira um turno com mensagem vazia.
+    return texto_juntado or None

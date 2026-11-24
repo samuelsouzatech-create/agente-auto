@@ -5,6 +5,8 @@ Para cada loja com remarketing ligado, dentro do horário de envio, pega a fila
 montada no painel, CONFERE DE NOVO cada contato e manda o modelo aprovado
 (reativacao_cliente se há compra registrada, senão reativacao_contato).
 Conta no mesmo limite mensal do remarketing.
+E2-1: também tem um limite DIÁRIO por loja (remarketing.limite_diario_reativacao), contado no
+dia local da loja. O que passar fica na fila, na mesma ordem, para o dia seguinte.
 
 SIMULAÇÃO é o padrão. Envio de verdade só com REATIVACAO_ENVIO_REAL=1 e só pelo runner.
 
@@ -189,7 +191,8 @@ def rodar_reativacao(agora: datetime | None = None, *, envio_real: bool | None =
             if not fila:
                 continue
             foto = rv.fotografia(loja_id, agora)
-            vagas = min(max_por_loja, vagas_no_mes(loja_id, agora))
+            vagas = min(max_por_loja, vagas_no_mes(loja_id, agora),
+                        rv.vagas_no_dia(loja, agora, real=real))
         except Exception as erro:          # uma loja com problema não trava as outras
             print(f"[Reativação] Erro na loja {loja_id}: {erro!r}")
             continue

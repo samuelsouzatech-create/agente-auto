@@ -49,9 +49,7 @@ def importar_modulo(nome):
 @pytest.fixture
 def banco_temporario(monkeypatch):
     """Banco SQLite descartável, com todas as tabelas."""
-    fd, caminho = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", caminho)
+    caminho = banco.url_do_banco()   # PG1: o banco de teste já vem limpo (conftest)
     criar_tabelas()
     yield caminho
     if os.path.exists(caminho):
@@ -403,7 +401,12 @@ def test_historico_vem_em_ordem_e_separado_por_lead_e_loja(banco_temporario):
 def test_salvar_mensagem_nunca_derruba_a_conversa(monkeypatch, tmp_path):
     """Banco inacessível: salvar_mensagem só registra no log, não levanta erro."""
     from app.mensagens import salvar_mensagem
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", str(tmp_path / "nao_existe" / "x.db"))
+    def banco_fora(*a, **k):
+        raise banco.ErroOperacional("banco fora do ar (teste)")
+    monkeypatch.setattr(banco, "conectar", banco_fora)
+    import app.mensagens as _m
+    if hasattr(_m, "conectar"):
+        monkeypatch.setattr(_m, "conectar", banco_fora)
     salvar_mensagem("A", "cliente", "oi", canal="whatsapp", loja_id=1)  # não pode levantar
 
 

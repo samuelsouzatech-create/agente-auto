@@ -68,7 +68,7 @@ def test_migracao_2_acrescenta_colunas():
     conexao = banco.conectar()
     try:
         assert banco.versao_schema(conexao) == banco.VERSAO_SCHEMA >= 2
-        colunas = {c["name"] for c in conexao.execute("PRAGMA table_info(uso_custos)")}
+        colunas = {c["name"] for c in conexao.execute("SELECT ordinal_position AS cid, column_name AS name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'uso_custos'")}
     finally:
         conexao.close()
     assert {"tipo", "modelo", "custo_completo"} <= colunas

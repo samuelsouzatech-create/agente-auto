@@ -101,7 +101,7 @@ def test_migracao_v7_cria_a_tabela():
     c = conectar()
     try:
         assert banco.versao_schema(c) == banco.VERSAO_SCHEMA >= 7
-        tabelas = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        tabelas = {r[0] for r in c.execute("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema()")}
     finally:
         c.close()
     assert "reativacao" in tabelas

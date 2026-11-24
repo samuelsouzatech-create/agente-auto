@@ -36,7 +36,6 @@ de app/ que têm trava de permissão. Este arquivo não altera nada em app/.
 import json
 import os
 import re
-import sqlite3
 import sys
 import time
 import unicodedata
