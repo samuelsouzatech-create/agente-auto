@@ -25,11 +25,11 @@ from app.leitura_config import valor_config
 from app.relogio import descrever_horarios, status_agora
 from app.segmentos import (
     PASTA_SEGMENTOS,  # noqa: F401  (compatibilidade; quem manda é app/segmentos.py)
-    ferramentas_de_modulo_do_segmento, ferramentas_do_segmento, pasta_do_segmento,
+    ferramentas_de_modulo_do_segmento, ferramentas_do_segmento, gancho, pasta_do_segmento,
+    ramo_da_loja, valor_do_ramo,
 )
 from tools import (
-    consultar_estoque, detalhes_veiculo, enviar_fotos, simular_financiamento,
-    registrar_troca, agendar_visita, registrar_lead, acionar_handoff,
+    enviar_fotos, simular_financiamento, agendar_visita, registrar_lead, acionar_handoff,
     buscar_conhecimento, registrar_interesse,
 )
 from tools.registrar_recado import registrar_recado
@@ -47,30 +47,20 @@ FERRAMENTAS_UNIVERSAIS = [registrar_lead, acionar_handoff, buscar_conhecimento, 
 # número de parcela é assunto que o vendedor fecha.
 FERRAMENTAS_FORA_DA_ESPERA = {"simular_financiamento"}
 
-# Lista de todas as tools conhecidas (o agente usa para injetar loja_id).
+# Lista das tools do MOTOR (o agente usa para injetar loja_id). SG1: as do ramo vêm do pacote do
+# ramo (segmentos/<ramo>/ferramentas.py); o agente as reconhece por app/segmentos.py.
 TODAS_AS_FERRAMENTAS = [
-    consultar_estoque, detalhes_veiculo, enviar_fotos, simular_financiamento,
-    registrar_troca, agendar_visita, registrar_lead, acionar_handoff,
+    enviar_fotos, simular_financiamento, agendar_visita, registrar_lead, acionar_handoff,
     buscar_conhecimento, registrar_interesse,
 ]
-
-# L5c: o que o Léo pode dizer sobre aceitar carro na troca (vem do cadastro da loja).
-TEXTO_ACEITA_TROCA = {
-    "sim": "- Troca: a loja aceita carro na troca (avaliação presencial, com um vendedor).",
-    "nao": "- Troca: a loja NÃO aceita carro na troca. Se perguntarem, diga isso com educação.",
-    "nao_informado": ("- Troca: não está cadastrado se a loja aceita carro na troca. Se perguntarem, "
-                      "diga que vai confirmar com a equipe e chame acionar_handoff. Não diga que aceita."),
-}
 
 # L3/L4: no modo equipe só existe esta ferramenta (nunca aparece para cliente).
 FERRAMENTAS_EQUIPE = [registrar_recado]
 ROTULOS_EQUIPE = {"dono": "dono", "gestor": "gerente"}
 
+# Guia das ferramentas do MOTOR. SG1: as do ramo vêm de segmentos/<ramo>/ferramentas.py (DESCRICOES).
 DESCRICOES = {
-    "consultar_estoque": "o cliente pergunta sobre carros, modelos, categorias (SUV, sedã, hatch, picape), preços ou disponibilidade.",
-    "detalhes_veiculo": "o cliente quer saber mais de um carro específico que já apareceu na conversa.",
     "simular_financiamento": "o cliente pede simulação de parcelas (sempre com o aviso de estimativa).",
-    "registrar_troca": "o cliente diz que tem um carro para dar na troca.",
     "agendar_visita": ("o cliente quer visitar a loja, fazer test-drive ou receber uma ligação. "
                        'Em data_hora, passe o dia e a hora EXATAMENTE como o cliente falou '
                        '("quarta às 3" fica "quarta às 3"): não converta "às 3" em 15h, '
@@ -153,7 +143,7 @@ def modulo_ligado(loja, modulo: str) -> bool:
 
 
 def segmento_da_loja(loja) -> str:
-    return getattr(loja, "segmento", None) or "veiculos"
+    return ramo_da_loja(loja)        # SG1: o padrão (lojas antigas) mora em app/segmentos.py
 
 
 def ferramentas_da_loja(loja, em_espera: bool = False) -> list:
@@ -236,9 +226,10 @@ def _camada_da_loja(loja, agora=None) -> str:
     else:
         linhas.append("- Endereço da loja: não cadastrado. Se perguntarem, diga que vai confirmar "
                       "com a equipe e chame acionar_handoff. Nunca invente endereço.")
-    # L5c: aceitar troca vem do cadastro, não da base de conhecimento.
-    linhas.append(TEXTO_ACEITA_TROCA.get(str(valor_config(cfg, "aceita_troca", "nao_informado")),
-                                         TEXTO_ACEITA_TROCA["nao_informado"]))
+    # L5c / SG1: linhas do RAMO (ex.: aceita troca, que vem do cadastro), no mesmo lugar de antes.
+    linhas_do_ramo = gancho(segmento_da_loja(loja), "textos", "linhas_da_identidade")
+    if linhas_do_ramo is not None:
+        linhas.extend(linhas_do_ramo(lambda chave, padrao=None: valor_config(cfg, chave, padrao)))
     vista = _loja_para_relogio(loja)
     horario = descrever_horarios(vista)
     if horario:
@@ -258,8 +249,10 @@ def _camada_da_loja(loja, agora=None) -> str:
 
 def _guia_ferramentas(loja, ferramentas) -> str:
     linhas = ["QUANDO USAR CADA FERRAMENTA (só estas existem nesta loja)"]
+    do_ramo = valor_do_ramo(segmento_da_loja(loja), "ferramentas", "DESCRICOES", {})
     for f in ferramentas:
-        linhas.append(f"- {f.name}: {DESCRICOES.get(f.name, f.description.strip().splitlines()[0])}")
+        guia = do_ramo.get(f.name) or DESCRICOES.get(f.name, f.description.strip().splitlines()[0])
+        linhas.append(f"- {f.name}: {guia}")
     # Só avisa de módulo que o segmento tem (barbearia não ouve falar de "ficha do carro").
     modulos_do_segmento = ferramentas_de_modulo_do_segmento(segmento_da_loja(loja))
     avisos = [texto for modulo, texto in AVISOS_MODULO_DESLIGADO.items()
@@ -355,10 +348,27 @@ def _camada_do_tom(loja) -> str:
     return "\n".join(linhas)
 
 
+# SG1: trechos de prompts/base.md que são do RAMO ({{ramo:<chave>}}). Ramo sem o trecho: o neutro.
+_TRECHO_DO_RAMO = re.compile(r"\{\{ramo:([a-z_]+)\}\}")
+TRECHOS_NEUTROS = {"nao_invente": "item, preço", "exemplo_sem_foto": "um item sem fotos",
+                   "o_item": "o item", "fotos_do_cliente": ""}
+
+
+def base_do_ramo(base: str, loja) -> str:
+    """prompts/base.md com os trechos do ramo da loja. Linha que era só o trecho e ficou vazia sai."""
+    do_ramo = valor_do_ramo(segmento_da_loja(loja), "textos", "TRECHOS_DO_PROMPT_BASE", {})
+    saida = []
+    for linha in base.split("\n"):
+        nova = _TRECHO_DO_RAMO.sub(lambda m: do_ramo.get(m.group(1), TRECHOS_NEUTROS.get(m.group(1), "")), linha)
+        if nova.strip() or not linha.strip():
+            saida.append(nova)
+    return "\n".join(saida)
+
+
 def montar_prompt(loja, ferramentas, agora, *, em_espera: bool = False,
                   primeiro_contato: bool = False, retomada: dict | None = None,
                   compras: list | None = None, recados: list | None = None) -> str:
-    base = _ler_arquivo(str(PASTA_PROMPTS / "base.md"))
+    base = base_do_ramo(_ler_arquivo(str(PASTA_PROMPTS / "base.md")), loja)
     segmento = _ler_arquivo(str(pasta_do_segmento(segmento_da_loja(loja)) / "prompt.md"))
     data = (f"DATA E HORA ATUAL: {agora.strftime('%d/%m/%Y %H:%M')} "
             f"({DIAS_SEMANA[agora.weekday()]}).")

@@ -17,7 +17,8 @@ import banco
 from app import imagens, lojas
 from app.custos import Uso
 from app.guarda_politica import (PREFIXO_FALSO_DONO, assunto_da_equipe, diz_ser_da_equipe,
-                                 pediu_valor_da_troca, pergunta_curta, promete_contato_da_equipe)
+                                 pergunta_curta, promete_contato_da_equipe)
+from segmentos.veiculos.guardas import pediu_valor_da_troca                                     # SG1: guarda do ramo
 from app.imagens import ANUNCIO, CARRO, DOCUMENTO, OUTRO, LeituraImagem
 
 LOJA_A, LOJA_B = 1, 2

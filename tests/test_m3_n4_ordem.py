@@ -22,12 +22,14 @@ def test_lista_unica_na_ordem_combinada():
 
 
 def test_guardas_linha_a_linha_na_definicao_e_sem_reatribuir_no_fim():
-    import app.guarda_politica as g
+    import app.guarda_politica as motor
+    import segmentos.veiculos.guardas as ramo                                   # SG1: guardas de carro moram no ramo
     nomes = ["trocar_frases_proibidas", "corrigir_regra_de_entrada", "trocar_politica_sem_base",
              "tirar_promessa_de_foto", "trocar_frases_de_risco", "cortar_estado_inventado",
              "tirar_agendamento_falso", "tirar_elogio_do_estado"]
-    assert all(hasattr(getattr(g, n), "__wrapped__") for n in nomes)
-    fonte = (RAIZ / "app" / "guarda_politica.py").read_text(encoding="utf-8")
+    assert all(hasattr(getattr(motor, n, None) or getattr(ramo, n), "__wrapped__") for n in nomes)
+    fonte = ((RAIZ / "app" / "guarda_politica.py").read_text(encoding="utf-8")
+             + (RAIZ / "segmentos" / "veiculos" / "guardas.py").read_text(encoding="utf-8"))
     assert not any(f"{n} = _mantem_linhas(" in fonte for n in nomes)
     assert all(f"@_mantem_linhas\ndef {n}(" in fonte for n in nomes)
 

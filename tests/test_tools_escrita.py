@@ -8,7 +8,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import banco
 from banco import criar_tabelas
-from tools import registrar_lead, registrar_troca, agendar_visita, acionar_handoff
+from tools import registrar_lead, agendar_visita, acionar_handoff
+from segmentos.veiculos.registrar_troca import registrar_troca
 
 from datetime import datetime
 from zoneinfo import ZoneInfo

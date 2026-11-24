@@ -72,7 +72,7 @@ def test_marcar_status_recusa_situacao_desconhecida():
 
 
 def test_reservado_e_indisponivel_saem_da_oferta_do_leo():
-    from tools import consultar_estoque
+    from segmentos.veiculos.consultar_estoque import consultar_estoque
     carro = _carro(1)
     for situacao in ("reservado", "indisponivel"):
         marcar_status(carro, situacao, 1)

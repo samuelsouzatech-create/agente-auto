@@ -16,9 +16,10 @@ import banco
 from app import imagens, lojas
 from app.custos import Uso
 from app.guarda_politica import (FRASE_CONTATO, FRASE_ENTRADA, PREFIXO_FALSO_DONO,
-                                 corrigir_regra_de_entrada, pergunta_se_aceita_troca,
-                                 tirar_elogio_da_descricao, tirar_elogio_do_estado,
+                                 corrigir_regra_de_entrada,
                                  trocar_frases_proibidas)
+from segmentos.veiculos.guardas import (pergunta_se_aceita_troca, tirar_elogio_da_descricao,   # SG1: guardas do ramo
+                  tirar_elogio_do_estado)
 from app.imagens import CARRO, LeituraImagem
 
 LOJA_A, LOJA_B = 1, 2
@@ -317,6 +318,6 @@ def test_turno_da_foto_do_carro_tira_o_elogio(duas_lojas):
 
 def test_estado_sem_ficha_sai_tambem_fora_de_foto(duas_lojas):
     # L12: estado/qualidade do carro só se vier da ficha, em qualquer turno (antes: só na foto).
-    from app.guarda_politica import FRASE_ESTADO
+    from segmentos.veiculos.guardas import FRASE_ESTADO
     r = _turno(LOJA_A, "lead-sem-foto", "o renegade é bom?", GrafoFalso("O Renegade está em ótimo estado."))
     assert r.texto == FRASE_ESTADO

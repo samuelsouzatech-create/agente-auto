@@ -492,7 +492,7 @@ def test_marcar_vendido_tira_o_carro_da_oferta_do_leo(banco_temporario):
     """Carro fora de 'disponível' sai da oferta do Léo NA HORA (seção 7 do doc).
     Desde o P2, 'vendido' só vem de Registrar venda."""
     from app.estoque import adicionar_carro, marcar_status
-    from tools import consultar_estoque
+    from segmentos.veiculos.consultar_estoque import consultar_estoque
     novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=1)
     assert "Argo" in consultar_estoque.invoke({"modelo": "Argo", "loja_id": 1})
     marcar_status(novo, "reservado", 1)

@@ -8,7 +8,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import banco
 from banco import criar_tabelas, popular_estoque_exemplo
-from tools import formatar_brl, simular_financiamento, consultar_estoque
+from tools import formatar_brl, simular_financiamento
+from segmentos.veiculos.consultar_estoque import consultar_estoque
 
 
 @pytest.fixture

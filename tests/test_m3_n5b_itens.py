@@ -15,8 +15,9 @@ from langchain_core.messages import AIMessage, HumanMessage
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import banco
-from app.guarda_politica import (FRASE_PAGAMENTO_EXPLICA, corrigir_reabertura, tirar_elogio_da_descricao,
+from app.guarda_politica import (FRASE_PAGAMENTO_EXPLICA, corrigir_reabertura,
                                  tirar_fragmentos, trocar_politica_sem_base)
+from segmentos.veiculos.guardas import tirar_elogio_da_descricao                                # SG1: guarda do ramo
 
 SABADO_0018 = datetime(2026, 11, 21, 3, 18, tzinfo=timezone.utc)     # sábado 00:18 em Recife (abre 08:00)
 DOMINGO_1500 = datetime(2026, 11, 22, 18, 0, tzinfo=timezone.utc)    # domingo 15:00 em Recife (abre seg 08:00)
@@ -201,7 +202,7 @@ def test_prompt_da_visao_nao_mudou():
     ("dá pra levar o carro até Olinda?", True),
 ])
 def test_entrega_so_com_carro_ou_cidade(fala, abre):
-    from app.core.turno import motivo_do_chamado_pelo_codigo
+    from segmentos.veiculos.guardas import motivo_do_chamado_pelo_codigo                  # SG1: a regra inteira da loja de carros
     motivo = motivo_do_chamado_pelo_codigo(fala, "Ok.", "sim")
     assert (motivo is not None and motivo[0] == "Cliente pediu entrega do carro.") is abre
 

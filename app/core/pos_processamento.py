@@ -24,6 +24,9 @@ Depois que a IA responde, o texto passa por estes passos, NESTA ordem (cada um �
     19. frase_de_oferta         a guarda tirou a pergunta e não sobrou nenhuma nem ação gravada
 
 Mudar a ordem muda o comportamento: um passo novo entra AQUI, com nome, no lugar certo.
+SG1 (Maratona 4): os passos 7, 8, o fim do 9 (CNH) e o começo do 10 (troca) são do RAMO da loja:
+o passo chama o gancho do pacote do ramo (segmentos/<ramo>/guardas.py, contrato em
+docs/pacote_de_ramo.md) no MESMO lugar. Ramo sem o gancho: o passo não faz nada. A ordem não mudou.
 Os passos buscam as guardas pelo módulo app.core.turno (os testes trocam funções por lá).
 N5: a SOMBRA usa esta mesma lista (Contexto.sombra=True): o texto passa pelos mesmos passos; o que
 grava algo (chamado, pós-venda, falso dono) não roda, e o aviso de chamado sai como sairia de verdade.
@@ -58,6 +61,20 @@ class Contexto:
     guarda_mexeu: bool = False
     sombra: bool = False       # N5: modo sombra: o texto passa pelos MESMOS passos, mas nada é gravado
     log: list = field(default_factory=list)
+    ramo: str | None = None    # SG1: o ramo da loja (lido uma vez, na primeira guarda do ramo)
+
+    def gancho(self, nome: str):
+        """SG1: a guarda `nome` do ramo desta loja (segmentos/<ramo>/guardas.py), ou None."""
+        from app.segmentos import gancho, ramo_da_loja_id
+        if self.ramo is None:
+            self.ramo = ramo_da_loja_id(self.loja_id)
+        return gancho(self.ramo, "guardas", nome)
+
+    def nomes_do_ramo(self, nome: str) -> tuple:
+        from app.segmentos import ramo_da_loja_id, valor_do_ramo
+        if self.ramo is None:
+            self.ramo = ramo_da_loja_id(self.loja_id)
+        return tuple(valor_do_ramo(self.ramo, "ferramentas", nome, ()) or ())
 
     def avisar(self, mensagem: str) -> None:
         print(f"{self.rotulo} {mensagem}")
@@ -120,18 +137,26 @@ def promessa_de_foto(c: Contexto) -> None:
 
 
 def elogio_da_foto(c: Contexto) -> None:
+    """SG1: gancho do ramo (veículos: elogio ao estado do carro da foto do cliente)."""
     if not c.foto_carro:
         return
-    c.resposta, trocou = _t().tirar_elogio_do_estado(c.resposta)
+    guarda = c.gancho("tirar_elogio_do_estado")
+    if guarda is None:
+        return
+    c.resposta, trocou = guarda(c.resposta)
     if trocou:
         c.avisar("GUARDA: elogio ao estado do carro da foto retirado.")
         c.ferramentas.append("guarda_elogio")
 
 
 def estado_sem_ficha(c: Contexto) -> None:
+    """SG1: gancho do ramo (veículos: estado/qualidade do carro só se veio da ficha)."""
     t = _t()
-    c.resposta, trocou = t.cortar_estado_inventado(c.resposta, t._fichas_do_turno(c.do_turno),
-                                                   substituir=not t._comprou_na_loja(c.loja_id, c.lead_id))
+    guarda = c.gancho("cortar_estado_inventado")
+    if guarda is None:
+        return
+    c.resposta, trocou = guarda(c.resposta, t._fichas_do_turno(c.do_turno, c.nomes_do_ramo("FERRAMENTAS_DE_FICHA")),
+                                substituir=not t._comprou_na_loja(c.loja_id, c.lead_id))
     if trocou:
         c.avisar("GUARDA: estado do carro sem ficha cortado.")
         c.ferramentas.append("guarda_estado")
@@ -145,13 +170,18 @@ def agendamento(c: Contexto) -> None:
         if trocou:
             c.avisar("GUARDA: agendamento dito sem a ferramenta gravar; vira pedido à equipe.")
             c.ferramentas.append("guarda_agenda")
-    elif "test-drive" in agenda.lower() and "cnh" not in c.resposta.lower():
-        c.resposta = f"{c.resposta} {t.FRASE_CNH}"
+    else:
+        depois = c.gancho("depois_da_agenda")              # SG1: veículos: test-drive lembra a CNH
+        if depois is not None:
+            c.resposta = depois(c.resposta, agenda)
 
 
 def chamado_pelo_codigo(c: Contexto) -> None:
     t = _t()
-    motivo_guarda = t.motivo_do_chamado_pelo_codigo(c.texto, c.resposta, t._aceita_troca(c.loja_id))
+    # SG1: primeiro o motivo do ramo (veículos: troca), depois as regras do motor. Ordem de antes.
+    do_ramo = c.gancho("motivo_do_chamado")
+    motivo_guarda = ((do_ramo(c.texto, c.loja_id) if do_ramo is not None else None)
+                     or t.motivo_do_chamado_do_motor(c.texto, c.resposta))
     if not (motivo_guarda and not c.handoff and t.estado_do_handoff(c.lead_id, c.loja_id) == "ativo"):
         return
     motivo, nome_guarda = motivo_guarda

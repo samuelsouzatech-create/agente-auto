@@ -23,9 +23,12 @@ import app.lojas as lojas
 from app.core.montagem import ferramentas_da_loja, montar_prompt
 from app.formatacao import limpar_markdown
 from tools import (
-    consultar_estoque, detalhes_veiculo, enviar_fotos, simular_financiamento,
-    registrar_lead, registrar_troca, agendar_visita, acionar_handoff,
+    enviar_fotos, simular_financiamento,
+    registrar_lead, agendar_visita, acionar_handoff,
 )
+from segmentos.veiculos.consultar_estoque import consultar_estoque          # SG1: do ramo
+from segmentos.veiculos.detalhes_veiculo import detalhes_veiculo
+from segmentos.veiculos.registrar_troca import registrar_troca
 
 LOJA_B = 42  # id alto, para não colidir com lojas criadas em outros testes
 AGORA = datetime(2026, 10, 26, 15, 0, tzinfo=ZoneInfo("America/Recife"))

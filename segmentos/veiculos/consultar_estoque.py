@@ -1,6 +1,6 @@
 from typing import Annotated
 from langchain_core.tools import tool, InjectedToolArg
-from app.categorias import categoria_do_modelo, categoria_pedida
+from segmentos.veiculos.categorias import categoria_do_modelo, categoria_pedida
 from banco import conectar
 from tools.utils import formatar_brl
 

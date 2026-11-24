@@ -51,12 +51,11 @@ from app.guarda_politica import (MENSAGEM_SEGURA, PREFIXO_FALSO_DONO, assunto_da
                                  cliente_ameacou, motivo_com_marcas, relatou_problema_da_compra,
                                  assunto_serio, limitar_emojis, tem_emoji,
                                  corrigir_regra_de_entrada, diz_ser_da_equipe,
-                                 pediu_valor_da_troca, pergunta_curta, pergunta_se_aceita_troca,
+                                 pergunta_curta,
                                  promete_contato_da_equipe, resposta_tem_preco_inventado,
-                                 tirar_elogio_da_descricao, tirar_elogio_do_estado,
                                  tirar_promessa_de_foto, pedido_da_equipe, trocar_frases_de_risco,
-                                 trocar_politica_sem_base, cortar_estado_inventado,
-                                 tirar_agendamento_falso, limpar_repeticoes, FRASE_CNH, FRASE_CONTATO,
+                                 trocar_politica_sem_base,
+                                 tirar_agendamento_falso, limpar_repeticoes, FRASE_CONTATO,
                                  tirar_palavra_de_tempo, corrigir_reabertura, tirar_fragmentos,
                                  FRASE_OFERTA, tirar_texto_interno,
                                  trocar_frases_proibidas)
@@ -73,6 +72,7 @@ from app.recados import (MENSAGEM_SO_DONO, MENSAGEM_SO_RECADOS, membro_da_equipe
                          pode_deixar_recado)
 from app.redis_debounce import acumular_e_esperar
 from app.redis_lock import adquirir_lock_esperando
+from app.segmentos import NomesDoMotorEDosRamos, gancho, ramo_da_loja_id
 from app.utils import extrair_texto, mensagens_do_turno
 from tools import acionar_handoff
 from app.log import logger as _logger   # N3: registro técnico (logs/leo.log)
@@ -126,8 +126,9 @@ class ResultadoTurno:
 
 
 # N2: ferramentas que gravam algo (depois delas a frase de oferta fixa não entra).
-FERRAMENTAS_QUE_GRAVAM = frozenset({"agendar_visita", "registrar_interesse", "registrar_lead", "registrar_recado",
-                                    "registrar_troca", "acionar_handoff"})
+# SG1: as do motor + as que o pacote do ramo declara (segmentos/<ramo>/ferramentas.py).
+FERRAMENTAS_QUE_GRAVAM = NomesDoMotorEDosRamos({"agendar_visita", "registrar_interesse", "registrar_lead",
+                                                "registrar_recado", "acionar_handoff"}, "FERRAMENTAS_QUE_GRAVAM")
 
 
 def reabertura_agora(loja_id: int):
@@ -145,7 +146,7 @@ def precisa_da_frase_de_oferta(guarda_mexeu: bool, resposta_inicial: str, respos
                                ferramentas, texto_do_cliente: str) -> bool:
     """M1/N2: a guarda cortou a pergunta final e a resposta ficou sem NENHUMA pergunta e sem nenhuma
     ação gravada (ex.: test-drive agendado): termina com a oferta simples. Nunca em assunto sério."""
-    acao_gravada = bool(set(ferramentas or ()) & FERRAMENTAS_QUE_GRAVAM)
+    acao_gravada = any(f in FERRAMENTAS_QUE_GRAVAM for f in (ferramentas or ()))
     return bool(guarda_mexeu and resposta_inicial.rstrip().endswith("?") and "?" not in resposta
                 and not handoff and not acao_gravada and not assunto_serio("", texto_do_cliente))
 
@@ -438,7 +439,6 @@ MENSAGEM_FALSO_DONO_2 = ("Por aqui eu sigo sem registrar pedidos para este núme
                          "da loja. O pessoal da equipe já foi avisado e confere.")
 MENSAGEM_FALSO_DONO = ("Esse número não está cadastrado na equipe da loja, então não registro pedidos "
                        "por aqui. O pessoal da equipe vai conferir.")
-MOTIVO_ACEITA_TROCA = "Cliente perguntou se a loja aceita troca (não está no cadastro)."
 JANELA_FALSO_DONO_HORAS = 24
 
 
@@ -542,24 +542,19 @@ def falso_dono_ativo(loja_id: int, lead_id: str) -> bool:
         return False
 
 
-def _aceita_troca(loja_id: int) -> str:
-    try:
-        from app.lojas import carregar_loja
-        return str(carregar_loja(loja_id).get("aceita_troca") or "nao_informado")
-    except Exception:
-        _logger("turno").exception("Não consegui ler 'aceita troca' da loja.")
-        return "nao_informado"
-MOTIVO_VALOR_TROCA = "Cliente pediu valor da troca."
 MOTIVO_PROMESSA = "Léo disse ao cliente que a equipe vai confirmar ou falar com ele."
 
 
-def motivo_do_chamado_pelo_codigo(texto: str, resposta: str,
-                                  aceita_troca: str = "sim") -> tuple[str, str] | None:
-    """(motivo, nome da guarda) ou None. Ordem: valor da troca, assunto, promessa."""
-    if aceita_troca == "nao_informado" and pergunta_se_aceita_troca(texto):
-        return MOTIVO_ACEITA_TROCA, "guarda_aceita_troca"
-    if pediu_valor_da_troca(texto):
-        return MOTIVO_VALOR_TROCA, "guarda_troca"
+def motivo_do_chamado_do_ramo(texto: str, loja_id: int) -> tuple[str, str] | None:
+    """SG1: o motivo próprio do ramo (ex.: troca, nas lojas de carro), ANTES das regras do motor.
+    Ramo sem o gancho guardas.motivo_do_chamado: None."""
+    funcao = gancho(ramo_da_loja_id(loja_id), "guardas", "motivo_do_chamado")
+    return funcao(texto, loja_id) if funcao is not None else None
+
+
+def motivo_do_chamado_do_motor(texto: str, resposta: str) -> tuple[str, str] | None:
+    """(motivo, nome da guarda) ou None. Ordem: assunto, pedido, promessa.
+    SG1: o que vinha antes (troca) é do ramo: motivo_do_chamado_do_ramo."""
     assunto = assunto_da_equipe(texto)
     if assunto:
         return f"Cliente perguntou sobre {assunto}.", "guarda_assunto"
@@ -639,10 +634,14 @@ def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, grafo,
     return ResultadoTurno(silenciado=True)
 
 
-def _fichas_do_turno(do_turno) -> str:
-    """L12: o que as ferramentas de estoque devolveram no turno (a 'ficha' do carro)."""
+def _fichas_do_turno(do_turno, nomes=None) -> str:
+    """L12: o que as ferramentas de ficha devolveram no turno (a 'ficha' do item).
+    SG1: quais são as ferramentas de ficha, o ramo diz (FERRAMENTAS_DE_FICHA). Sem dizer: as de
+    todos os ramos já carregados (é o que a bancada usa)."""
+    if nomes is None:
+        nomes = NomesDoMotorEDosRamos((), "FERRAMENTAS_DE_FICHA")
     return " ".join(str(m.content) for m in do_turno if isinstance(m, ToolMessage)
-                    and m.name in ("consultar_estoque", "detalhes_veiculo"))
+                    and m.name in nomes)
 
 
 def _agenda_do_turno(do_turno) -> str | None:
@@ -814,24 +813,17 @@ def _chamado_da_foto(loja_id: int, lead_id: str, motivo: str, resumo: str) -> No
         conexao.close()
 
 
-def _anotar_foto_na_troca(loja_id: int, lead_id: str, descricao: str) -> None:
-    """Se o cliente já tem troca registrada, a última ganha 'foto recebida: ...'."""
-    if not descricao:
-        return
-    conexao = conectar()
-    try:
-        linha = conexao.execute("SELECT id, estado FROM trocas WHERE loja_id = ? AND lead_id = ? "
-                                "ORDER BY id DESC LIMIT 1", (loja_id, lead_id)).fetchone()
-        if linha is None:
-            return
-        nota = f"foto recebida: {descricao}"
-        estado = (linha["estado"] or "").strip()
-        if nota not in estado:
-            estado = f"{estado} | {nota}" if estado else nota
-            conexao.execute("UPDATE trocas SET estado = ? WHERE id = ?", (estado, linha["id"]))
-            conexao.commit()
-    finally:
-        conexao.close()
+def _anotar_foto_do_cliente(loja_id: int, lead_id: str, descricao: str) -> None:
+    """SG1: o ramo anota a foto do item do cliente (veículos: a troca ganha 'foto recebida')."""
+    funcao = gancho(ramo_da_loja_id(loja_id), "guardas", "anotar_foto_do_cliente")
+    if funcao is not None:
+        funcao(loja_id, lead_id, descricao)
+
+
+def _sem_elogio_na_descricao(loja_id: int, descricao: str) -> str:
+    """SG1: a descrição da foto do item do cliente sem julgamento de estado (gancho do ramo)."""
+    funcao = gancho(ramo_da_loja_id(loja_id), "guardas", "tirar_elogio_da_descricao")
+    return funcao(descricao) if funcao is not None else descricao
 
 
 def _resposta_fixa_com_chamado(loja_id, canal, lead_id, registro, resposta, motivo, uso):
@@ -905,7 +897,7 @@ def _turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: bytes,
     if not leitura.ok:
         _anotar_falha_da_foto(loja_id, lead_id, canal, leitura)
     if leitura.ok and leitura.tipo == imagens.CARRO:     # L5c: sem julgamento de estado
-        leitura.descricao = tirar_elogio_da_descricao(leitura.descricao)
+        leitura.descricao = _sem_elogio_na_descricao(loja_id, leitura.descricao)
 
     if not leitura.ok:
         return _com_leitura(_resposta_fixa_com_chamado(loja_id, canal, lead_id, "[foto não lida]",
@@ -922,6 +914,6 @@ def _turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: bytes,
     resultado = _turno(loja_id, canal, lead_id, imagens.texto_para_o_leo(leitura, legenda),
                        grafo=grafo, tipo="imagem", foto_carro=leitura.tipo == imagens.CARRO)
     if leitura.tipo == imagens.CARRO:
-        _anotar_foto_na_troca(loja_id, lead_id, leitura.descricao)
+        _anotar_foto_do_cliente(loja_id, lead_id, leitura.descricao)
         resultado.handoff_aberto = True
     return _com_leitura(resultado, leitura)

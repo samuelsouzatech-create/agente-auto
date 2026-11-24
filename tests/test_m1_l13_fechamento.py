@@ -12,8 +12,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import banco
 from app import lojas
-from app.guarda_politica import (FRASE_CREDITO, FRASE_ENTRADA, FRASE_ESTADO, FRASE_OFERTA, FRASE_PROMOCAO,
-                                 corrigir_regra_de_entrada, cortar_estado_inventado, limpar_repeticoes,
+from segmentos.veiculos.guardas import FRASE_ESTADO, cortar_estado_inventado                 # SG1: guardas do ramo
+from app.guarda_politica import (FRASE_CREDITO, FRASE_ENTRADA, FRASE_OFERTA, FRASE_PROMOCAO,
+                                 corrigir_regra_de_entrada, limpar_repeticoes,
                                  tirar_texto_interno, trocar_frases_de_risco, trocar_politica_sem_base)
 
 LOJA_A, LOJA_B = 1, 2

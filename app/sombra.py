@@ -18,13 +18,16 @@ from datetime import datetime, timedelta
 
 from app.chaves import exigir_loja
 from app.relogio import agora_utc, para_banco
+from app.segmentos import NomesDoMotorEDosRamos
 from banco import conectar
 
 DIAS_GUARDADOS = 30
 MAX_TEXTO = 2000
 # Ferramentas que GRAVAM algo: em sombra, o Léo só diz que usaria (não executa).
-FERRAMENTAS_QUE_GRAVAM = {"registrar_troca", "agendar_visita", "registrar_lead",
-                          "acionar_handoff", "registrar_interesse", "registrar_recado"}
+# SG1: as do motor + as que o pacote do ramo declara (FERRAMENTAS_QUE_GRAVAM).
+FERRAMENTAS_QUE_GRAVAM = NomesDoMotorEDosRamos({"agendar_visita", "registrar_lead", "acionar_handoff",
+                                                "registrar_interesse", "registrar_recado"},
+                                               "FERRAMENTAS_QUE_GRAVAM")
 RESPOSTA_DA_FERRAMENTA = ("Modo sombra: nada foi gravado. Responda ao cliente como responderia "
                           "se a ferramenta tivesse funcionado.")
 

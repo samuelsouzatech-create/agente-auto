@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import banco
 from app.guarda_politica import numeros_do_cliente, valores_em_reais
 from app.pedido_parada import pediu_para_parar
-from tools import registrar_troca
+from segmentos.veiculos.registrar_troca import registrar_troca
 
 
 def furo(numero, motivo):

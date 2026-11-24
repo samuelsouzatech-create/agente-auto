@@ -84,7 +84,7 @@ def preco_fora(texto, permitidos) -> bool:
 
 
 def precos_da_conversa(historico) -> set:
-    """Valores já ditos na conversa: do cliente (menos km) e da loja (Léo, vendedor)."""
+    """Valores já ditos na conversa: do cliente (menos distância, que não é dinheiro) e da loja (Léo, vendedor)."""
     permitidos = set()
     for m in historico or ():
         conteudo = str(m.get("conteudo") or "")

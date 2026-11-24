@@ -18,10 +18,13 @@ from app.chaves import LojaNaoInformada
 from app.core import agent
 from app.lojas import criar_loja
 from tools import (
-    acionar_handoff, agendar_visita, buscar_conhecimento, consultar_estoque,
-    detalhes_veiculo, enviar_fotos, registrar_interesse, registrar_lead,
-    registrar_troca, simular_financiamento,
+    acionar_handoff, agendar_visita, buscar_conhecimento,
+    enviar_fotos, registrar_interesse, registrar_lead,
+    simular_financiamento,
 )
+from segmentos.veiculos.consultar_estoque import consultar_estoque          # SG1: do ramo
+from segmentos.veiculos.detalhes_veiculo import detalhes_veiculo
+from segmentos.veiculos.registrar_troca import registrar_troca
 
 LEAD = "5581999990000"
 
