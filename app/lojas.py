@@ -107,6 +107,13 @@ PADROES: dict = {
         "resposta_publica": False,
         "limite_private_replies_h": 20,
         "texto_private_reply": "Oi! Vi seu comentário, te chamei por aqui para te ajudar.",
+        # IG2 (Opção B): {item} vira o nome do item do post (modelo e ano). Nunca preço.
+        "texto_comentario_item": ("Oi! Vi seu comentário no post do {item}. Ele está disponível. "
+                                  "Quer que eu te mande mais fotos?"),
+        "texto_comentario_vendido": ("Oi! Vi seu comentário. Esse {item} já saiu, mas tenho opções "
+                                     "parecidas. Quer que eu te mostre?"),
+        "texto_resposta_publica": "Te chamei no direct.",
+        "comentarios_prazo_dias": 7,
     },
     "custos": {"teto_diario_llm": None},
     "envio_real": {"remarketing": False, "pos_venda": False, "reativacao": False},
@@ -286,6 +293,10 @@ EDITAVEIS: dict[str, Callable] = {
     "instagram.resposta_publica": _bool,
     "instagram.limite_private_replies_h": _int(1, 200),
     "instagram.texto_private_reply": _texto(1, 300),
+    "instagram.texto_comentario_item": _texto(1, 300),
+    "instagram.texto_comentario_vendido": _texto(1, 300),
+    "instagram.texto_resposta_publica": _texto(1, 80),
+    "instagram.comentarios_prazo_dias": _int(1, 7),
     "custos.teto_diario_llm": _opcional(_float(0, 10_000)),
     "dados.retencao_dias": _opcional(_int(30, 3650)),
     **{f"modulos.{m}": _bool for m in MODULOS},

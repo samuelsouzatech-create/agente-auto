@@ -401,3 +401,43 @@ assíncrono do teste.)
 - Suíte inteira, 3 partes: 835 + 1.239 + 990 = **3.064 passaram, 0 falhas**. (Na 1ª rodada a parte 1
   teve 1 falha, o `test_canal_sem_envio_proativo[instagram]` acima; consertado, a parte 1 inteira
   foi rodada de novo: 835 passaram.)
+
+## IG2 — Comentários viram conversa (branch instagram-2, saiu da instagram-1)
+
+### O que foi feito
+- `app/comentarios_instagram.py`, chamado pela mesma porta (`POST /webhook/instagram`).
+- **Chaves** (já existiam no cadastro desde a Etapa 1, padrão DESLIGADAS): `modulos.instagram`
+  (operador) e `instagram.responder_comentarios` (as duas ligadas, senão nada sai);
+  `instagram.resposta_publica` (separada, padrão desligada). Novas: `texto_comentario_item`,
+  `texto_comentario_vendido`, `texto_resposta_publica` ("Te chamei no direct.") e
+  `comentarios_prazo_dias` (7, o máximo confirmado no IG0), na tela de Configuração > Instagram.
+  As que já existiam continuam valendo: `palavras_comentario` (lista de 1 a 30 palavras; o
+  comentário precisa ter uma delas; padrão "quero, valor, preço, info") e
+  `limite_private_replies_h` (20 por hora).
+- **Uma mensagem privada por comentário:** o comentário é gravado antes de tudo
+  (`instagram_comentarios`, único por loja + comentário); repetido não manda nada. Comentário da
+  própria conta da loja: ignorado. Loja em teste (P7): só número de teste. Mais de 7 dias: não
+  responde. Quem pediu para não ser procurado: não responde.
+- **Opção B (a mensagem sabe do carro):** lê a legenda do post (guardada 24 h por post, na
+  `instagram_legendas`) e procura no **catálogo** da loja (SG2, `citados_no_texto`):
+  exatamente 1 carro disponível -> "Oi! Vi seu comentário no post do Honda Civic 2019. Ele está
+  disponível. Quer que eu te mande mais fotos?"; vendido -> "Esse ... já saiu, mas tenho opções
+  parecidas"; nenhum ou mais de um -> o texto genérico da loja. Os textos são da loja, sem emoji
+  (tirado no envio), passam pelas guardas de frase proibida e de palavra de tempo e **nunca levam
+  preço** (se o texto da loja tiver preço, vai o genérico). O carro achado vira o interesse do lead
+  (`interesse_veiculo`, a tabela de sempre) e a mensagem privada fica gravada na conversa: quando a
+  pessoa responde, o Léo recebe essa mensagem no histórico e continua no carro (teste confere).
+- **Resposta pública:** curta e fixa, no máximo uma por comentário (o registro único garante),
+  nunca com preço (texto da loja com preço vira "Te chamei no direct.").
+- **Anúncio:** o IG0 confirmou o formato só no login do Facebook (`media.ad_id`). Comentário com
+  `ad_id` segue o mesmo caminho e a origem do lead fica "anuncio" (o id do anúncio vai em
+  `origem_detalhe`).
+
+### Testes do IG2 (`tests/test_ig2_comentarios.py`, 19)
+Chaves nascem desligadas e sem emoji; chave desligada não envia; os 3 caminhos da Opção B (1
+disponível, vendido, nenhum/mais de um/sem legenda); texto com preço vira o genérico; texto da loja
+sem emoji; legenda guardada por post; comentário repetido não gera 2ª mensagem; a própria loja
+ignorada; fora dos 7 dias; loja em teste; duas lojas (mesmo id de comentário, catálogos
+diferentes); resposta pública desligada por padrão, uma só e nunca com preço; anúncio com origem
+"anuncio"; origem "comentario"; a pessoa responde e o Léo continua sabendo do carro; a porta agenda
+o comentário da loja certa; as palavras da loja filtram.

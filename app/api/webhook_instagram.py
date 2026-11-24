@@ -134,4 +134,6 @@ async def receber(request: Request, tarefas: BackgroundTasks):
             tarefas.add_task(processar_texto, loja_id, m.lead_id, m.texto)
         else:
             tarefas.add_task(processar_nao_entendido, loja_id, m.lead_id, m.tipo_original)
+    from app.comentarios_instagram import receber_comentarios        # IG2: comentários
+    await receber_comentarios(dados, tarefas)
     return Response(status_code=200)
