@@ -1,0 +1,27 @@
+# Maratona Postgres (PG1): por enquanto só o banco. A aplicação entra no próximo bloco (Docker).
+# Subir:   docker compose up -d
+# Parar:   docker compose stop        (os dados ficam no volume "leo_banco")
+# A senha vem do .env (POSTGRES_SENHA); nunca escreva a senha aqui.
+# A porta fica só em 127.0.0.1 (nada de fora do computador entra). Padrão 5432; quem já usa a
+# 5432 põe BANCO_PORTA=5433 no .env.
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: leo
+      POSTGRES_DB: leo
+      POSTGRES_PASSWORD: ${POSTGRES_SENHA:?coloque POSTGRES_SENHA no .env}
+    ports:
+      - "127.0.0.1:${BANCO_PORTA:-5432}:5432"
+    volumes:
+      - leo_banco:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leo -d leo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  leo_banco:
+    name: leo_banco

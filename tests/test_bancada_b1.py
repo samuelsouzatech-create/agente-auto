@@ -110,12 +110,20 @@ def test_usa_banco_temporario_e_nunca_o_real():
     caminhos = []
 
     def responder(texto, loja_id, lead_id):
-        caminhos.append(Path(banco.CAMINHO_BANCO).resolve())
+        c = banco.conectar()
+        try:
+            leads = {r[0] for r in c.execute("SELECT DISTINCT lead_id FROM mensagens").fetchall()}
+        finally:
+            c.close()
+        caminhos.append((banco.nome_do_banco(banco.url_do_banco()), lead_id, leads))
         return [AIMessage(content="Oi!")]
 
     rodar([roteiro(), roteiro(nome="outro")], GrafoFalso(responder))
-    assert len(set(caminhos)) == 2                      # um banco novo por roteiro
-    assert all(c != real.resolve() and c.parent == (rb._PASTA_TEMP).resolve() for c in caminhos)
+    # PG1: um banco só da bancada (nunca o de uso nem o de teste), esvaziado a cada roteiro:
+    # o segundo roteiro não enxerga nada do primeiro.
+    assert all(nome.endswith("_bancada") for nome, _, _ in caminhos)
+    assert all(leads <= {lead} for _, lead, leads in caminhos)
+    assert len({lead for _, lead, _ in caminhos}) == 2
     assert (real.stat().st_mtime if real.exists() else None) == antes
 
 

@@ -9,10 +9,11 @@ Tudo offline, banco temporário do conftest (ator "Teste", operador, painel).
 """
 import importlib
 import json
-import sqlite3
 from pathlib import Path
 
 import pytest
+
+import banco
 
 from banco import conectar
 from app import logs
@@ -133,7 +134,7 @@ def test_canal_sem_cadastro_continua_no_arquivo():
 
 def test_canal_sem_cadastro_nao_quebra_se_o_banco_falhar(monkeypatch):
     def banco_fora():
-        raise sqlite3.OperationalError("banco fora do ar")
+        raise banco.ErroOperacional("banco fora do ar")
     monkeypatch.setattr("app.registro.conectar", banco_fora)
     assert logs.registrar_canal_desconhecido("telegram", "123") is True
     assert _registros("mensagem_canal_sem_cadastro") == []

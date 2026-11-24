@@ -225,9 +225,7 @@ def test_rajada_de_mensagens_vira_uma_unica_resposta(monkeypatch, saidas):
 @pytest.fixture
 def banco_com_fotos(monkeypatch):
     """Banco temporário com fotos cadastradas para o Corolla (único)."""
-    fd, caminho = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", caminho)
+    caminho = banco.url_do_banco()   # PG1: o banco de teste já vem limpo (conftest)
     criar_tabelas()
     popular_estoque_exemplo()
     # Maratona Fotos: as fotos ficam no depósito; o WhatsApp usa o endereço público (nuvem).

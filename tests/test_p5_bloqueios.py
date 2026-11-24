@@ -6,7 +6,6 @@ P5 do Plano Mestre: bloqueios de envio (escolha da loja) e carência.
 - Carência: sem retomada por 7 dias depois do vendedor ou da visita marcada.
 Tudo offline: banco temporário do conftest, sem IA, duas lojas.
 """
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -67,11 +66,11 @@ def _redator(*args, **kwargs):
 
 def test_migracao_9_cria_a_tabela():
     assert banco.VERSAO_SCHEMA >= 9
-    assert _contar("SELECT COUNT(*) FROM sqlite_master WHERE name = 'bloqueios_envio'") == 1
+    assert _contar("SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'bloqueios_envio'") == 1
 
 
 def test_todos_nao_aceita_passo_no_banco():
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(banco.ErroDeIntegridade):
         _sql("INSERT INTO bloqueios_envio (loja_id, lead_id, tipo, passo, criado_por) "
              "VALUES (1, ?, 'todos', 1, 'Ana')", (LEAD,))
 

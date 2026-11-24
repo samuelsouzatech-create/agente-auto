@@ -20,7 +20,6 @@ ficou gravado no banco e se algum preço apareceu sem ter vindo de uma tool.
 
 import os
 import re
-import sqlite3
 import sys
 import tempfile
 import time
@@ -180,8 +179,7 @@ def conversar_em_turnos(falas, lead_id=None) -> Conversa:
  
 def ler_linhas(caminho_banco, sql, parametros=()):
     """Executa um SELECT no banco temporário e devolve lista de dicts."""
-    conexao = sqlite3.connect(caminho_banco)
-    conexao.row_factory = sqlite3.Row
+    conexao = banco.conectar()
     linhas = [dict(l) for l in conexao.execute(sql, parametros).fetchall()]
     conexao.close()
     return linhas
@@ -212,9 +210,7 @@ def chamada_de_tool(nome, args):
 def banco_com_estoque(monkeypatch):
     """Banco temporário populado com os 7 carros de exemplo (inclui o
     Civic 2017 vendido). Isola o teste do loja.db real."""
-    fd, caminho = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", caminho)
+    caminho = banco.url_do_banco()   # PG1: o banco de teste já vem limpo (conftest)
     criar_tabelas()
     popular_estoque_exemplo()
     yield caminho

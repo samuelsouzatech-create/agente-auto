@@ -261,3 +261,6 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   reativação, padrão 30, número final na decisão A8). Aviso: o texto acima diz que "a 22 já foi
   usada"; no repositório não existe migração 22 (usadas: 1 a 17, 19, 20; 21 reservada ao
   Instagram). A próxima livre é a 22.
+- 23/11/2026, PG1: banco = PostgreSQL 17 (docker compose só com o banco), camada única de
+  conexão, base equivalente à v20 registrada como versão 20; próxima migração livre: 22. Datas
+  seguem texto UTC e sem chaves estrangeiras (como no SQLite); a tranca por loja fica para Segurança.

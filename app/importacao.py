@@ -299,7 +299,7 @@ def importar(loja_id, previa: Previa, *, usuario: str, consentimento: bool,
                                                    THEN ? ELSE consentimento_em END,
                            consentimento_por = CASE WHEN ? = 1 AND consentimento = 0
                                                     THEN ? ELSE consentimento_por END,
-                           consentimento = MAX(consentimento, ?),
+                           consentimento = GREATEST(consentimento, ?),
                            atualizado_em = ?
                        WHERE id = ?""",
                     (nome, marca, quando, marca, usuario, marca, quando, existe["id"]))

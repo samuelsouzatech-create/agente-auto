@@ -6,11 +6,12 @@ S6 (Fase 3): Mensagens automáticas.
 - "No mês": uma consulta agrupada por tipo; mostra só o que ficou gravado.
 Tudo offline, com duas lojas.
 """
-import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+
+import banco
 
 from banco import conectar
 from app import elegibilidade as el
@@ -302,18 +303,17 @@ class _Contador:
 
 def _consultas(monkeypatch, funcao):
     contador = _Contador()
-    original = sqlite3.connect
+    original = banco.Cursor.execute
 
-    def conectar_contando(*args, **kwargs):
-        conexao = original(*args, **kwargs)
-        conexao.set_trace_callback(contador)
-        return conexao
+    def contando(self, comando, parametros=()):
+        contador(comando)
+        return original(self, comando, parametros)
 
-    monkeypatch.setattr(sqlite3, "connect", conectar_contando)
+    monkeypatch.setattr(banco.Cursor, "execute", contando)
     try:
         funcao()
     finally:
-        monkeypatch.setattr(sqlite3, "connect", original)
+        monkeypatch.setattr(banco.Cursor, "execute", original)
     return contador.n
 
 

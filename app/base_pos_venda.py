@@ -43,9 +43,9 @@ class BaseNaoAgendada(ValueError):
 
 
 def _conectar():
-    conexao = conectar()
-    conexao.create_function("fone_br", 1, normalizar_telefone_br)
-    return conexao
+    # fone_br é uma função do próprio banco (migração-base do PostgreSQL), igual a
+    # app/telefone.normalizar_telefone_br.
+    return conectar()
 
 
 def lead_da_base(loja_id, telefone) -> str:

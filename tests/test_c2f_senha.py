@@ -58,21 +58,6 @@ def _criar(cliente, token, senha=NOVA):
     return cliente.post(CRIAR, json={"token": token, "senha_nova": senha})
 
 
-def test_migracao_16_links_senha_so_com_hash_e_pode_rodar_de_novo():
-    assert 16 in banco.MIGRACOES
-    conexao = conectar()
-    try:
-        colunas = {l[1] for l in conexao.execute("PRAGMA table_info(links_senha)")}
-    finally:
-        conexao.close()
-    assert {"token_hash", "usuario_id", "loja_id", "tipo", "expira_em", "usado_em",
-            "revogado_em"} <= colunas
-    assert "token" not in colunas and "senha" not in colunas
-    _executar("PRAGMA user_version = 15")
-    migrar()
-    assert _um("PRAGMA user_version") == banco.VERSAO_SCHEMA
-
-
 def test_esqueci_responde_sempre_igual(enviados):
     _pessoa()
     autenticacao.criar_usuario_com_login(None, "Samuel", "operador", "samuel@leo.com", SENHA)

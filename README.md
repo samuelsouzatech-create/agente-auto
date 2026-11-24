@@ -18,7 +18,7 @@ Agente de atendimento e qualificação de leads para lojas de veículos, constru
 - **Orquestração do agente**: LangGraph (StateGraph com ciclo de tool calling)
 - **LLM**: Google Gemini
 - **RAG**: embeddings do Gemini + Chroma
-- **Banco de dados**: SQLite (local), com migrações numeradas
+- **Banco de dados**: PostgreSQL 17 (no Docker), com migrações numeradas em `migracoes/`
 - **Memória rápida e relógio**: Redis
 - **Painéis**: Streamlit 1.65
 
@@ -44,18 +44,27 @@ Agente de atendimento e qualificação de leads para lojas de veículos, constru
    pip install -r requirements.txt
    ```
 
-4. Crie um arquivo `.env` na raiz com sua chave do Google Gemini e o seu nome (usado no painel do operador):
+4. Crie um arquivo `.env` na raiz com sua chave do Google Gemini, o seu nome (usado no painel do
+   operador) e o banco (copie as três linhas do banco de `.env.example` e troque a senha):
 
    ```
    GOOGLE_API_KEY=sua_chave_aqui
    OPERADOR_NOME=Seu Nome
+   POSTGRES_SENHA=...
+   BANCO_PORTA=5432
+   BANCO_URL=postgresql://leo:...@127.0.0.1:5432/leo
    ```
 
-5. Crie (ou atualize) o banco de dados com estoque de exemplo. As migrações só acrescentam; nada é apagado:
+5. Suba o banco (precisa do Docker Desktop ligado) e crie as tabelas. As migrações só acrescentam;
+   nada é apagado:
 
    ```bash
+   docker compose up -d
    python banco.py
    ```
+
+   Quem já tinha um `loja.db` (SQLite) copia os dados com `python scripts/importar_sqlite.py`
+   (veja `docs/postgres.md`).
 
 6. Gere a base de conhecimento (RAG):
 
@@ -92,7 +101,7 @@ Nenhum dos dois painéis pode ir para a internet até existir login.
 pytest -q -p no:cacheprovider
 ```
 
-Os testes rodam sem internet, num banco temporário, com duas lojas para provar que uma não vê os dados da outra.
+Os testes rodam sem internet, com duas lojas para provar que uma não vê os dados da outra. Eles usam um banco PostgreSQL só de teste (o nome da `BANCO_URL` terminado em `_teste`), apagado e criado de novo a cada rodada: o banco de uso nunca é tocado. O banco precisa estar ligado (`docker compose up -d`).
 
 ## Arquitetura
 

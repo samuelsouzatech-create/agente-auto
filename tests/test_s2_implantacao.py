@@ -181,38 +181,3 @@ def test_acoes_novas_estao_na_lista_e_tem_rotulo():
 
 # ------------------------------------------------------------ migração 13
 
-@pytest.fixture
-def banco_v12(monkeypatch, tmp_path):
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", str(tmp_path / "v12.db"))
-    completas = dict(banco.MIGRACOES)
-    monkeypatch.setattr(banco, "MIGRACOES", {v: s for v, s in completas.items() if v <= 12})
-    banco.criar_tabelas()
-    conexao = conectar()
-    try:
-        conexao.execute("INSERT INTO lojas (nome) VALUES ('Loja Antiga')")
-        conexao.commit()
-        assert conexao.execute("PRAGMA user_version").fetchone()[0] == 12
-    finally:
-        conexao.close()
-    monkeypatch.setattr(banco, "MIGRACOES", completas)
-
-
-def test_sobe_da_v12_sem_perder_loja(banco_v12):
-    banco.migrar()
-    assert _um("PRAGMA user_version") == banco.VERSAO_SCHEMA     # S10b: vai até a 14
-    assert _um("SELECT COUNT(*) FROM lojas WHERE nome = 'Loja Antiga'") == 1
-    assert _um("SELECT COUNT(*) FROM checklist_implantacao") == 0
-
-
-def test_rodar_de_novo_nao_perde_item_marcado():
-    loja = _nova()
-    implantacao.marcar_item(loja, "teste_conversa")
-    conexao = conectar()
-    try:
-        conexao.execute("PRAGMA user_version = 3")
-        conexao.commit()
-    finally:
-        conexao.close()
-    banco.migrar()
-    assert _um("PRAGMA user_version") == banco.VERSAO_SCHEMA
-    assert _um("SELECT COUNT(*) FROM checklist_implantacao") == 1

@@ -65,17 +65,6 @@ def duas_lojas():
 
 # ------------------------------------------------------------- migração
 
-def test_migracao_19_cria_recados_e_pode_rodar_de_novo():
-    assert 19 in banco.MIGRACOES and banco.VERSAO_SCHEMA >= 19      # L9: a 20 veio depois
-    colunas = {l["name"] for l in _ler("PRAGMA table_info(recados)")}
-    assert {"loja_id", "autor", "texto", "valido_ate", "ativo", "criado_em"} <= colunas
-    _loja(LOJA_A)
-    rc.registrar_recado(LOJA_A, "Carlos", "feirão sábado", "", hoje=HOJE)
-    _sql("PRAGMA user_version = 17")
-    banco.migrar()
-    assert _ler("PRAGMA user_version")[0]["user_version"] == banco.VERSAO_SCHEMA
-    assert len(_ler("SELECT id FROM recados")) == 1          # nada apagado
-
 
 # ------------------------------------------------------------- equipe
 

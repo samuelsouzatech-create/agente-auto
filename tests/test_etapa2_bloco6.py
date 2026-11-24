@@ -69,7 +69,7 @@ def test_migracao_v6_cria_as_tabelas():
     c = conectar()
     try:
         assert banco.versao_schema(c) == banco.VERSAO_SCHEMA >= 6
-        tabelas = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        tabelas = {r[0] for r in c.execute("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema()")}
     finally:
         c.close()
     assert {"importacoes", "contatos", "compras_anteriores"} <= tabelas

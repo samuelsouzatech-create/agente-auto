@@ -6,7 +6,7 @@ Quatro blocos em cadeia: PG0 → PG1 → PG2 → PG3. Branches `postgres-p0` (sa
 | Bloco | Branch | Situação | Commit | Testes |
 |-------|--------|----------|--------|--------|
 | PG0 documentos e E2-1 | postgres-p0 | feito | cd84e11 + diário | suíte 2.928 ok |
-| PG1 banco PostgreSQL | postgres-p1 | a fazer | | |
+| PG1 banco PostgreSQL | postgres-p1 | feito | (ver abaixo) | suíte 2.962 ok no PostgreSQL |
 | PG2 memória e importação | postgres-p2 | a fazer | | |
 | PG3 teste de carga | postgres-p3 | a fazer | | |
 
@@ -65,3 +65,112 @@ com a retomada), mas nenhum limite por dia e nenhum teste disso.
   `app/reativacao.py` e a suíte passou.
 - O que NÃO fiz no PG0: nada de banco novo (isso é o PG1); o número final do limite diário é
   decisão do Samuel (A8).
+
+## PG1 — Banco PostgreSQL (branch postgres-p1, saiu da postgres-p0)
+
+### O que foi feito
+1. **`docker-compose.yml`** na raiz, só com o serviço `postgres` (imagem `postgres:17`, volume com
+   nome `leo_banco`, porta só em `127.0.0.1`, senha vinda do `.env` em `POSTGRES_SENHA`). Subir:
+   `docker compose up -d`. **Neste PC a porta é 5433** (`BANCO_PORTA=5433` no `.env`), porque a
+   5432 já é usada pelo PostgreSQL 18 instalado direto no Windows (não mexi nele). O padrão do
+   compose continua 5432.
+2. **`.env`**: acrescentei `POSTGRES_SENHA` (senha aleatória, nunca mostrada), `BANCO_PORTA` e
+   `BANCO_URL`, sem ler nem mostrar o resto do arquivo. **`.env.example`** novo, só com texto de
+   exemplo.
+3. **Camada única de conexão (`banco.py`)**: psycopg 3 + pool (`psycopg[binary]==3.3.9`,
+   `psycopg-pool==3.3.3`, fixados no `requirements.txt`). Lê a `BANCO_URL`. Nenhum outro arquivo
+   abre conexão (tem teste que confere). Para o resto do código não precisar mudar de uma vez, a
+   conexão se comporta como a do SQLite:
+   - `?` vira o marcador do PostgreSQL; `INSERT OR IGNORE` vira `ON CONFLICT DO NOTHING`;
+     `LIKE` vira `ILIKE` (o LIKE do SQLite não diferencia maiúsculas); `CURRENT_TIMESTAMP` vira
+     `agora_texto()`; `a IS ?` vira `IS NOT DISTINCT FROM`. Texto entre aspas e comentário não são
+     mexidos. `PRAGMA` e `INSERT OR REPLACE` são recusados (dão erro claro).
+   - Os valores vão como texto e o PostgreSQL decide o tipo pelo lugar (como o SQLite fazia);
+     `True/False` viram 1/0; data e hora viram o mesmo texto de antes; soma e média voltam como
+     número comum (não Decimal).
+   - Linha por posição e por nome (`linha[0]`, `linha["modelo"]`, `dict(linha)`); `lastrowid`;
+     `with conexao:` confirma ou desfaz; fechar sem `commit` desfaz; conexão esquecida aberta
+     volta sozinha para o pool; `conectar(somente_leitura=True)` (era `PRAGMA query_only`).
+4. **Esquema**: `migracoes/020_base_postgres.sql`, equivalente ao SQLite inteiro na v20 (40
+   tabelas, mesmas colunas na mesma ordem, os 32 índices). Fica registrada como **versão 20** na
+   tabela nova **`migracoes_aplicadas`** (no próprio banco). A próxima migração usa o próximo
+   número livre, a **22** (a 21 continua do Instagram; o `banco.py` recusa uma 21 que não seja do
+   Instagram e recusa número repetido). Cada migração roda inteira ou nada, com trava para duas
+   cópias do Léo não migrarem juntas.
+5. **Busca sem acento**: a função `sem_acento` do banco usa a extensão `unaccent` (mesmo nome,
+   então as consultas de estoque, categoria e preço não mudaram). `fone_br` (telefone) também
+   virou função do banco, com a mesma regra do Python (teste compara as duas com 18 casos).
+   `round(x, casas)` ganhou a versão para número decimal comum.
+6. **SQL do SQLite traduzido no código**: `instr` → `strpos` (turno), `sqlite_master`/`PRAGMA
+   table_info` → `information_schema` (demo), `strftime/datetime` → `to_char(... + intervalo)`
+   (custos e preços), `MAX(a, b)` → `GREATEST` (importação), `create_function` removido (4
+   lugares, um deles em `segmentos/veiculos/comprador.py`), `PRAGMA query_only` → conexão
+   somente leitura (6 lugares), `sqlite3.IntegrityError` → `banco.ErroDeIntegridade` (login),
+   `VALUES (?, ...)` com número de loja (visão geral) ganhou `CAST`, bancada sem
+   `INSERT OR REPLACE`.
+7. **Testes**: a suíte roda contra o PostgreSQL, num banco **separado e criado sozinho**:
+   `<nome da BANCO_URL>_teste` (ou `BANCO_URL_TESTE`), apagado e criado de novo no começo de
+   cada rodada. O teste recusa rodar se o nome não terminar em `_teste` ou for igual ao de uso.
+   Antes de cada teste o banco é esvaziado (`TRUNCATE`) e volta a ter só o que a migração grava
+   (a loja 1 no ar). A bancada tem o banco dela (`_bancada`), esvaziado a cada roteiro.
+   A catraca de `loja_id` (`tests/test_catraca_loja.py`) continua valendo.
+   - `tests/test_pg1_banco.py` (novo): esquema igual ao da v20, registro de migrações, erro no
+     meio não deixa nada pela metade, numeração, tradução do SQL, tipos, `with`, somente
+     leitura, pool, `sem_acento`, `fone_br`, banco de teste separado, nenhum `sqlite3` no código,
+     nenhum arquivo abrindo conexão por conta própria, compose e `.env.example`.
+
+### Decisões (para o analista conferir)
+- **Datas continuam texto** ("AAAA-MM-DD HH:MM:SS", UTC), como o código sempre gravou e comparou.
+  Trocar para o tipo de data do PostgreSQL mexeria em centenas de consultas e no `app/relogio.py`;
+  fica para depois, se valer a pena.
+- **Sem chaves estrangeiras obrigatórias**: o SQLite não conferia (a opção nunca foi ligada).
+  Ligar agora mudaria o comportamento (apagar loja, demo). Fica para o bloco de segurança, junto
+  com a "tranca por loja" do banco (decisões e roteiro, item 5).
+- **E-mail de login** único sem diferença de maiúsculas: índice em `lower(email)` (era
+  `COLLATE NOCASE`).
+- **Tradução automática na camada** em vez de reescrever as ~700 consultas uma a uma: menos risco
+  de erro agora. A camada recusa o que não sabe traduzir. Consultas novas devem ser escritas já no
+  jeito PostgreSQL (o `?` continua valendo).
+
+### Testes que saíram (e por quê)
+Testavam a **subida do SQLite** de uma versão para a outra (v9→v10, v10→v11, v11→v12, v12→v13,
+v14→v15, rodar de novo depois de voltar o `user_version`, erro no meio da migração 12). Esse
+caminho não existe mais: o banco nasce da migração-base. O que vale para o PostgreSQL (tudo ou
+nada, rodar de novo, mesmas tabelas e colunas) está em `tests/test_pg1_banco.py`. Lista:
+- `test_c2a_sessoes.py`: migração 15 roda de novo; sobe da 14.
+- `test_c2f_senha.py`: migração 16 só com hash e roda de novo.
+- `test_c3_link_vendedor.py`: migração 17 só hash e roda de novo.
+- `test_etapa1_bloco1.py`: migração preserva os dados do banco antigo.
+- `test_etapa1_bloco7b.py`: migração 4 não dispara avisos de handoffs antigos.
+- `test_etapa2_bloco1.py`: migração 5 roda de novo.
+- `test_l3_recados.py`: migração 19 cria recados e roda de novo.
+- `test_l9_sombra.py`: migração 20 é aditiva e roda de novo.
+- `test_p6_registro.py`: sobe da v9 sem perder dado.
+- `test_p7a_estado_loja.py`: migração 11 roda de novo; sobe da v10 com as lojas no ar.
+- `test_p8a_usuarios_login.py`: sobe da v11 com os mesmos ids; contador de ids; rodar de novo
+  não perde e-mail; recusa dado que não combina; erro no meio desfaz tudo.
+- `test_s10b_limpeza.py`: migração 14 cria índices (os índices estão no teste do PG1).
+- `test_s2_implantacao.py`: sobe da v12; rodar de novo não perde item marcado.
+- Trocado: `test_m3_n3_servidor.py` "conexão em WAL com espera de 5 s" (era do SQLite) virou
+  "conexão vem do pool do PostgreSQL". O teste de duas escritas ao mesmo tempo continua.
+- Ajustados (mesma ideia, jeito PostgreSQL): os que liam `sqlite_master`/`PRAGMA table_info`,
+  os que contavam consultas (`set_trace_callback` agora existe na conexão nova), o plano de
+  consulta do S10b (`EXPLAIN` com leitura inteira desligada, para ver se o índice serve).
+
+### Testes do PG1
+- Suíte inteira **contra o PostgreSQL** (3 partes): 759 + 1.065 + 1.137 = 2.961 passaram e 1
+  falhou (um teste usava o `iterdump` do SQLite para fotografar o banco; agora lê todas as
+  tabelas). Depois do conserto, a parte 2 rodou de novo: **1.066 passaram**. Total: 759 + 1.066
+  + 1.137 = **2.962 passaram, 0 falhas**.
+- Mais rápida que no SQLite (cerca de 12 min contra 19 min), depois de duas mudanças: limpar o
+  banco com `DELETE` em vez de `TRUNCATE` antes de cada teste, e o banco de TESTE sem esperar o
+  disco a cada gravação (`synchronous_commit = off`, só no banco `_teste`).
+- Conta: eram 2.928 no PG0; saíram 21 testes da subida do SQLite (lista acima) e entraram 54
+  do `test_pg1_banco.py` (com os casos repetidos com dados diferentes) = 2.961 + 1 consertado.
+
+### O que NÃO foi feito no PG1
+- Memória das conversas e importação do `loja.db`: PG2.
+- O resto da aplicação no Docker: próximo bloco (Docker), como pedido.
+- Chaves estrangeiras e a "tranca por loja" do banco: bloco de segurança.
+- A `venv/` (ambiente que roda o Léo de verdade) ainda não tem o psycopg: antes de ligar o Léo,
+  rodar `venv\Scripts\pip install -r requirements.txt`. Os testes usam a `.venv-teste`, que já tem.

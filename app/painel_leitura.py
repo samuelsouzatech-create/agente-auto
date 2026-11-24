@@ -2,7 +2,7 @@
 Leitura para os painéis (P4 do Plano Mestre): etapas dos leads, resultado do
 período e o cartão "O que o Léo já sabe".
 
-Só consulta: a conexão abre em modo somente leitura (PRAGMA query_only),
+Só consulta: a conexão abre em modo somente leitura (conectar(somente_leitura=True)),
 então qualquer escrita por engano dá erro. loja_id sempre obrigatório.
 Horários já convertidos para o fuso da loja (app/apresentacao.py).
 
@@ -75,8 +75,7 @@ ROTULOS_FUNIL = {
 
 def _ler():
     """Conexão que só lê: qualquer INSERT/UPDATE/DELETE dá erro."""
-    conexao = conectar()
-    conexao.execute("PRAGMA query_only = ON")
+    conexao = conectar(somente_leitura=True)
     return conexao
 
 

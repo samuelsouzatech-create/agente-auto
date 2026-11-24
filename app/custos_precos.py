@@ -108,7 +108,7 @@ def intervalo_do_mes(ano: int, mes: int) -> tuple[str, str]:
 
 
 def _deslocamento_sql(agora=None) -> str:
-    """Diferença de Brasília para UTC, no formato do SQLite (ex.: '-3 hours').
+    """Diferença de Brasília para UTC, como intervalo do banco (ex.: '-3 hours').
     Brasília não tem horário de verão desde 2019."""
     segundos = (agora or agora_utc()).astimezone(_brasilia()).utcoffset().total_seconds()
     return f"{int(segundos // 3600):+d} hours"
@@ -180,7 +180,7 @@ def ultimos_12_meses(loja=None, agora=None) -> list[dict]:
     meses = meses_para_escolher(agora)
     inicio = _inicio_do_mes_utc(*meses[-1])
     fim = _inicio_do_mes_utc(*_mes_seguinte(*meses[0]))
-    sql = ("SELECT strftime('%Y-%m', datetime(criado_em, ?)) AS mes, "
+    sql = ("SELECT to_char(criado_em::timestamp + CAST(? AS interval), 'YYYY-MM') AS mes, "
            "COUNT(DISTINCT loja_id || ':' || lead_id) AS conversas, "
            "COALESCE(SUM(custo_llm), 0) AS custo_ia, COALESCE(SUM(custo_meta), 0) AS custo_meta "
            "FROM uso_custos WHERE criado_em >= ? AND criado_em < ?")

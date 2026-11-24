@@ -49,8 +49,7 @@ def _como(sessao: dict):
 
 
 def _cliente_existe(loja_id: int, lead: str) -> bool:
-    conexao = conectar()
-    conexao.execute("PRAGMA query_only = ON")
+    conexao = conectar(somente_leitura=True)
     try:
         return conexao.execute(
             "SELECT 1 FROM mensagens WHERE loja_id = ? AND lead_id = ? UNION ALL "

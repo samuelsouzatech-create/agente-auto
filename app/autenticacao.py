@@ -29,13 +29,12 @@ estas funções. Sem Streamlit.
 from __future__ import annotations
 
 import re
-import sqlite3
 from datetime import timedelta
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
-from banco import conectar
+from banco import ErroDeIntegridade, conectar
 from app.chaves import exigir_loja
 from app.estado_loja import SoOperador
 from app.relogio import agora_utc, para_banco
@@ -178,7 +177,7 @@ def criar_usuario_com_login(loja_id, nome: str, papel: str, email: str, senha: s
                   {"usuario_id": novo, "nome": nome_limpo, "papel": papel, "email": email_limpo},
                   conexao=conexao, alvo=f"usuario:{novo}")
         conexao.commit()
-    except sqlite3.IntegrityError as erro:
+    except ErroDeIntegridade as erro:
         raise DadosInvalidos("Esse e-mail já é usado por outra pessoa.") from erro
     finally:
         conexao.close()
@@ -202,7 +201,7 @@ def definir_email(usuario_id: int, email: str) -> bool:
         registrar("definir_email_acesso", u["loja_id"], {"email": u["email"]},
                   {"email": email_limpo}, conexao=conexao, alvo=f"usuario:{usuario_id}")
         conexao.commit()
-    except sqlite3.IntegrityError as erro:
+    except ErroDeIntegridade as erro:
         raise DadosInvalidos("Esse e-mail já é usado por outra pessoa.") from erro
     finally:
         conexao.close()

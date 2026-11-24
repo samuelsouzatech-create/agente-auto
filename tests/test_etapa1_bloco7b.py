@@ -127,24 +127,10 @@ def test_migracao_4():
     conexao = banco.conectar()
     try:
         assert banco.versao_schema(conexao) >= 4
-        tabelas = {r["name"] for r in conexao.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        tabelas = {r["name"] for r in conexao.execute("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema()")}
     finally:
         conexao.close()
     assert "avisos" in tabelas
-
-
-def test_migracao_4_nao_dispara_avisos_de_handoffs_antigos(telegram):
-    _equipe()
-    _executar("INSERT INTO handoffs (loja_id, lead_id, estado) VALUES (1, 'antigo', 'aguardando_humano')")
-    conexao = banco.conectar()
-    conexao.execute("PRAGMA user_version = 3")
-    conexao.commit()
-    conexao.close()
-    banco.migrar()
-    [h] = _ler("SELECT avisado_em, reavisado_em, gestor_avisado_em FROM handoffs WHERE lead_id = 'antigo'")
-    assert all(h.values())
-    alertas.verificar_handoffs()
-    assert telegram.enviados == []
 
 
 # ---------------------------------------------------------------- relógio

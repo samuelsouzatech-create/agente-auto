@@ -94,8 +94,7 @@ def _utc(dt: datetime) -> datetime:
 
 def _ler():
     """Conexão que só lê: qualquer escrita por engano dá erro."""
-    conexao = conectar()
-    conexao.execute("PRAGMA query_only = ON")
+    conexao = conectar(somente_leitura=True)
     return conexao
 
 
@@ -126,8 +125,10 @@ def _segundos_texto(ms) -> str:
 
 
 def _valores(linhas) -> tuple[str, list]:
-    """Monta o VALUES de uma consulta agrupada: uma linha por loja."""
-    marcas = ", ".join("(" + ", ".join(["?"] * len(l)) + ")" for l in linhas)
+    """Monta o VALUES de uma consulta agrupada: uma linha por loja. A primeira coluna é o
+    número da loja (no PostgreSQL o VALUES precisa saber que é número)."""
+    marcas = ", ".join("(" + ", ".join(["CAST(? AS BIGINT)"] + ["?"] * (len(l) - 1)) + ")"
+                       for l in linhas)
     return marcas, [v for l in linhas for v in l]
 
 

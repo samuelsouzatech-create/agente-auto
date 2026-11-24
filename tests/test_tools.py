@@ -16,9 +16,7 @@ def banco_com_estoque(monkeypatch):
     """Cria um banco SQLite temporário, isolado, já populado com os
     7 carros de exemplo (incluindo o Civic 2017 vendido). Assim os testes
     de estoque não dependem do loja.db real nem da ordem de execução."""
-    fd, caminho = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", caminho)
+    caminho = banco.url_do_banco()   # PG1: o banco de teste já vem limpo (conftest)
     criar_tabelas()
     popular_estoque_exemplo()
     yield caminho

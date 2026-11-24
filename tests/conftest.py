@@ -1,8 +1,10 @@
 """
 Configuração compartilhada dos testes (pytest).
 
-A fixture 'banco_temporario' é autouse: antes de CADA teste, aponta o banco
-para um arquivo .db temporário, cria as tabelas e aplica as migrações.
+A fixture 'banco_temporario' é autouse: antes de CADA teste, o banco de TESTE
+(PostgreSQL, Maratona Postgres PG1) fica limpo, só com o que as migrações criam
+(a loja 1). O banco de teste é separado do banco de uso: nome da BANCO_URL com
+"_teste" no fim (ou BANCO_URL_TESTE), apagado e criado de novo a cada rodada.
 Também limpa o cache de configuração das lojas e manda o log estruturado
 para uma pasta temporária (os testes nunca sujam logs/ de verdade).
 
@@ -18,7 +20,6 @@ normais usam LLM falso e nunca chamam o Gemini.
 """
 import os
 import sys
-import tempfile
 
 import pytest
 from dotenv import load_dotenv
@@ -30,23 +31,75 @@ if not os.environ.get("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = "chave-falsa-so-para-testes"
 
 import banco
-from banco import criar_tabelas
 from app import ator, lojas, logs, permissoes
 
 
+def url_do_banco_de_teste() -> str:
+    """Nunca o banco de uso: BANCO_URL_TESTE, ou o nome da BANCO_URL terminado em _teste."""
+    url = os.environ.get("BANCO_URL_TESTE")
+    uso = os.environ.get("BANCO_URL")
+    if not url:
+        if not uso:
+            pytest.exit("Falta a BANCO_URL no .env (veja .env.example) e o banco ligado "
+                        "(docker compose up -d).", returncode=4)
+        url = banco.trocar_nome_do_banco(uso, banco.nome_do_banco(uso) + "_teste")
+    nome = banco.nome_do_banco(url)
+    if not nome.endswith("_teste") or (uso and nome == banco.nome_do_banco(uso)):
+        pytest.exit("O banco de teste precisa ter um nome terminado em _teste e diferente do "
+                    "banco de uso.", returncode=4)
+    return url
+
+
+@pytest.fixture(scope="session", autouse=True)
+def banco_de_teste():
+    """Uma vez por rodada: apaga e cria de novo o banco de teste, aplica as migrações e
+    guarda o que elas deixam gravado (a loja 1), para cada teste começar igual."""
+    import psycopg
+    from psycopg import sql
+    url = url_do_banco_de_teste()
+    nome = banco.nome_do_banco(url)
+    try:
+        with psycopg.connect(banco.trocar_nome_do_banco(url, "postgres"), autocommit=True) as c:
+            c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome)))
+            c.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(nome)))
+    except psycopg.OperationalError:
+        pytest.exit("Não consegui falar com o PostgreSQL. Ele está ligado? (docker compose up -d)",
+                    returncode=4)
+    with psycopg.connect(url, autocommit=True) as c:      # só o banco de TESTE: mais rápido
+        c.execute(sql.SQL("ALTER DATABASE {} SET synchronous_commit = off").format(sql.Identifier(nome)))
+    banco.apontar_para(url)
+    banco.migrar()
+    _SEMENTE.update(banco.estado_inicial())
+    yield url
+    banco.fechar_pools()
+    banco.apontar_para(None)
+
+
+_SEMENTE: dict = {}
+
+
+def limpar_banco() -> None:
+    """Deixa o banco de teste como as migrações deixam (só a loja 1)."""
+    banco.voltar_ao_estado_inicial(_SEMENTE)
+
+
 @pytest.fixture(autouse=True)
-def banco_temporario(monkeypatch, tmp_path):
-    """Cada teste roda contra um banco limpo e isolado, com todas as tabelas."""
-    fd, caminho = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", caminho)
+def banco_limpo(banco_de_teste, monkeypatch, tmp_path):
+    """Cada teste roda contra o banco de teste limpo, com todas as tabelas. Separado do
+    banco_temporario porque alguns arquivos antigos redefinem aquele; este vale sempre."""
+    banco.apontar_para(banco_de_teste)
     monkeypatch.setattr(logs, "PASTA_LOGS", str(tmp_path / "logs"))
     lojas.limpar_cache()
-    criar_tabelas()
-    yield caminho
+    limpar_banco()
+    yield banco_de_teste
+    banco.apontar_para(banco_de_teste)
     lojas.limpar_cache()
-    if os.path.exists(caminho):
-        os.remove(caminho)
+
+
+@pytest.fixture(autouse=True)
+def banco_temporario(banco_limpo):
+    """Endereço do banco de teste (os testes antigos recebiam o caminho do arquivo .db)."""
+    yield banco_limpo
 
 
 @pytest.fixture(autouse=True)

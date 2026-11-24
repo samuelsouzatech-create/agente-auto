@@ -64,21 +64,6 @@ def _tudo(*tabelas):
         conexao.close()
 
 
-def test_migracao_17_so_hash_e_pode_rodar_de_novo():
-    assert 17 in banco.MIGRACOES
-    conexao = conectar()
-    try:
-        colunas = {l[1] for l in conexao.execute("PRAGMA table_info(links_vendedor)")}
-    finally:
-        conexao.close()
-    assert {"token_hash", "loja_id", "usuario_id", "lead_id", "expira_em", "usado_em",
-            "revogado_em"} <= colunas
-    assert "token" not in colunas
-    _executar("PRAGMA user_version = 16")
-    migrar()
-    assert _um("PRAGMA user_version") == banco.VERSAO_SCHEMA
-
-
 def test_link_certo_abre_so_aquela_conversa():
     uid = _pessoa()
     _conversa_basica(lead=LEAD1)

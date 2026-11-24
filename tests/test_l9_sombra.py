@@ -87,18 +87,6 @@ def test_modo_sombra_desligado_por_padrao_e_so_do_operador():
         lojas.EDITAVEIS["modo_sombra"]("sim")
 
 
-def test_migracao_20_e_aditiva_e_roda_de_novo():
-    assert 20 in banco.MIGRACOES and banco.VERSAO_SCHEMA == 20
-    colunas = {l["name"] for l in _ler("PRAGMA table_info(sombra_sugestoes)")}
-    assert {"loja_id", "lead_id", "mensagem_cliente", "sugestao", "ferramentas", "criado_em"} <= colunas
-    _config(LOJA_A, {})
-    sombra.gravar(LOJA_A, LEAD, "simulador", "oi", "Oi!", [])
-    _sql("PRAGMA user_version = 19")
-    banco.migrar()
-    assert _ler("PRAGMA user_version")[0]["user_version"] == 20
-    assert len(_ler("SELECT id FROM sombra_sugestoes")) == 1
-
-
 # ------------------------------------------------------------ turno: nada sai, nada grava
 
 def test_loja_em_sombra_nao_envia_e_guarda_a_sugestao(duas_lojas):
@@ -172,7 +160,8 @@ def test_jobs_pulam_a_loja_em_sombra(duas_lojas, monkeypatch):
 
 def test_envio_real_nunca_em_sombra(duas_lojas):
     from app.modo_envio import real_para
-    _sql("INSERT OR REPLACE INTO estado_lojas (loja_id, estado) VALUES (1, 'no_ar'), (2, 'no_ar')")
+    _sql("INSERT INTO estado_lojas (loja_id, estado) VALUES (1, 'no_ar'), (2, 'no_ar') "
+         "ON CONFLICT (loja_id) DO UPDATE SET estado = excluded.estado")
     assert real_para(lojas.carregar_loja(LOJA_A), "remarketing", True) is False
     assert real_para(lojas.carregar_loja(LOJA_B), "remarketing", True) is True
 

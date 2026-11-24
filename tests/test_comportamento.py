@@ -39,9 +39,7 @@ pytestmark = pytest.mark.api
 def banco_com_estoque(monkeypatch):
     """Banco temporário populado com os 7 carros de exemplo (inclui o
     Civic 2017 vendido). Isola o teste do loja.db real."""
-    fd, caminho = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    monkeypatch.setattr(banco, "CAMINHO_BANCO", caminho)
+    caminho = banco.url_do_banco()   # PG1: o banco de teste já vem limpo (conftest)
     criar_tabelas()
     popular_estoque_exemplo()
     yield caminho
