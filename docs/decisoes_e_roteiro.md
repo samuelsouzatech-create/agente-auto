@@ -264,3 +264,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
 - 23/11/2026, PG1: banco = PostgreSQL 17 (docker compose só com o banco), camada única de
   conexão, base equivalente à v20 registrada como versão 20; próxima migração livre: 22. Datas
   seguem texto UTC e sem chaves estrangeiras (como no SQLite); a tranca por loja fica para Segurança.
+- 24/11/2026, PG2: memória das conversas no PostgreSQL (PostgresSaver, limite do L12 mantido);
+  importação do loja.db conferida (40 tabelas). Chroma segue como está. Nenhuma decisão mudou.

@@ -227,8 +227,9 @@ def test_memoria_tira_conversa_parada_e_o_excesso():
     memoria.MAX_CONVERSAS = 3
     apagadas = []
     memoria.delete_thread = lambda t: apagadas.append(t)
-    for i in range(5):
-        memoria._ultimo_uso[f"t{i}"] = float(i)
+    usos = {f"t{i}": float(i) for i in range(5)}
+    # PG2: o último uso vem do banco (memória no PostgreSQL); aqui, uma lista falsa.
+    memoria.ultimos_usos = lambda: {t: q for t, q in usos.items() if t not in apagadas}
     assert memoria.podar() == 2 and sorted(apagadas) == ["t0", "t1"]
     relogio[0] = 25 * 3600.0
     assert memoria.podar() == 3 and sorted(apagadas) == ["t0", "t1", "t2", "t3", "t4"]

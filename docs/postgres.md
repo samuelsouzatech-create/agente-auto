@@ -6,8 +6,8 @@ Quatro blocos em cadeia: PG0 → PG1 → PG2 → PG3. Branches `postgres-p0` (sa
 | Bloco | Branch | Situação | Commit | Testes |
 |-------|--------|----------|--------|--------|
 | PG0 documentos e E2-1 | postgres-p0 | feito | cd84e11 + diário | suíte 2.928 ok |
-| PG1 banco PostgreSQL | postgres-p1 | feito | (ver abaixo) | suíte 2.962 ok no PostgreSQL |
-| PG2 memória e importação | postgres-p2 | a fazer | | |
+| PG1 banco PostgreSQL | postgres-p1 | feito | 994c680 | suíte 2.962 ok no PostgreSQL |
+| PG2 memória e importação | postgres-p2 | feito | (ver abaixo) | suíte 2.977 ok no PostgreSQL |
 | PG3 teste de carga | postgres-p3 | a fazer | | |
 
 ## PG0 — Conferência e documentos
@@ -174,3 +174,69 @@ nada, rodar de novo, mesmas tabelas e colunas) está em `tests/test_pg1_banco.py
 - Chaves estrangeiras e a "tranca por loja" do banco: bloco de segurança.
 - A `venv/` (ambiente que roda o Léo de verdade) ainda não tem o psycopg: antes de ligar o Léo,
   rodar `venv\Scripts\pip install -r requirements.txt`. Os testes usam a `.venv-teste`, que já tem.
+
+## PG2 — Memória das conversas e importação dos dados (branch postgres-p2, saiu da postgres-p1)
+
+### O que foi feito
+1. **Memória das conversas no PostgreSQL** (`app/core/agent.py`): a `MemoriaLimitada` agora é
+   um `PostgresSaver` (pacote oficial `langgraph-checkpoint-postgres==3.2.1`, fixado). A conversa
+   continua depois de reiniciar o processo. A conexão vem do `banco.py` (um pool só da memória,
+   porque a biblioteca pede conexões do jeito dela), sempre no banco da `BANCO_URL` em uso.
+   - **Limite do L12 mantido:** conversa parada há mais de 24 h sai; acima de 2.000 conversas,
+     saem as mais antigas. A "hora do último uso" agora vem do banco (data da última fotografia
+     da conversa), então o limite vale também depois de reiniciar. A poda roda no máximo a cada
+     5 minutos (ela consulta o banco).
+   - **Apagar por conversa** (`delete_thread`) continua; a bancada usa.
+   - As 4 tabelas da memória (`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`,
+     `checkpoint_migrations`) são da biblioteca e têm a própria lista de mudanças. Não usam a
+     nossa numeração: o `banco.migrar()` chama o `setup()` da biblioteca depois das nossas.
+2. **`scripts/importar_sqlite.py`**: copia o `loja.db` para o PostgreSQL.
+   - `--ensaio`: confere a estrutura (toda tabela e coluna do loja.db existe no PostgreSQL) e
+     mostra, tabela por tabela, a contagem no loja.db e no PostgreSQL. Não grava nada.
+   - Sem `--ensaio`: copia com os mesmos ids, tudo numa transação; no fim compara a contagem de
+     cada tabela e, se alguma diferir, desfaz tudo e para com erro. Rodar duas vezes não duplica
+     (a linha que já existe é atualizada). O próximo id automático continua depois do maior.
+   - O loja.db é aberto só para leitura e precisa estar na versão 20.
+   - É o único arquivo do Léo que usa `sqlite3` (tem teste que confere).
+3. **Demo no PostgreSQL**: `criar_loja_demo`, `criar_usuarios_demo` e `reiniciar_demo`
+   rodaram no banco novo; fotos da demo no depósito (24 carros); retomada de exemplo gravada.
+4. **`docs/demo.md`**: passo 0 "Subir o banco" (`docker compose up -d`, criar as tabelas,
+   conferir com `docker compose ps`) e o que fazer se o banco não responder.
+
+### Rodado de verdade (neste PC)
+- Banco de uso (`leo`, porta 5433): tabelas criadas.
+- **Ensaio com o loja.db real** (só leitura): estrutura conferida nas **40 tabelas**, 1.011 linhas.
+- **Importação de verdade** para o banco de uso local: as 40 contagens bateram (1.011 linhas);
+  **rodada de novo: nada duplicou**. Os dados ficaram só no PostgreSQL local deste computador.
+- **Demo no painel, no navegador (Edge), sem IA**: API do painel na porta 8001 rodando sobre o
+  PostgreSQL + tela `leo-painel-web` (main). Login do Dono Demo; Atender, Estoque, Acompanhamento
+  e Resultado abriram em 375 px e 1280 px; fotos do depósito carregadas (15 visíveis em 375 px,
+  24 em 1280 px); **nenhum erro da API** (52 e 61 pedidos). As senhas ficaram num arquivo
+  temporário fora do Git, apagado no fim.
+
+### Falha minha (registrada)
+- Rodei `scripts\criar_loja_demo.py` **sem** `--sem-indexar`. Ele tentou indexar a base de
+  conhecimento da demo, o que usa o Gemini (embeddings), e falhou ("não consegui indexar a base
+  agora"). Não sei se a chamada chegou a sair; os créditos do Gemini estavam esgotados (estado de
+  22/11), então o custo provável é zero. Fere a regra "sem Gemini". Depois disso, só com
+  `--sem-indexar`. O índice da demo fica como estava (Chroma, fora do banco).
+
+### Testes do PG2
+- `tests/test_pg2_memoria.py` (6): o Léo usa a memória no PostgreSQL; a conversa continua depois
+  de fechar todas as conexões e criar uma memória nova; outra loja não vê a conversa; o limite
+  apaga as mais antigas; parada há mais de 24 h sai; a poda roda sozinha ao salvar; apagar uma
+  conversa apaga só ela.
+- `tests/test_pg2_importar.py` (9), com um **loja.db fictício** montado com o esquema da v20
+  (`tests/dados/esquema_sqlite_v20.sql`): ensaio não grava; importa com os mesmos ids e dados
+  (acento, número decimal, vazio); rodar duas vezes não duplica e o próximo id continua; contagem
+  diferente para e não grava nada; versão errada e coluna desconhecida são recusadas; o loja.db
+  não é alterado; o comando de ensaio não mostra a senha.
+- Ajustado: o teste do L12 (a hora do último uso vem do banco).
+- **Suíte inteira contra o PostgreSQL** (3 partes): 793 + 1.061 + 1.123 = **2.977 passaram, 0
+  falhas** (2.962 do PG1 + 6 da memória + 9 da importação).
+
+### O que NÃO foi feito no PG2
+- A base de conhecimento (Chroma) continua fora do banco, como manda o roteiro (pgvector é para
+  depois).
+- A `venv/` que roda o Léo de verdade ainda não tem os pacotes novos:
+  `venv\Scripts\pip install -r requirements.txt` antes de ligar o Léo.

@@ -276,21 +276,45 @@ def _pool(url: str) -> ConnectionPool:
     return pool
 
 
+_pools_memoria: dict[str, ConnectionPool] = {}
+POOL_MEMORIA_MAX = int(os.getenv("BANCO_POOL_MEMORIA_MAX", "4"))
+
+
+def pool_da_memoria(url: str | None = None) -> ConnectionPool:
+    """PG2: pool só da memória das conversas (biblioteca do LangGraph, PostgresSaver), que pede
+    conexões do jeito dela (autocommit e linhas como dicionário). Mesmo banco da BANCO_URL."""
+    from psycopg.rows import dict_row
+    url = url or url_do_banco()
+    pool = _pools_memoria.get(url)
+    if pool is None:
+        with _trava_pools:
+            pool = _pools_memoria.get(url)
+            if pool is None:
+                pool = ConnectionPool(
+                    url, min_size=1, max_size=POOL_MEMORIA_MAX, timeout=ESPERA_POOL_S,
+                    kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+                    open=True, name="leo-memoria")
+                _pools_memoria[url] = pool
+    return pool
+
+
 def fechar_pools() -> None:
     """Fecha todas as conexões abertas (fim do processo, testes)."""
     with _trava_pools:
-        for pool in _pools.values():
+        for pool in [*_pools.values(), *_pools_memoria.values()]:
             pool.close()
         _pools.clear()
+        _pools_memoria.clear()
         _tabelas_com_id.clear()
 
 
 def fechar_pool(url: str) -> None:
     with _trava_pools:
-        pool = _pools.pop(url, None)
+        pools = [_pools.pop(url, None), _pools_memoria.pop(url, None)]
         _tabelas_com_id.pop(url, None)
-    if pool:
-        pool.close()
+    for pool in pools:
+        if pool:
+            pool.close()
 
 
 def criar_banco_vazio(url_base: str, nome: str) -> str:
@@ -566,10 +590,24 @@ def migrar() -> list[int]:
                     bruta.execute("INSERT INTO migracoes_aplicadas (versao, nome) VALUES (%s, %s)",
                                   (numero, nome))
                 aplicadas_agora.append(numero)
+            _preparar_tabelas_da_memoria(bruta)
         finally:
             bruta.execute("SELECT pg_advisory_unlock(%s)", (_TRAVA_MIGRACAO,))
     _tabelas_com_id.clear()
     return aplicadas_agora
+
+
+def _preparar_tabelas_da_memoria(bruta: psycopg.Connection) -> None:
+    """PG2: as tabelas da memória das conversas (checkpoints...) são da biblioteca do LangGraph,
+    que tem a própria lista de mudanças (tabela checkpoint_migrations). Não usam a nossa
+    numeração: são criadas e atualizadas pelo setup() dela, aqui, junto com as nossas."""
+    from psycopg.rows import dict_row
+    from langgraph.checkpoint.postgres import PostgresSaver
+    bruta.row_factory = dict_row
+    try:
+        PostgresSaver(bruta).setup()
+    finally:
+        bruta.row_factory = psycopg.rows.tuple_row
 
 
 def criar_tabelas():

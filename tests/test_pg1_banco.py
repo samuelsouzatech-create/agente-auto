@@ -88,7 +88,8 @@ def _executar(comando, parametros=()):
 # ------------------------------------------------------------ esquema
 
 def test_base_tem_as_mesmas_tabelas_e_colunas_do_sqlite_v20():
-    assert set(banco.tabelas()) == set(ESQUEMA_V20)
+    memoria = {"checkpoints", "checkpoint_blobs", "checkpoint_writes", "checkpoint_migrations"}
+    assert set(banco.tabelas()) == set(ESQUEMA_V20) | memoria     # PG2: + memória das conversas
     for tabela, colunas in ESQUEMA_V20.items():
         assert tuple(banco.colunas(tabela)) == colunas, tabela
 
