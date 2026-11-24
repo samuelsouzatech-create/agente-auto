@@ -15,6 +15,7 @@ o computador acordado ligado no começo (24/11, 15:42) e desligado no fim.
 | AR arrumações | arrumacoes | feito (16:20) | 3.002 ok (798 + 1.228 + 976) |
 | SG1 motor × pacote de veículos | segmentos-1 | feito (16:40) | 3.020 ok (802 + 1.242 + 976) |
 | SG2 catálogo e ramo de teste | segmentos-2 | feito (16:50) | 3.034 ok (802 + 1.242 + 990) |
+| IG0 documentação da Meta | instagram-0 | feito (17:00) | 3.037 ok (802 + 1.231 + 1.004) |
 
 ## Contradições com o roteiro, anotadas no começo (não graves: segui este pedido)
 - `docs/decisoes_e_roteiro.md`, seção 3: o pacote de ramo "não se faz agora; quando o segundo
@@ -336,3 +337,6 @@ Teste: `tests/test_ig0_payloads.py` (os arquivos existem, são JSON, são fictí
 ### Como li (sem conta real)
 As páginas foram lidas por um ajudante de leitura (sem login, só páginas públicas da Meta). Uma
 página (`messenger-platform/instagram`) abriu só o menu: o que dependia dela ficou "não confirmado".
+
+### Testes do IG0
+Suíte inteira, 3 partes: 802 + 1.231 + 1.004 = **3.037 passaram, 0 falhas** (3.034 + 3).

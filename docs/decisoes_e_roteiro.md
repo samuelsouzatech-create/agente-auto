@@ -290,3 +290,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   lojas de carro não mudou (prompt igual letra por letra). Ainda de carro no motor: lista LEGADO.
 - 24/11/2026, SG2: "catálogo" do ramo no motor (veículos = estoque; tabela, API /estoque e painel iguais;
   sem migração). Ramo de teste oculto `_exemplo_imoveis` (nunca opção para loja real; não é produto).
+- 24/11/2026, IG0: tabela da Meta no `docs/maratona4.md`. **Recomendação para decidir: login do Facebook**
+  (legenda do post e comentário de anúncio só existem nele). D13 continua: o não confirmado é "a confirmar".
