@@ -190,12 +190,20 @@ def test_fotos_nao_vazam_entre_lojas(duas_lojas):
 
 
 def test_fotos_sem_filtro_envia_o_unico_carro_com_foto(duas_lojas):
+    # Maratona Fotos: o Léo só envia foto do depósito (link de terceiros é ignorado).
+    import io
+    from PIL import Image
+    from app import fotos as _fotos
+    saida = io.BytesIO()
+    Image.new("RGB", (40, 30), (90, 90, 90)).save(saida, format="PNG")
+    refs = [_fotos.guardar(1, saida.getvalue()), _fotos.guardar(1, saida.getvalue())]
     _executar("UPDATE estoque SET fotos = ? WHERE loja_id = 1 AND modelo = 'Civic' AND ano = 2019",
-              ("http://fotos.teste/civic1.jpg,http://fotos.teste/civic2.jpg",))
+              (", ".join(refs),))
+    _executar("UPDATE estoque SET fotos = 'http://fotos.teste/terceiro.jpg' WHERE loja_id = 1 AND modelo = 'Onix'")
     mensagem = enviar_fotos.invoke({
         "name": "enviar_fotos", "args": {"loja_id": 1}, "id": "c1", "type": "tool_call",
     })
-    assert mensagem.artifact["urls"] == ["http://fotos.teste/civic1.jpg", "http://fotos.teste/civic2.jpg"]
+    assert mensagem.artifact["urls"] == refs
 
 
 def test_fotos_sem_filtro_e_sem_nenhuma_foto_e_honesto(duas_lojas):
