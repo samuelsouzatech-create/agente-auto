@@ -99,3 +99,18 @@ def origem_do_lead(loja_id, lead_id: str) -> str | None:
     finally:
         conexao.close()
     return linha["origem"] if linha else None
+
+
+def anexar_a_ultima_fala(loja_id, lead_id: str, frase: str) -> None:
+    """IG3: a frase do WhatsApp (do código) entra também na fala gravada do Léo."""
+    loja_id = exigir_loja(loja_id)
+    conexao = conectar()
+    try:
+        linha = conexao.execute("SELECT id, conteudo FROM mensagens WHERE loja_id = ? AND lead_id = ? AND canal = ? "
+                                "AND direcao = 'leo' ORDER BY id DESC LIMIT 1", (loja_id, lead_id, CANAL)).fetchone()
+        if linha is not None and frase not in (linha["conteudo"] or ""):
+            conexao.execute("UPDATE mensagens SET conteudo = ? WHERE id = ?",
+                            (f"{linha['conteudo']}\n\n{frase}".strip(), linha["id"]))
+            conexao.commit()
+    finally:
+        conexao.close()

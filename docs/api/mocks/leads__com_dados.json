@@ -16,7 +16,12 @@
       },
       "etapa": "com_vendedor",
       "etapa_rotulo": "Com vendedor",
-      "proximo_passo": "Aguardando vendedor"
+      "proximo_passo": "Aguardando vendedor",
+      "canais": [
+        "Instagram",
+        "WhatsApp"
+      ],
+      "como_chegou": "Anúncio"
     },
     {
       "lead": "5581999990001",
@@ -29,7 +34,11 @@
       },
       "etapa": "com_vendedor",
       "etapa_rotulo": "Com vendedor",
-      "proximo_passo": "Vendedor conversa com a Juliana"
+      "proximo_passo": "Vendedor conversa com a Juliana",
+      "canais": [
+        "WhatsApp"
+      ],
+      "como_chegou": null
     },
     {
       "lead": "5581999990004",
@@ -42,7 +51,11 @@
       },
       "etapa": "visita_marcada",
       "etapa_rotulo": "Visita marcada",
-      "proximo_passo": "Visita sáb 10:00"
+      "proximo_passo": "Visita sáb 10:00",
+      "canais": [
+        "WhatsApp"
+      ],
+      "como_chegou": null
     },
     {
       "lead": "5581999990005",
@@ -55,7 +68,11 @@
       },
       "etapa": "venda_registrada",
       "etapa_rotulo": "Venda registrada",
-      "proximo_passo": "Pós-venda em 7 dias"
+      "proximo_passo": "Pós-venda em 7 dias",
+      "canais": [
+        "WhatsApp"
+      ],
+      "como_chegou": null
     },
     {
       "lead": "5581999990006",
@@ -68,7 +85,11 @@
       },
       "etapa": "pediu_tempo",
       "etapa_rotulo": "Pediu tempo",
-      "proximo_passo": "Léo retoma em 10/11"
+      "proximo_passo": "Léo retoma em 10/11",
+      "canais": [
+        "WhatsApp"
+      ],
+      "como_chegou": null
     },
     {
       "lead": "5581999990002",
@@ -81,7 +102,11 @@
       },
       "etapa": "em_conversa",
       "etapa_rotulo": "Em conversa",
-      "proximo_passo": "Léo retoma amanhã 09:00"
+      "proximo_passo": "Léo retoma amanhã 09:00",
+      "canais": [
+        "WhatsApp"
+      ],
+      "como_chegou": null
     }
   ],
   "contagem_por_etapa": [

@@ -18,7 +18,12 @@
     "ultimo_contato": {
       "iso": "2026-11-06T21:40:00-03:00",
       "texto": "hoje 21:40"
-    }
+    },
+    "canais": [
+      "Instagram",
+      "WhatsApp"
+    ],
+    "como_chegou": "Comentário"
   },
   "mensagens": [
     {

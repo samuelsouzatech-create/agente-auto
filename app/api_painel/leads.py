@@ -38,7 +38,8 @@ def _ultimo_contato(linha: dict):
     return {"iso": iso, "texto": linha["ultimo_contato"]}
 
 
-def _item(linha: dict) -> dict:
+def _item(linha: dict, resumo: dict | None = None) -> dict:
+    extra = resumo or {}
     return {
         "lead": str(linha["lead_id"]),
         "nome": linha["nome"],
@@ -48,7 +49,25 @@ def _item(linha: dict) -> dict:
         "etapa": linha["etapa"],
         "etapa_rotulo": linha["etapa_rotulo"],
         "proximo_passo": linha["proximo_passo"],
+        "canais": extra.get("canais") or [],                  # v1.3 (IG3)
+        "como_chegou": extra.get("como_chegou"),               # v1.3 (IG3)
     }
+
+
+def _um_cartao_por_cliente(loja_id: int, linhas: list[dict]) -> list[dict]:
+    """IG3: a conversa do WhatsApp do mesmo cliente do Instagram não vira outro cartão."""
+    from app.instagram_whatsapp import vinculos
+    mapa = vinculos(loja_id)
+    if not mapa:
+        return linhas
+    presentes = {str(l["lead_id"]) for l in linhas}
+    return [l for l in linhas if mapa.get(str(l["lead_id"])) not in presentes]
+
+
+def _itens(loja_id: int, linhas: list[dict]) -> list[dict]:
+    from app.instagram_whatsapp import resumo_dos_clientes
+    resumo = resumo_dos_clientes(loja_id, [l["lead_id"] for l in linhas])
+    return [_item(l, resumo.get(str(l["lead_id"]))) for l in linhas]
 
 
 def montar_leads(loja_id: int, periodo=PERIODO_PADRAO, busca=None, etapa=None,
@@ -57,6 +76,7 @@ def montar_leads(loja_id: int, periodo=PERIODO_PADRAO, busca=None, etapa=None,
     dias = periodo if periodo in PERIODOS else PERIODO_PADRAO
     termo = " ".join(str(busca or "").split())[:MAX_BUSCA] or None
     linhas = etapas_dos_leads(loja_id, dias, termo, agora=agora)
+    linhas = _um_cartao_por_cliente(loja_id, linhas)                        # IG3
 
     contagem = {e: 0 for e in ORDEM_DAS_ETAPAS}
     for linha in linhas:
@@ -75,7 +95,7 @@ def montar_leads(loja_id: int, periodo=PERIODO_PADRAO, busca=None, etapa=None,
         "total": total,
         "tamanho": tamanho,
         "periodo_dias": dias,
-        "itens": [_item(l) for l in linhas[inicio:inicio + tamanho]],
+        "itens": _itens(loja_id, linhas[inicio:inicio + tamanho]),
         "contagem_por_etapa": [{"etapa": e, "rotulo": ROTULOS_ETAPA[e], "total": contagem[e]}
                                for e in ORDEM_DAS_ETAPAS],
     }

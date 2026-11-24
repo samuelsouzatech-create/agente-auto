@@ -113,6 +113,10 @@ def _cartao(loja, loja_id, lead, conversa, handoff, nomes, carros, agora) -> dic
         "assumido_por": handoff.get("vendedor") if estado == ASSUMIDO else None,
         "janela": janela_do_cartao(loja, loja_id, lead, canal, agora),
     })
+    from app.instagram_whatsapp import resumo_dos_clientes        # v1.3 (IG3)
+    resumo = resumo_dos_clientes(loja_id, [lead]).get(lead, {})
+    cartao["canais"] = resumo.get("canais") or []
+    cartao["como_chegou"] = resumo.get("como_chegou")
     return cartao
 
 
@@ -131,6 +135,9 @@ def montar_atender(loja_id: int, agora=None) -> dict:
     hoje = [lead for lead, c in conversas.items()
             if inicio <= str(c.get("ultima_mensagem") or "")[:19] < fim][:MAX_HOJE]
 
+    from app.instagram_whatsapp import vinculos                   # IG3: um cartão por cliente
+    mapa = vinculos(loja_id)
+    hoje = list(dict.fromkeys(mapa.get(lead, lead) for lead in hoje))
     leads = list(dict.fromkeys([h["lead_id"] for h in em_ordem] + hoje))
     nomes = nomes_dos_clientes(loja_id, leads)
     carros = _carros(loja_id, leads)

@@ -114,6 +114,10 @@ PADROES: dict = {
                                      "parecidas. Quer que eu te mostre?"),
         "texto_resposta_publica": "Te chamei no direct.",
         "comentarios_prazo_dias": 7,
+        # IG3: levar para o WhatsApp (pedido_ou_vendedor | nunca) e juntar o mesmo cliente.
+        "oferecer_whatsapp": "pedido_ou_vendedor",
+        "whatsapp_da_loja": "",
+        "prazo_mesmo_cliente_dias": 7,
     },
     "custos": {"teto_diario_llm": None},
     "envio_real": {"remarketing": False, "pos_venda": False, "reativacao": False},
@@ -151,6 +155,25 @@ def _bool(v):
     if not isinstance(v, bool):
         raise ValueError("precisa ser verdadeiro ou falso")
     return v
+
+
+def _opcao_whatsapp(v):
+    """IG3: quando o Léo oferece o WhatsApp no Instagram."""
+    if v not in ("pedido_ou_vendedor", "nunca"):
+        raise ValueError("use pedido_ou_vendedor ou nunca")
+    return v
+
+
+def _telefone_ou_vazio(v):
+    """IG3: o WhatsApp da loja (só para montar o link wa.me). Vazio = não oferece."""
+    from app.telefone import normalizar_telefone_br
+    texto = str(v or "").strip()
+    if not texto:
+        return ""
+    fone = normalizar_telefone_br(texto)
+    if not fone:
+        raise ValueError("precisa ser um celular com DDD")
+    return fone
 
 
 def _texto(minimo: int, maximo: int) -> Callable:
@@ -297,6 +320,9 @@ EDITAVEIS: dict[str, Callable] = {
     "instagram.texto_comentario_vendido": _texto(1, 300),
     "instagram.texto_resposta_publica": _texto(1, 80),
     "instagram.comentarios_prazo_dias": _int(1, 7),
+    "instagram.oferecer_whatsapp": _opcao_whatsapp,
+    "instagram.whatsapp_da_loja": _telefone_ou_vazio,
+    "instagram.prazo_mesmo_cliente_dias": _int(1, 30),
     "custos.teto_diario_llm": _opcional(_float(0, 10_000)),
     "dados.retencao_dias": _opcional(_int(30, 3650)),
     **{f"modulos.{m}": _bool for m in MODULOS},

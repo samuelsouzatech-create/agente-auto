@@ -160,7 +160,14 @@ def montar_conversa(loja_id: int, lead: str, sessao: dict, agora=None) -> dict |
     ultima = f["mensagens"][-1]["criado_em"] if f["mensagens"] else None
     cliente["ultimo_contato"] = horario(loja, ultima, agora)
 
-    mensagens = [x for x in (montar_mensagem(loja, m, agora) for m in f["mensagens"]) if x]
+    # IG3: o histórico do MESMO cliente nos dois canais (Instagram e WhatsApp), em ordem.
+    from app.instagram_whatsapp import mensagens_das_outras_conversas, resumo_dos_clientes
+    todas = f["mensagens"] + mensagens_das_outras_conversas(loja_id, lead, MAX_MENSAGENS)
+    todas = sorted(todas, key=lambda m: (str(m.get("criado_em") or ""), m["id"]))[-MAX_MENSAGENS:]
+    resumo = resumo_dos_clientes(loja_id, [lead]).get(lead, {})
+    cliente["canais"] = resumo.get("canais") or []
+    cliente["como_chegou"] = resumo.get("como_chegou")
+    mensagens = [x for x in (montar_mensagem(loja, m, agora) for m in todas) if x]
     return {
         "atualizar_em_segundos": ATUALIZAR_EM_SEGUNDOS,
         "cliente": cliente,

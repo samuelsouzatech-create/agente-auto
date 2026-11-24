@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Léo — API do painel do cliente
-  version: 1.2.0
+  version: 1.3.0
   description: |
     Contrato v1 (C1 do Plano Mestre). Escrito antes do código: a API real (C2) tem de obedecer a este arquivo,
     e o front pode ser feito contra os dados falsos de docs/api/mocks/.
@@ -814,6 +814,14 @@ components:
         etapa_rotulo: {type: string}
         proximo_passo: {type: string}
         ultimo_contato: {oneOf: [{$ref: '#/components/schemas/Horario'}, {type: 'null'}]}
+        canais:
+          type: array
+          items: {type: string}
+          description: 'Opcional (v1.3). Os canais deste cliente, ex. [Instagram, WhatsApp] quando é o mesmo cliente nos dois.'
+        como_chegou:
+          type: [string, 'null']
+          enum: [Anúncio, Perfil, Comentário, Direto, null]
+          description: 'Opcional (v1.3). Como o cliente chegou (Instagram): anúncio, perfil, comentário ou direto.'
     CartaoConversa:
       type: object
       required: [lead, nome, origem, estado_do_chamado, janela]
@@ -838,6 +846,14 @@ components:
         estado_do_chamado: {type: string, enum: [aguardando, humano_assumiu, nenhum]}
         assumido_por: {type: [string, 'null']}
         janela: {$ref: '#/components/schemas/Janela'}
+        canais:
+          type: array
+          items: {type: string}
+          description: 'Opcional (v1.3). Os canais deste cliente, ex. [Instagram, WhatsApp] quando é o mesmo cliente nos dois.'
+        como_chegou:
+          type: [string, 'null']
+          enum: [Anúncio, Perfil, Comentário, Direto, null]
+          description: 'Opcional (v1.3). Como o cliente chegou (Instagram): anúncio, perfil, comentário ou direto.'
     Atender:
       type: object
       required: [esperando, com_vendedor, conversas_de_hoje, atualizar_em_segundos]
@@ -932,6 +948,14 @@ components:
         etapa: {$ref: '#/components/schemas/Etapa'}
         etapa_rotulo: {type: string, description: 'A etapa "venda_registrada" aparece como "Venda registrada".'}
         proximo_passo: {type: string}
+        canais:
+          type: array
+          items: {type: string}
+          description: 'Opcional (v1.3). Os canais deste cliente, ex. [Instagram, WhatsApp] quando é o mesmo cliente nos dois.'
+        como_chegou:
+          type: [string, 'null']
+          enum: [Anúncio, Perfil, Comentário, Direto, null]
+          description: 'Opcional (v1.3). Como o cliente chegou (Instagram): anúncio, perfil, comentário ou direto.'
     Paginacao:
       type: object
       required: [pagina, paginas, total, tamanho]

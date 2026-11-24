@@ -70,14 +70,44 @@ async def processar_texto(loja_id: int, lead_id: str, texto: str) -> None:
     if texto_juntado is None:
         return
     try:
+        _guardar_telefone(loja_id, lead_id, texto_juntado)                  # IG3
         resultado = await executar_turno(loja_id, CANAL, lead_id, texto_juntado, grafo=grafo_do_turno())
         if resultado.silenciado or not resultado.texto:
             return
+        resultado.texto = _com_whatsapp(loja_id, lead_id, texto_juntado, resultado)   # IG3
         canal = FABRICA_DO_CANAL(loja_id)
         await enviar_resultado(canal, lead_id, resultado, loja_id=loja_id)
         gravar_ids_do_leo(loja_id, lead_id, canal.ids_enviados)
     finally:
         await liberar_lock(lead_id, token, loja_id=loja_id)
+
+
+def _guardar_telefone(loja_id: int, lead_id: str, texto: str) -> None:
+    """IG3: o cliente do Instagram passou o telefone: fica gravado (para o 'mesmo cliente')."""
+    from app.instagram_whatsapp import gravar_telefone, telefone_do_texto
+    try:
+        fone = telefone_do_texto(texto)
+        if fone:
+            gravar_telefone(loja_id, lead_id, fone)
+    except Exception:
+        _log.exception("[Instagram] Não consegui gravar o telefone.")
+
+
+def _com_whatsapp(loja_id: int, lead_id: str, texto_do_cliente: str, resultado) -> str:
+    """IG3: quando o cliente pede ou o vendedor é chamado, o Léo oferece o WhatsApp da loja (código)."""
+    from app.instagram import anexar_a_ultima_fala
+    from app.instagram_whatsapp import frase_do_whatsapp, telefone_do_lead
+    from app.lojas import carregar_loja
+    try:
+        frase = frase_do_whatsapp(carregar_loja(loja_id), texto_do_cliente, bool(resultado.handoff_aberto),
+                                  bool(telefone_do_lead(loja_id, lead_id)))
+    except Exception:
+        _log.exception("[Instagram] Não consegui montar a oferta do WhatsApp.")
+        return resultado.texto
+    if not frase or frase in resultado.texto:
+        return resultado.texto
+    anexar_a_ultima_fala(loja_id, lead_id, frase)
+    return f"{resultado.texto}\n\n{frase}"
 
 
 async def processar_nao_entendido(loja_id: int, lead_id: str, tipo_original: str) -> None:

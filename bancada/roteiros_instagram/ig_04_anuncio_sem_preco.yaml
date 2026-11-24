@@ -1,0 +1,9 @@
+nome: ig_anuncio_sem_preco
+descricao: >
+  IG2. Comentário em anúncio pago ("quanto?"). A mensagem privada nunca leva preço; no direct, o
+  preço só sai se vier da ferramenta de estoque.
+canal: instagram
+contexto_inicial: "Oi! Vi seu comentário, te chamei por aqui para te ajudar."
+falas:
+  - "quanto tá o carro do anúncio?"
+nao_contem: ["R$ 9", "mil reais"]

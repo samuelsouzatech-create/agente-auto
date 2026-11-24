@@ -443,3 +443,65 @@ diferentes); resposta pública desligada por padrão, uma só e nunca com preço
 "anuncio"; origem "comentario"; a pessoa responde e o Léo continua sabendo do carro; a porta agenda
 o comentário da loja certa; as palavras da loja filtram.
 - Suíte inteira, 3 partes: 835 + 1.246 + 1.004 = **3.085 passaram, 0 falhas** (3.064 + 21).
+
+## IG3 — Do Instagram para o WhatsApp, e o fechamento (branch instagram-3, saiu da instagram-2)
+
+### 1. Levar para o WhatsApp (`app/instagram_whatsapp.py`)
+- Padrão por loja `instagram.oferecer_whatsapp` = "pedido_ou_vendedor": o Léo atende no direct e
+  só oferece o WhatsApp quando o cliente pede ("zap", "whatsapp"...) ou quando o vendedor é chamado
+  (o turno abriu chamado). Pede o telefone e manda o link `https://wa.me/<número>` do
+  `instagram.whatsapp_da_loja` (cadastro; celular validado). Opção "nunca". Sem número
+  cadastrado: não oferece.
+- É **código, não instrução para a IA**: a frase é fixa, sem emoji, colada no fim da resposta (e
+  gravada na fala do Léo). Por isso o prompt do Léo não mudou (a regra de ouro do SG1 continua).
+- O telefone que o cliente escreve no direct é gravado (`leads.telefone`, com a hora).
+
+### 2. Mesmo cliente
+- Mensagem no WhatsApp da loja, do telefone que o lead do Instagram DESSA loja passou, dentro de
+  `instagram.prazo_mesmo_cliente_dias` (padrão 7): as duas conversas viram UM cliente
+  (`clientes_vinculados`, uma vez só). A conferência roda na porta do WhatsApp, antes do turno.
+- Nunca entre lojas: telefone igual em lojas diferentes fica separado (teste). Fora do prazo ou em
+  outro canal: não junta.
+
+### 3. Painel (contrato 1.3.0)
+- API: `canais` e `como_chegou` em Leads, nos cartões do Atender e no cliente da conversa; um
+  cartão só para o mesmo cliente; a conversa traz o histórico dos dois canais em ordem (responder
+  continua pelo canal da própria conversa). `openapi.yaml` 1.3.0, `contrato_v1.md`, dados falsos;
+  `conferir_mocks.py`: **85 dados falsos conferidos, tudo certo**.
+- **leo-painel-web, branch `painel-instagram`** (saiu da main): tipos gerados de novo, Leads e
+  Atender mostram "Instagram e WhatsApp" e "veio por ..."; na conversa, "Como chegou" e o canal de
+  cada balão. `npm test`: **91 passaram** (87 + 4 novos). `npm run build`: **OK**.
+
+### 4. Exclusão de dados (I6) e textos para a Meta
+- `app/api/dados.py`: `POST /dados/excluir` (formulário com `signed_request` no formato da Meta,
+  HMAC-SHA256 com `INSTAGRAM_APP_SECRET`; sem segredo ou assinatura errada: 400) apaga o cliente
+  `ig:<id>` em TODAS as tabelas que têm cliente e loja (achadas no banco, então tabela nova entra
+  sozinha) e a memória da conversa; responde `{url, confirmation_code}`; `GET
+  /dados/excluir/<código>` mostra que foi feito. O registro (`pedidos_exclusao`) guarda só o código
+  e um resumo (hash). **Outra loja e outros clientes não são tocados** (teste). O porteiro passou a
+  mandar `/dados/excluir` para o webhook. Variável `LEO_ENDERECO_PUBLICO` monta a url (padrão
+  https://localhost).
+- `docs/meta/`: `privacidade.md`, `termos.md`, `justificativas.md` (uma por permissão) e
+  `roteiro_video.md`, todos marcados **"RASCUNHO, revisar com advogado"**.
+
+### 5. Servidor falso da Meta e ponta a ponta (I7/I8)
+- `tests/meta_falsa.py`: servidor HTTP de verdade em 127.0.0.1 (porta livre) com as rotas do
+  Instagram (`/messages`, `/replies`, a legenda do post), conferindo o token. O "documento 4.0,
+  seção 6" citado no plano não está no repositório: o servidor é novo.
+- `tests/test_ig3_ponta_a_ponta.py`: comentário no post do Civic (pela porta assinada) ->
+  mensagem privada citando "Honda Civic 2019", sem preço, e "Te chamei no direct." -> o eco da
+  própria mensagem privada não muda nada -> o cliente responde no direct e o Léo recebe o carro no
+  contexto -> pede o zap e passa o telefone: a resposta leva o wa.me da loja e o telefone fica
+  gravado -> escreve no WhatsApp da loja (porta do WhatsApp assinada; o envio do WhatsApp foi
+  trocado por um falso) -> **o painel mostra UM cliente com Instagram e WhatsApp, como chegou
+  "Comentário", e o histórico dos dois canais**. Mais um teste: token errado é recusado.
+- O que este ponta a ponta **não** prova (como o plano já dizia): que a Meta aprova o app, que os
+  campos reais batem 100% com os de exemplo, nem prazos e limites na prática. Isso só com conta real.
+
+### 6. Roteiros de bancada do Instagram (NÃO rodados)
+`bancada/roteiros_instagram/` (4 roteiros + `LEIA.md`), fora da pasta que a bancada lê, para não
+entrarem numa rodada sem querer. Rodar quando houver crédito (e conferir se a bancada já entende
+`canal: instagram` e `contexto_inicial`: **não confirmado**, a bancada de hoje não tem esses campos).
+
+### Testes do IG3
+`tests/test_ig3_instagram_whatsapp.py` (17) e `tests/test_ig3_ponta_a_ponta.py` (2).
