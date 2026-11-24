@@ -278,3 +278,7 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   Configuração, Conhecimento nem Usuários (existem no operador). Decidir se o operador cobre isso no
   piloto (o plano mestre aceita "no painel novo ou no operador"). A suíte passou a usar a gaveta 15
   do Redis (não suja mais o Redis de uso).
+- 24/11/2026, DK3: turno numa linha separada (thread, não banco assíncrono), memória das conversas
+  sem a trava única e transação só quando precisa no banco.py. Turno médio −33%, espera do cliente
+  −50%, 0 perdidas e 0 cruzadas. Nenhuma decisão mudou. Pendência resolvida: "turno lento com
+  muitas lojas" (PG3).

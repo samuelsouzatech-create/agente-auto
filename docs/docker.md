@@ -12,7 +12,7 @@ dados fictícios. `.env`, senhas e tokens nunca aparecem aqui nem no Git.
 | DK0 mapa das peças | docker-d0 | feito | suíte 2.982 ok (851 + 1.137 + 994) |
 | DK1 tudo sobe com um comando | docker-d1 | feito | suíte 3.002 ok; demo pelo HTTPS local 10/10 |
 | DK2 aposentar o Streamlit do cliente | docker-d2 | **não apagado**: faltam 3 telas no painel novo (lista no DK2); conserto do Redis nos testes | suíte 3.006 ok (783 + 1.229 + 994) |
-| DK3 turno lento com muitas lojas | docker-d3 | | |
+| DK3 turno lento com muitas lojas | docker-d3 | feito: turno médio 2,20 → 1,47 s; espera do cliente 7,9 → 3,9 s; 0 perdidas, 0 cruzadas | suíte 3.021 ok (798 + 1.095 + 1.128) |
 
 ## DK0 — Mapa das peças (como roda hoje, antes do Docker)
 
@@ -249,3 +249,113 @@ conhecimento e equipe, ou o operador faz por ele no piloto?
 
 ### Testes do DK2
 - Suíte inteira nesta branch: ver a tabela do começo.
+
+## DK3 — Turno lento com muitas lojas (branch docker-d3, saiu da docker-d2)
+
+### A escolha: thread (e não banco assíncrono)
+- **Thread** (escolhida): o turno inteiro (banco + IA) roda numa "linha do turno"
+  (`app/core/turno.py`, `em_linha_do_turno`), fora do laço assíncrono do servidor. O código do
+  turno, das guardas e do `banco.py` não muda de jeito: continua síncrono, com o mesmo pool, as
+  mesmas consultas e os mesmos testes. É o mesmo mecanismo que já se usava para a IA. Leva junto
+  "quem está agindo" (o contexto), como o `asyncio.to_thread`.
+- **Banco assíncrono** (descartado agora): reescrever o `banco.py` e as ~700 consultas, as
+  guardas e as ferramentas para `async`. Muito mais código mexido no coração do Léo, mais risco
+  de erro, e a memória das conversas (PostgresSaver) teria de trocar de versão. Fica como opção
+  se um dia o servidor precisar de muito mais.
+
+### O que foi feito
+1. **Turno numa linha própria** (`app/core/turno.py`): `executar_turno` e `executar_turno_imagem`
+   viraram "cascas" que mandam o turno (`_turno`, `_turno_imagem`, `_turno_da_equipe`,
+   `_turno_sombra`, agora síncronos) para um grupo de linhas só do turno. Dentro da linha, a IA é
+   chamada direto. Também a **leitura da foto do cliente** (IA) saiu do laço: antes ela travava o
+   servidor enquanto lia a foto.
+   - Quantas linhas: `LEO_TURNO_THREADS`; padrão = tamanho do pool do banco + 2 (**12**). Medido:
+     com 32 linhas, elas brigam pelo Python e pelas conexões (turno ~1,9 s); com 12, ~1,3 s.
+     Antes do DK3 a IA tinha no máximo 8 linhas (as do asyncio: 4 núcleos + 4).
+2. Só isso **não bastou**. Medindo por dentro, o gargalo era outro:
+   - **A memória das conversas tinha uma trava única** (o `PostgresSaver` da biblioteca põe uma
+     trava em volta de toda leitura e gravação, pensada para quem usa UMA conexão). Os turnos de
+     todas as lojas passavam um de cada vez por ela. Conserto (`app/core/agent.py`): sem essa
+     trava, porque cada operação pega a sua conexão do pool, e duas operações da MESMA conversa
+     nunca correm juntas (a trava por cliente no Redis garante). A poda da memória continua uma
+     por vez (trava própria).
+   - **Cada consulta gastava 3 idas ao banco**: toda conexão abria uma transação (`BEGIN`) e a
+     desfazia ao fechar (`ROLLBACK`), até para uma leitura simples. Um turno faz ~18 consultas,
+     cada uma na sua conexão. Conserto (`banco.py`): **transação só quando precisa**. A leitura
+     simples roda sem transação; o primeiro comando que não é leitura simples (escrita,
+     `SET LOCAL`, `SELECT ... FOR UPDATE`, `nextval`, trava de transação, `INTO`) abre a
+     transação, e daí em diante tudo é como antes (`commit` confirma; `rollback` ou fechar sem
+     commit desfaz). Por que é seguro: o PostgreSQL aqui usa READ COMMITTED (o padrão), em que
+     cada comando já vê só o que estava confirmado naquela hora, dentro ou fora de transação. Na
+     dúvida (ex.: a palavra "update" num texto), a regra abre a transação: erra para o lado
+     seguro. Conexão somente leitura continua como antes. Um turno sozinho caiu de 107 ms para
+     68 ms.
+
+### Números (10 lojas, 100 clientes, 500 mensagens; IA falsa de 0,1 a 0,3 s)
+| | ANTES 1 | ANTES 2 | ANTES 3 | DEPOIS 1 | DEPOIS 2 | DEPOIS 3 |
+|---|---|---|---|---|---|---|
+| Mensagens perdidas | **0** | **0** | **0** | **0** | **0** | **0** |
+| Respostas cruzadas | **0** | **0** | **0** | **0** | **0** | **0** |
+| Clientes sem resposta / erros | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| Turnos / respostas enviadas | 106 / 106 | 137 / 137 | 100 / 100 | 105 / 105 | 113 / 113 | 108 / 108 |
+| **Tempo do turno: médio** | 2,10 s | 2,50 s | 2,00 s | **1,04 s** | **1,68 s** | **1,69 s** |
+| Tempo do turno: pior | 2,54 s | 5,18 s | 3,04 s | 2,05 s | 2,88 s | 2,55 s |
+| **Espera do cliente (última mensagem → resposta): média** | 6,97 s | 10,04 s | 6,59 s | **3,71 s** | **4,13 s** | **3,99 s** |
+| Espera do cliente: pior | 9,98 s | 13,95 s | 9,29 s | 4,92 s | 5,17 s | 5,29 s |
+| Duração total | 15,2 s | 19,4 s | 14,8 s | 10,1 s | 10,3 s | 10,2 s |
+| Conexões do pool usadas (pico) | 3 | 2 | 2 | 9 | 10 | 10 |
+| Pedidos esperando conexão (pico) | 0 | 0 | 0 | 7 | 9 | 7 |
+| Memória do processo antes → depois | 160 → 189 MB | 160 → 189 MB | 160 → 189 MB | 159 → 190 MB | 160 → 189 MB | 160 → 190 MB |
+
+Resumo: turno médio **2,20 s → 1,47 s (−33%)**; espera média do cliente **7,9 s → 3,9 s (−50%)**;
+pior espera **14,0 s → 5,3 s**. Debounce do teste: 1,5 s (está dentro da espera).
+Arquivos: `logs/docker/d3_antes_*.txt`, `logs/docker/d3_depois_*.txt` e `logs/carga/` (fora do Git).
+
+### Como cheguei lá (rodadas de ajuste, mesmo teste)
+| Mudança | Turno médio | Espera média |
+|---|---|---|
+| antes (laço travado) | 2,0 a 2,5 s | 6,6 a 10,0 s |
+| só a linha do turno (32 linhas) | 2,6 a 3,0 s | 5,4 a 6,4 s |
+| + memória sem trava única | ~2,8 a 3,0 s | ~6,3 s |
+| + transação só quando precisa (32 linhas) | 1,6 a 2,2 s | 4,6 a 5,0 s |
+| + 12 linhas (padrão final) | 1,0 a 1,7 s | 3,7 a 4,1 s |
+
+**Cuidado ao ler "tempo do turno":** antes, com o laço travado, o relógio de um turno só começava
+quando o anterior soltava o laço, então a fila não entrava na conta. Agora os 100 turnos começam
+juntos e a espera por uma linha livre conta dentro do turno. Por isso a "espera do cliente" (o
+que o cliente sente) é a medida mais justa, e foi a que mais caiu.
+
+### O limite que sobrou (para o analista)
+- Um processo do Léo atende ~20 turnos por segundo com a IA falsa (o Python faz uma coisa por
+  vez; as linhas só ajudam enquanto esperam o banco ou a IA). Com a IA de verdade (1 a 3 s por
+  resposta, tempo de espera), as 12 linhas atendem ~4 a 12 turnos por segundo, bem acima de 10
+  lojas. Para crescer além disso: mais de um processo do webhook (o Redis já coordena duplicata,
+  rajada e trava entre processos) ou menos consultas por turno. Não testado.
+- A rodada de carga mede o webhook. O bot do Telegram e o simulador usam o mesmo
+  `executar_turno` e ganham o mesmo.
+- Fora do turno, a porta do webhook ainda faz algumas consultas curtas no laço (descobrir a
+  loja, anotar a recebida). São 1 ou 2 por mensagem. Não mexi (fora do pedido).
+
+### Testes do DK3
+- `tests/test_dk3_turno_em_linha.py` (15, offline, duas lojas): o turno roda numa linha do
+  turno; banco lento (0,3 s por gravação) não trava o laço (o laço continua girando); 8 turnos
+  de duas lojas ao mesmo tempo, sem cruzar (a loja A nunca vê a B) e em paralelo; "quem está
+  agindo" vai junto; turno com foto também fora do laço; erro da IA continua virando a mensagem
+  de erro; leitura simples não abre transação; escrita abre e fechar sem commit desfaz; commit
+  confirma; rollback desfaz; comandos que precisam de transação (FOR UPDATE, SET LOCAL...);
+  somente leitura continua recusando escrita; a conexão volta ao pool no jeito de sempre; memória
+  sem trava única com 8 conversas ao mesmo tempo, sem perder nada; uma poda por vez.
+  **Conferido:** com o `turno.py` antigo, 3 destes testes falham (linha do turno, banco lento,
+  foto).
+- **Suíte inteira contra o PostgreSQL** (3 partes): 798 + 1.095 + 1.128 = **3.021 passaram, 0
+  falhas** (3.006 + 15). Ficou mais rápida (~10 min; era ~14), efeito da transação só quando
+  precisa.
+- **Docker com o código do DK3** (`docker compose up -d --build`): as 7 peças healthy e o
+  percurso da demo pelo HTTPS local de novo **10 de 10** (login, Atender, Estoque com fotos, sem
+  erro da API, 375 e 1280 px). A 1ª tentativa, segundos depois de as peças ficarem healthy,
+  falhou no login: o roteiro preencheu o formulário antes de a página terminar de carregar (a
+  API nem recebeu o pedido). Refeita, passou.
+- **Cuidado (para o analista):** o teste de carga usa a gaveta de USO do Redis (é assim desde o
+  PG3). As ~20 rodadas deste bloco deixaram ~12 mil chaves de teste (duplicatas, vencem em 24 h)
+  no Redis local; apaguei (`FLUSHDB` da gaveta 0, que só tinha isso). Sugestão: o teste de carga
+  também usar uma gaveta própria. Não mexi (fora do pedido).

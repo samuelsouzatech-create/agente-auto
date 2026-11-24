@@ -30,9 +30,13 @@ contatos que a LOJA iniciaria (remarketing e pós-venda, Etapa 2).
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import functools
+import os
 import re
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -245,6 +249,34 @@ def com_contexto_do_periodo_fora(texto: str, perdidas: list) -> str:
     return f"{CONTEXTO_INICIO}\n" + "\n".join(linhas) + f"\n{CONTEXTO_FIM}\n\n{texto}"
 
 
+# DK3 (Maratona Docker): o turno usa o banco de forma SÍNCRONA (psycopg com pool). Antes, só a
+# IA rodava fora do laço assíncrono (asyncio.to_thread); o resto do turno (guardas, mensagens,
+# chamados, custos, memória) rodava DENTRO do laço e travava o servidor: com 100 clientes ao
+# mesmo tempo os turnos andavam praticamente um de cada vez (PG3). Agora o turno INTEIRO (banco
+# + IA) roda numa linha separada (thread). O laço fica livre para receber mensagens, o Redis
+# (debounce, trava) e os envios. Escolha e números: docs/docker.md, DK3.
+# Linhas próprias do turno (não divide com o resto do programa): LEO_TURNO_THREADS; padrão =
+# tamanho do pool do banco + 2 (12 com BANCO_POOL_MAX=10). Medido no teste de carga: linha a mais
+# que isso só fica esperando conexão e disputando o Python (32 linhas: turno ~1,9 s; 12: ~1,3 s).
+# Antes do DK3 a IA tinha no máximo 8 linhas (as do asyncio, 4 núcleos + 4); agora tem 12.
+def _linhas_padrao() -> int:
+    import banco
+    return banco.POOL_MAX + 2
+
+
+THREADS_DO_TURNO = max(1, int(os.environ.get("LEO_TURNO_THREADS") or _linhas_padrao()))
+_linhas_do_turno = ThreadPoolExecutor(max_workers=THREADS_DO_TURNO, thread_name_prefix="turno")
+
+
+async def em_linha_do_turno(funcao, *args, **kwargs):
+    """Roda funcao numa linha do turno, levando o contexto atual (quem está agindo, etc.),
+    do mesmo jeito que o asyncio.to_thread leva."""
+    laco = asyncio.get_running_loop()
+    contexto = contextvars.copy_context()
+    return await laco.run_in_executor(
+        _linhas_do_turno, functools.partial(contexto.run, funcao, *args, **kwargs))
+
+
 async def aguardar_vez(loja_id: int, lead_id: str, texto: str):
     """Debounce + lock. Devolve (texto_juntado, token) ou (None, None).
     Quem receber um token TEM que liberar o lock no final (finally)."""
@@ -260,7 +292,15 @@ async def aguardar_vez(loja_id: int, lead_id: str, texto: str):
 
 async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
                          grafo=None, tipo: str = "texto", foto_carro: bool = False) -> ResultadoTurno:
-    """Roda UM turno do Léo. Não envia nada: quem envia é o canal."""
+    """Roda UM turno do Léo. Não envia nada: quem envia é o canal.
+    DK3: o turno inteiro (banco + IA) roda numa linha do turno, fora do laço assíncrono."""
+    return await em_linha_do_turno(_turno, loja_id, canal, lead_id, texto,
+                                   grafo=grafo, tipo=tipo, foto_carro=foto_carro)
+
+
+def _turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
+           grafo=None, tipo: str = "texto", foto_carro: bool = False) -> ResultadoTurno:
+    """O turno de verdade (síncrono). Chame executar_turno, nunca este direto do laço."""
     inicio = time.perf_counter()
     # P7: antes de tudo (antes de gravar e de chamar a IA).
     if porta_fechada(loja_id, canal, lead_id):
@@ -269,9 +309,9 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
         from app.core.agent import agente_grafo as grafo   # import tardio (cria a IA)
     membro = _quem_da_equipe(loja_id, canal, lead_id)
     if membro:
-        return await _turno_da_equipe(loja_id, canal, lead_id, texto, membro, grafo, inicio)
+        return _turno_da_equipe(loja_id, canal, lead_id, texto, membro, grafo, inicio)
     if em_sombra(loja_id):          # L9: gera a resposta, NÃO envia nem grava atendimento
-        return await _turno_sombra(loja_id, canal, lead_id, texto, grafo, inicio)
+        return _turno_sombra(loja_id, canal, lead_id, texto, grafo, inicio)
     rotulo = _rotulo(canal, loja_id)
     print(f"\n{rotulo} Cliente {id_no_console(lead_id, canal)} disse: {texto_no_console(texto, canal)}")
 
@@ -308,8 +348,7 @@ async def executar_turno(loja_id: int, canal: str, lead_id: str, texto: str, *,
               f"{len(historico)} mensagem(ns) do histórico do banco.")
 
     try:
-        resultado = await asyncio.to_thread(
-            grafo.invoke,
+        resultado = grafo.invoke(
             {
                 "messages": [HumanMessage(content=texto_para_leo)],
                 "lead_id": lead_id,
@@ -561,7 +600,7 @@ def marcar_falso_dono(loja_id: int, lead_id: str, texto: str) -> bool:
         return False
 
 
-async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, grafo,
+def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, grafo,
                         inicio: float) -> ResultadoTurno:
     """L9: o Léo gera a resposta, mas nada sai e nada de atendimento é gravado
     (sem mensagem na conversa, sem chamado, troca, visita ou lead). Só a sugestão fica.
@@ -569,8 +608,7 @@ async def _turno_sombra(loja_id: int, canal: str, lead_id: str, texto: str, graf
     rotulo = _rotulo(canal, loja_id)
     print(f"\n{rotulo} [SOMBRA] Cliente {id_no_console(lead_id, canal)} disse: {texto_no_console(texto, canal)}")
     try:
-        resultado = await asyncio.to_thread(
-            grafo.invoke,
+        resultado = grafo.invoke(
             {"messages": [HumanMessage(content=texto)], "lead_id": lead_id, "loja_id": loja_id,
              "canal": canal, "equipe": {}, "sombra": True},
             {"configurable": {"thread_id": thread_id(loja_id, canal, lead_id)}},
@@ -670,7 +708,7 @@ def _quem_da_equipe(loja_id: int, canal: str, lead_id: str) -> dict | None:
 _TEM_NUMERO = re.compile(r"\d")
 
 
-async def _turno_da_equipe(loja_id: int, canal: str, lead_id: str, texto: str,
+def _turno_da_equipe(loja_id: int, canal: str, lead_id: str, texto: str,
                            membro: dict, grafo, inicio: float) -> ResultadoTurno:
     """L3/L4: equipe escrevendo. Nada vira lead nem conversa de cliente.
     Dono ou gestor: o Léo só anota recados (registrar_recado). A resposta depois
@@ -681,8 +719,7 @@ async def _turno_da_equipe(loja_id: int, canal: str, lead_id: str, texto: str,
     if not pode_deixar_recado(membro):
         return ResultadoTurno(texto=MENSAGEM_SO_DONO)
     try:
-        resultado = await asyncio.to_thread(
-            grafo.invoke,
+        resultado = grafo.invoke(
             {"messages": [HumanMessage(content=texto)], "lead_id": lead_id,
              "loja_id": loja_id, "canal": canal, "equipe": dict(membro), "sombra": False},
             {"configurable": {"thread_id": thread_id(loja_id, canal, lead_id)}},
@@ -834,6 +871,14 @@ def _anotar_falha_da_foto(loja_id: int, lead_id: str, canal: str, leitura) -> No
 async def executar_turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: bytes,
                                 mime: str = "image/jpeg", legenda: str = "", *,
                                 grafo=None, leitor=None) -> ResultadoTurno:
+    """L5: turno com a foto do cliente. DK3: roda inteiro numa linha do turno."""
+    return await em_linha_do_turno(_turno_imagem, loja_id, canal, lead_id, imagem, mime, legenda,
+                                   grafo=grafo, leitor=leitor)
+
+
+def _turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: bytes,
+                  mime: str = "image/jpeg", legenda: str = "", *,
+                  grafo=None, leitor=None) -> ResultadoTurno:
     """L5: um turno com a foto do cliente. A imagem é lida (uma chamada de IA) e
     nunca é guardada: só a descrição curta vira a mensagem do cliente.
     Documento e falha de leitura: resposta fixa + chamado, sem passar pelo Léo.
@@ -874,8 +919,8 @@ async def executar_turno_imagem(loja_id: int, canal: str, lead_id: str, imagem: 
         motivo = MOTIVO_AVALIACAO + (f' Pergunta do cliente: "{pergunta_curta(legenda)}"' if legenda.strip() else "")
         _chamado_da_foto(loja_id, lead_id, motivo, f"Foto do carro: {leitura.descricao}")
 
-    resultado = await executar_turno(loja_id, canal, lead_id, imagens.texto_para_o_leo(leitura, legenda),
-                                     grafo=grafo, tipo="imagem", foto_carro=leitura.tipo == imagens.CARRO)
+    resultado = _turno(loja_id, canal, lead_id, imagens.texto_para_o_leo(leitura, legenda),
+                       grafo=grafo, tipo="imagem", foto_carro=leitura.tipo == imagens.CARRO)
     if leitura.tipo == imagens.CARRO:
         _anotar_foto_na_troca(loja_id, lead_id, leitura.descricao)
         resultado.handoff_aberto = True
