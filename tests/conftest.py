@@ -34,6 +34,40 @@ import banco
 from app import ator, lojas, logs, permissoes
 
 
+REDIS_BANCO_DE_TESTE = 15      # o Redis tem 16 "gavetas" (0 a 15); o Léo usa a 0
+
+
+def redis_de_teste(url_de_uso: str) -> str:
+    """Mesmo Redis, gaveta 15 (ou REDIS_URL_TESTE). Nunca a gaveta de uso."""
+    from urllib.parse import urlsplit, urlunsplit
+    partes = urlsplit(url_de_uso or "redis://localhost:6379/0")
+    return urlunsplit(partes._replace(path=f"/{REDIS_BANCO_DE_TESTE}"))
+
+
+def pytest_configure(config):
+    """DK2 (Maratona Docker): desde o DK1 o Redis do compose fica SEMPRE ligado, e a suíte
+    gravava na gaveta de uso (duplicatas, rajadas, travas): uma rodada deixava "mensagem já
+    vista" e a seguinte falhava. Agora a suíte usa a gaveta 15 do mesmo Redis (ou
+    REDIS_URL_TESTE), esvaziada no começo de cada rodada, como o banco "_teste" do PostgreSQL.
+    (Apontar para um Redis desligado também isolava, mas cada tentativa recusada leva ~2 s no
+    Windows e a suíte passou de 13 para ~75 minutos.) Só o teste de carga (-m carga) usa o
+    REDIS_URL de uso. Roda antes de qualquer teste importar app.redis_cliente (que lê o REDIS_URL)."""
+    expressao = (config.getoption("markexpr") or "").replace("not carga", "")
+    if "carga" in expressao:
+        return
+    uso = os.environ.get("REDIS_URL", "")
+    teste = os.environ.get("REDIS_URL_TESTE") or redis_de_teste(uso)
+    if teste.rstrip("/").split("/")[-1] == (uso.rstrip("/").split("/")[-1] if uso else "0") \
+            and teste.split("@")[-1].split("/")[0] == uso.split("@")[-1].split("/")[0]:
+        pytest.exit("O Redis dos testes não pode ser a mesma gaveta do Redis de uso.", returncode=4)
+    os.environ["REDIS_URL"] = teste
+    try:
+        import redis
+        redis.Redis.from_url(teste, socket_connect_timeout=3).flushdb()
+    except Exception:
+        pass        # Redis desligado: o código cai no caminho "sem Redis" (mais lento, mas passa)
+
+
 def url_do_banco_de_teste() -> str:
     """Nunca o banco de uso: BANCO_URL_TESTE, ou o nome da BANCO_URL terminado em _teste."""
     url = os.environ.get("BANCO_URL_TESTE")

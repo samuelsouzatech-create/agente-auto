@@ -326,8 +326,9 @@ def test_compose_tem_so_o_postgres_na_porta_local_e_senha_do_env():
     assert '"127.0.0.1:${BANCO_PORTA:-5432}:5432"' in texto
     assert "POSTGRES_PASSWORD: ${POSTGRES_SENHA" in texto
     assert "leo_banco:/var/lib/postgresql/data" in texto
-    servicos = texto.split("services:")[1].split("\nvolumes:")[0]
-    assert re.findall(r"^  (\w+):$", servicos, re.M) == ["postgres"]
+    # DK1: o compose ganhou as outras peças (conferidas em tests/test_dk1_docker.py).
+    servicos = texto.split("\nservices:")[1].split("\nnetworks:")[0]
+    assert "postgres" in re.findall(r"^  ([\w-]+):$", servicos, re.M)
 
 
 def test_env_exemplo_so_tem_texto_de_exemplo():

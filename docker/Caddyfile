@@ -1,0 +1,63 @@
+# Porteiro HTTPS do Léo (DK1), seguindo docs/api/publicacao.md.
+#
+# - LEO_DOMINIO (padrão localhost). Com "localhost", o Caddy cria um certificado LOCAL (autoridade
+#   própria, guardada no volume leo_caddy_dados). Com um domínio de verdade (na hospedagem), ele
+#   pede o certificado sozinho ao Let's Encrypt.
+# - Endereço real do visitante: o Caddy SEMPRE troca o X-Forwarded-For pelo endereço de quem
+#   conectou nele (não confia no que o visitante manda). A API só confia no IP fixo do porteiro
+#   (--forwarded-allow-ips 172.28.0.10 no docker-compose.yml). Nunca "*".
+# - O admin do Caddy fica só dentro do container (127.0.0.1:2019, para a verificação de saúde).
+
+(repassar) {
+	header_up X-Forwarded-For {remote_host}
+	header_up X-Forwarded-Proto {scheme}
+	header_up Host {host}
+}
+
+(seguranca) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		X-Frame-Options SAMEORIGIN
+		-Server
+	}
+}
+
+# Painel do cliente (tela) + API do painel + webhook do WhatsApp: a única porta pública.
+{$LEO_DOMINIO:localhost} {
+	import seguranca
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api-painel:8001 {
+			import repassar
+		}
+	}
+
+	handle /webhook {
+		reverse_proxy webhook:8000 {
+			import repassar
+		}
+	}
+
+	handle {
+		root * /srv/tela
+		@pagina path / /index.html /sw.js /registerSW.js /manifest.webmanifest
+		header @pagina Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Painel do operador e simulador: SEM LOGIN. O docker-compose.yml só abre estas portas em
+# 127.0.0.1 (este computador). No servidor, acesse por túnel SSH, nunca pela internet.
+https://{$LEO_DOMINIO:localhost}:8502 {
+	import seguranca
+	reverse_proxy operador:8502
+}
+
+https://{$LEO_DOMINIO:localhost}:8501 {
+	import seguranca
+	reverse_proxy simulador:8501
+}

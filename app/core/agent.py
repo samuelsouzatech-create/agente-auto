@@ -13,6 +13,8 @@ L3/L4: estado["equipe"] preenchido (dono ou gestor cadastrado escrevendo) =
 MODO EQUIPE: outro prompt e só a ferramenta registrar_recado. Cliente recebe os
 recados ativos da loja no prompt.
 """
+import contextlib
+import threading
 import time
 from datetime import datetime
 from typing import Annotated, TypedDict
@@ -231,6 +233,13 @@ class MemoriaLimitada(PostgresSaver):
 
     def __init__(self, *, relogio=time.time):
         super().__init__(None)
+        # DK3: o PostgresSaver põe UMA trava em volta de toda leitura e gravação, pensada para
+        # quem usa UMA conexão. Aqui cada operação pega a sua conexão do pool (banco.py), então a
+        # trava só fazia os turnos de TODAS as lojas passarem um de cada vez pela memória. Duas
+        # operações da MESMA conversa nunca correm juntas (a trava por cliente no Redis garante).
+        # A poda continua sozinha (trava própria).
+        self.lock = contextlib.nullcontext()
+        self._trava_da_poda = threading.Lock()
         self._relogio = relogio
         self._ultima_poda: float | None = None
 
@@ -260,7 +269,16 @@ class MemoriaLimitada(PostgresSaver):
         return {l["thread_id"]: datetime.fromisoformat(l["ts"]).timestamp() for l in linhas if l["ts"]}
 
     def podar(self) -> int:
-        """Tira da memória as conversas paradas e o excesso. Devolve quantas saíram."""
+        """Tira da memória as conversas paradas e o excesso. Devolve quantas saíram.
+        DK3: uma poda por vez (se outra linha já está podando, esta não faz nada)."""
+        if not self._trava_da_poda.acquire(blocking=False):
+            return 0
+        try:
+            return self._podar()
+        finally:
+            self._trava_da_poda.release()
+
+    def _podar(self) -> int:
         agora = self._relogio()
         usos = self.ultimos_usos()
         sair = {t for t, quando in usos.items() if agora - quando > self.HORAS_SEM_USO * 3600}

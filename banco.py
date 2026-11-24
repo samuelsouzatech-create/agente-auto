@@ -401,6 +401,26 @@ def _ids_por_tabela(url: str, conexao: psycopg.Connection) -> frozenset:
 
 # ---------------------------------------------------------------- conexão
 
+# DK3 (Maratona Docker): transação só quando precisa. Antes, TODA conexão abria uma transação
+# (BEGIN) no primeiro comando e desfazia (ROLLBACK) ao fechar, até para uma leitura simples:
+# 3 idas ao banco por consulta. Um turno faz ~18 consultas, cada uma na sua conexão: eram ~50
+# idas só de BEGIN/ROLLBACK. Agora a leitura simples roda sem transação; o primeiro comando que
+# não é leitura simples (escrita, SET LOCAL, SELECT ... FOR UPDATE, função que mexe em
+# sequência ou trava de transação) abre a transação, e daí em diante tudo é como antes (commit
+# confirma, rollback ou fechar sem commit desfaz). No READ COMMITTED (o padrão do PostgreSQL,
+# usado aqui) cada comando já enxerga o que estava confirmado na hora: a leitura fora da
+# transação vê a mesma coisa que veria dentro. Conexão somente leitura continua como antes.
+_LEITURA_SIMPLES = re.compile(r"^\s*(SELECT|WITH|EXPLAIN|SHOW)\b", re.I)
+_PRECISA_DE_TRANSACAO = re.compile(
+    r"\bFOR\s+(UPDATE|SHARE|NO\s+KEY|KEY)\b|\b(INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b"
+    r"|advisory_xact|nextval|setval|\bINTO\b", re.I)
+
+
+def leitura_simples(comando: str) -> bool:
+    """True se o comando só lê e não precisa de transação (DK3)."""
+    return bool(_LEITURA_SIMPLES.match(comando)) and not _PRECISA_DE_TRANSACAO.search(comando)
+
+
 class Cursor:
     def __init__(self, conexao: "Conexao"):
         self._conexao = conexao
@@ -413,6 +433,7 @@ class Cursor:
             self._conexao._rastro(comando)
         tem = bool(parametros)
         traduzido, tabela = traduzir(comando, tem)
+        self._conexao._antes_do_comando(traduzido)
         if tabela and tabela in self._conexao._tabelas_com_id():
             traduzido += " RETURNING id"
         self._cur.execute(traduzido, parametros if tem else None)
@@ -424,6 +445,7 @@ class Cursor:
 
     def executemany(self, comando: str, sequencia):
         traduzido, _ = traduzir(comando, True)
+        self._conexao._antes_do_comando(traduzido)
         self._cur.executemany(traduzido, list(sequencia))
         return self
 
@@ -466,8 +488,21 @@ class Conexao:
         self._bruta = self._pool.getconn()
         self._fechada = False
         self._rastro = None
+        # DK3: sem transação até precisar (ver leitura_simples). Somente leitura: como antes.
+        self._sob_demanda = not somente_leitura
         if somente_leitura:
             self._bruta.execute("SET TRANSACTION READ ONLY")
+        else:
+            self._bruta.autocommit = True
+
+    def _antes_do_comando(self, comando: str) -> None:
+        """DK3: abre a transação no primeiro comando que não é leitura simples."""
+        if self._sob_demanda and self._bruta.autocommit and not leitura_simples(comando):
+            self._bruta.autocommit = False          # o psycopg manda o BEGIN junto deste comando
+
+    def _transacao_terminou(self) -> None:
+        if self._sob_demanda and not self._bruta.autocommit:
+            self._bruta.autocommit = True
 
     def _tabelas_com_id(self) -> frozenset:
         return _ids_por_tabela(self._url, self._bruta)
@@ -486,10 +521,16 @@ class Conexao:
         return Cursor(self).executemany(comando, sequencia)
 
     def commit(self) -> None:
+        if self._bruta.autocommit:                 # DK3: nada aberto, nada a confirmar
+            return
         self._bruta.commit()
+        self._transacao_terminou()
 
     def rollback(self) -> None:
+        if self._bruta.autocommit:
+            return
         self._bruta.rollback()
+        self._transacao_terminou()
 
     @property
     def in_transaction(self) -> bool:
@@ -502,6 +543,11 @@ class Conexao:
         try:
             if self._bruta.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
                 self._bruta.rollback()          # como o SQLite: fechar sem commit desfaz
+        except psycopg.Error:
+            pass
+        try:
+            if self._bruta.autocommit:              # DK3: devolve no jeito de sempre
+                self._bruta.autocommit = False
         except psycopg.Error:
             pass
         self._pool.putconn(self._bruta)

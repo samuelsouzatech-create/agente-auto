@@ -1,0 +1,27 @@
+# O que NUNCA entra na imagem do Léo (DK1).
+# Segredos
+.env
+.env.*
+!.env.example
+diagnostico_meta.py
+# Dados (ficam nos volumes ou fora do Docker)
+*.db
+*.db-wal
+*.db-shm
+chroma_db/
+fotos_deposito/
+demo_fotos/
+logs/
+# Ambientes e caches
+venv/
+.venv*/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+.vscode/
+# Coisas que só servem no computador
+tests/
+bancada/audios/
+bancada/imagens/
+docs/resultados_testes/

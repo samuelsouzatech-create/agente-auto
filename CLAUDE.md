@@ -2,7 +2,7 @@
 
 Léo é um agente de IA de atendimento para lojas de veículos (WhatsApp, Instagram, Telegram), feito para vender a lojas de Recife. Stack: Python 3.13, FastAPI, LangGraph + Gemini, banco com migrações, Redis, Chroma, Streamlit (painel do operador) e API de painel em FastAPI (porta 8001, prefixo /api/v1). O painel do cliente é o repositório `leo-painel-web` (React).
 
-**Banco:** a partir da Maratona Postgres (23/11/2026) o banco é **PostgreSQL 17** (diário em `docs/postgres.md`); o SQLite (`loja.db`) fica só como origem da importação. O próximo bloco põe a aplicação inteira no **Docker**.
+**Banco:** a partir da Maratona Postgres (23/11/2026) o banco é **PostgreSQL 17** (diário em `docs/postgres.md`); o SQLite (`loja.db`) fica só como origem da importação. Desde a Maratona Docker (DK1) a aplicação inteira roda no **Docker** e sobe com `docker compose up -d`, atrás do porteiro HTTPS (Caddy); diário em `docs/docker.md`.
 
 Você é o ajudante de código. Você escreve o código, um bloco por vez. Quem valida é o analista (outra IA), e quem faz merge é o Samuel. O Samuel é júnior e leigo em parte da engenharia: explique em português simples e vá direto ao ponto.
 
