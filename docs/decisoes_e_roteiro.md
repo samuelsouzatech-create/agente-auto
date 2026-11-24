@@ -292,3 +292,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   sem migração). Ramo de teste oculto `_exemplo_imoveis` (nunca opção para loja real; não é produto).
 - 24/11/2026, IG0: tabela da Meta no `docs/maratona4.md`. **Recomendação para decidir: login do Facebook**
   (legenda do post e comentário de anúncio só existem nele). D13 continua: o não confirmado é "a confirmar".
+- 24/11/2026, IG1: **migração 21 usada** (Instagram, como reservado; próxima livre: 22). Retomada no
+  Instagram só dentro da janela de 24 h (fora dela não sai nada: não há modelo aprovado no Instagram).

@@ -16,6 +16,7 @@ o computador acordado ligado no começo (24/11, 15:42) e desligado no fim.
 | SG1 motor × pacote de veículos | segmentos-1 | feito (16:40) | 3.020 ok (802 + 1.242 + 976) |
 | SG2 catálogo e ramo de teste | segmentos-2 | feito (16:50) | 3.034 ok (802 + 1.242 + 990) |
 | IG0 documentação da Meta | instagram-0 | feito (17:00) | 3.037 ok (802 + 1.231 + 1.004) |
+| IG1 canal Instagram | instagram-1 | feito (17:15) | 3.064 ok (835 + 1.239 + 990) |
 
 ## Contradições com o roteiro, anotadas no começo (não graves: segui este pedido)
 - `docs/decisoes_e_roteiro.md`, seção 3: o pacote de ramo "não se faz agora; quando o segundo
@@ -396,3 +397,7 @@ remarketing só dentro da janela; migração 21 aplicada e subida da 20 sem apag
 (Debounce, trava e duplicata do Redis foram trocados por versões em memória nestes testes: o
 código é o mesmo do WhatsApp, já testado, e o cliente do Redis fica preso ao primeiro laço
 assíncrono do teste.)
+- `test_etapa2_bloco2.py::test_canal_sem_envio_proativo`: mesmo caso (o Instagram saiu da lista de canais sem retomada; ficou o simulador).
+- Suíte inteira, 3 partes: 835 + 1.239 + 990 = **3.064 passaram, 0 falhas**. (Na 1ª rodada a parte 1
+  teve 1 falha, o `test_canal_sem_envio_proativo[instagram]` acima; consertado, a parte 1 inteira
+  foi rodada de novo: 835 passaram.)
