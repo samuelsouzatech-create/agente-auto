@@ -18,7 +18,7 @@ o computador acordado ligado no começo (24/11, 15:42) e desligado no fim.
 | IG0 documentação da Meta | instagram-0 | feito (17:00) | 3.037 ok (802 + 1.231 + 1.004) |
 | IG1 canal Instagram | instagram-1 | feito (17:15) | 3.064 ok (835 + 1.239 + 990) |
 | IG2 comentários viram conversa | instagram-2 | feito (17:30) | 3.085 ok (835 + 1.246 + 1.004) |
-| IG3 Instagram → WhatsApp e fechamento | instagram-3 (+ `painel-instagram` no leo-painel-web) | feito (17:55) | 3.104 ok (893 + 1.207 + 1.004); tela 91 ok, build ok |
+| IG3 Instagram → WhatsApp e fechamento | instagram-3 (+ `painel-instagram` no leo-painel-web) | feito (17:45) | 3.104 ok (893 + 1.207 + 1.004); tela 91 ok, build ok |
 
 ## Contradições com o roteiro, anotadas no começo (não graves: segui este pedido)
 - `docs/decisoes_e_roteiro.md`, seção 3: o pacote de ramo "não se faz agora; quando o segundo
@@ -509,7 +509,7 @@ entrarem numa rodada sem querer. Rodar quando houver crédito (e conferir se a b
 - Suíte inteira, 3 partes: 893 + 1.207 + 1.004 = **3.104 passaram, 0 falhas** (3.085 + 19).
 
 ## Fim da maratona
-- Script de manter o computador acordado: desligado no fim (17:55).
+- Script de manter o computador acordado: desligado no fim (17:45).
 - Nada foi rodado com IA real, bancada, canal real, túnel ou conta da Meta. Nenhum `.env`, senha ou
   token entrou no Git (conferido a cada commit com `git status`).
 
