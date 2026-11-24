@@ -1,0 +1,23 @@
+{
+  "object": "instagram",
+  "entry": [
+    {
+      "id": "17841400000000001",
+      "time": 1764000400,
+      "messaging": [
+        {
+          "sender": {"id": "9100000000000003"},
+          "recipient": {"id": "17841400000000001"},
+          "timestamp": 1764000400000,
+          "message": {"mid": "aWdfZmljdGljaW9fYW5leG8", "attachments": [{"type": "share", "payload": {"url": "https://exemplo.invalid/post"}}]}
+        },
+        {
+          "sender": {"id": "9100000000000003"},
+          "recipient": {"id": "17841400000000001"},
+          "timestamp": 1764000400500,
+          "reaction": {"mid": "aWdfZmljdGljaW9fMDAx", "action": "react", "reaction": "love"}
+        }
+      ]
+    }
+  ]
+}

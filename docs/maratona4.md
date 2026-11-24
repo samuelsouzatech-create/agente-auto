@@ -244,3 +244,95 @@ quando precisa do item, pergunta ao catálogo pelo id. A migração 22 não foi 
 - **Duas lojas de ramos diferentes ao mesmo tempo** (4 turnos juntos, 2 de cada): cada uma usa a
   sua ferramenta e o seu catálogo; nenhuma resposta nem mensagem cruza de loja.
 - Suíte inteira, 3 partes: 802 + 1.242 + 990 = **3.034 passaram, 0 falhas** (3.020 + 14).
+
+## IG0 — Documentação oficial da Meta (branch instagram-0)
+
+Lida em 24/11/2026 nas páginas oficiais (developers.facebook.com). "Confirmado" = a página diz
+isso com todas as letras. "Não confirmado" = não achei escrito; vira configuração com o padrão
+mais seguro, marcada "a confirmar". A documentação da Meta muda com frequência: conferir de novo
+antes da conta real. Versão da API citada nas páginas: **v27.0**.
+
+Páginas lidas:
+- [P1] https://developers.facebook.com/docs/instagram-platform
+- [P2] https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login
+- [P3] https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api
+- [P4] https://developers.facebook.com/documentation/instagram-platform/webhooks/examples
+- [P5] https://developers.facebook.com/documentation/instagram-platform/webhooks/setup
+- [P6] https://developers.facebook.com/docs/instagram-platform/private-replies
+- [P7] https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/comment-moderation
+- [P8] https://developers.facebook.com/docs/instagram-platform/reference/instagram-media
+- [P9] https://developers.facebook.com/docs/messenger-platform/policy/policy-overview
+- [P10] https://developers.facebook.com/documentation/instagram-platform/app-review
+- [P11] https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback
+- (https://developers.facebook.com/docs/messenger-platform/instagram abriu só o menu, sem texto útil)
+
+| Assunto | O que a documentação diz | Situação | Link |
+|---|---|---|---|
+| Qual API | Três jeitos: "Unified Login" (chamado de recomendado para integrações novas), **login do Instagram** (não precisa de Página do Facebook) e **login do Facebook** (a conta do Instagram precisa estar ligada a uma Página). | confirmado | P1, P2 |
+| Login do Instagram: limite | "This API setup cannot access ads or tagging." | confirmado | P2 |
+| Endereço | Login do Instagram: graph.instagram.com. Login do Facebook/Unified: graph.facebook.com. | confirmado | P6, P5 |
+| Permissões (login do Instagram) | instagram_business_basic, instagram_business_manage_messages, instagram_business_manage_comments | confirmado | P3, P10 |
+| Permissões (login do Facebook) | instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_read_engagement (ads_* só com papel no Business Manager). `pages_messaging` não aparece. | confirmado em parte | P6, P10 |
+| Mensagem recebida (formato) | `object: "instagram"`; `entry[].id` = conta da loja; `entry[].time`; `entry[].messaging[]` com `sender.id`, `recipient.id`, `timestamp`, `message.mid`, `message.text` | confirmado (só com marcadores, sem exemplo com valores) | P4 |
+| Eco (`is_echo`) | `message.is_echo: true` "when the message was sent by your app user"; no eco, `sender.id` é a loja e `recipient.id` o cliente | confirmado (o campo) | P4 |
+| Eco de resposta feita no app do Instagram | a página não diz com todas as letras que o eco vem também quando o vendedor responde pelo app | **não confirmado** | P4 |
+| Eco diz qual app mandou (`app_id`) | não aparece em nenhuma página | **não confirmado** (por isso o Léo descarta o próprio eco pelo id da mensagem, `mid`, e não por `app_id`) | — |
+| Webhook de comentários (post comum) | campo `comments`; `value.id` (comentário), `value.from.id`, `value.from.username`, `value.text`, `value.media.id`, `value.media.media_product_type`. Um exemplo põe `field`/`value` direto no `entry`; outro dentro de `entry[].changes[]` (com `parent_id`). | confirmado (com as duas formas) | P7, P4 |
+| Comentário em anúncio pago | login do Facebook: `media.ad_id`, `ad_title`, `original_media_id` "included if the comment was on an ad post"; anúncio dinâmico não traz o id do anúncio. Login do Instagram: sem campo de anúncio (e "cannot access ads"). | confirmado em parte (só com login do Facebook) | P4, P5, P2 |
+| Comentários: acesso | "Advanced Access is required for comments" e a conta precisa ser pública | confirmado | P5 |
+| Resposta privada: como | `POST /<id da conta>/messages` com `{"recipient":{"comment_id":...},"message":{"text":...}}`; volta `recipient_id` e `message_id` | confirmado | P6 |
+| Resposta privada: prazo | "within 7 days of the creation time of the comment" (Live: só durante a transmissão) | confirmado | P6 |
+| Resposta privada: quantas | "Only one message can be sent to the commenter." | confirmado | P6 |
+| Se a pessoa não responder | não pode mandar mais nada; mais mensagens "only ... if the recipient responds, and must be sent within 24 hours of the response" | confirmado | P6 |
+| Vale para anúncio/reel/story | a resposta privada vale para comentário em "post, reel, story, Live, or ad post" | confirmado | P6 |
+| Permissão da resposta privada | a tabela da página lista só basic + manage_comments para o login do Instagram (o envio pelo /messages costuma pedir manage_messages) | **não confirmado** (página incoerente; pedir as duas) | P6 |
+| Resposta pública | `POST /<id do comentário>/replies` com `{"message": "..."}`; volta `{"id": ...}`; permissão manage_comments | confirmado | P7 |
+| Tamanho da resposta pública | não diz | **não confirmado** | P7 |
+| Ler a legenda do post | `GET /<id do post>?fields=caption,...`; a tabela marca `caption` como "Available for Instagram API with Facebook Login only" | confirmado **só com login do Facebook** | P8 |
+| Tamanho do texto da mensagem | "Message text must be UTF-8 and be a 1000 bytes or less." | confirmado | P3 |
+| Janela de 24 h | "For most user actions, it lasts 24 hours." | confirmado | P9, P3 |
+| Exceções da janela | anúncio Click-to-Direct: até 7 dias da primeira mensagem; humano (Human Agent): janela separada de 7 dias, com a marcação de humano. One-time notification, mensagens patrocinadas e notícias "not available for IG Messaging API". | confirmado | P9, P3 |
+| Nome exato da marcação de humano (`HUMAN_AGENT`) | o texto não aparece nas páginas lidas | **não confirmado** | — |
+| Revisão do app | "must complete App Review before it can request permissions with Advanced Access"; pede vídeo, passos para o revisor, ao menos 1 chamada que deu certo, política de privacidade e ícone. Para uma empresa própria, Standard Access basta; para atender várias lojas (nosso caso), Advanced. | confirmado | P10 |
+| Verificação da empresa | login do Instagram: "Required for production access" | confirmado | P5 |
+| Exclusão de dados | URL HTTPS no campo "Data Deletion Request URL"; recebe POST com `signed_request` (assinatura HMAC-SHA256 com o segredo do app, no código de exemplo); responde `{ url, confirmation_code }` | confirmado (página geral do Facebook) | P11 |
+| Assinatura do webhook | `X-Hub-Signature-256: sha256=...`, assinatura SHA256 do corpo com o App Secret | confirmado (a palavra HMAC não aparece no texto; o jeito de calcular é o mesmo do WhatsApp) | P5 |
+| Verificação GET | `hub.mode=subscribe`, `hub.verify_token` igual ao do painel, responder `hub.challenge` | confirmado | P5 |
+| Resposta e repetição | responder 200; lotes de até 1000 avisos; a Meta tenta de novo por até 36 h (tratar repetidos) | confirmado | P5 |
+
+### Recomendação: login do Facebook (ou o Unified, que usa o mesmo endereço)
+Para o que o Léo precisa, o **login do Facebook** ganha:
+1. A Opção B do IG2 (a mensagem que sabe do carro) precisa ler a **legenda do post**, e a página
+   diz que `caption` é "Facebook Login only".
+2. **Comentário em anúncio** (IG2, item 5) só traz `ad_id` no login do Facebook; o login do
+   Instagram "cannot access ads".
+3. As lojas de carro de Recife já anunciam no Instagram pelo Gerenciador de Anúncios, que já exige
+   a Página do Facebook ligada.
+Custo: a loja precisa ter a Página ligada à conta profissional. Se uma loja não tiver Página, o
+login do Instagram serve para o direct e para os comentários (sem legenda e sem anúncio: a Opção B
+cai no texto genérico). O código do Léo fala com a Meta por **um endereço configurável** (padrão
+graph.facebook.com), então a troca não muda o resto.
+
+### O que virou configuração "a confirmar" (padrão mais seguro)
+| Item | Configuração | Padrão |
+|---|---|---|
+| Prazo da resposta privada | `instagram.comentarios_prazo_dias` | 7 (confirmado); o Léo usa margem: só responde comentário com menos de 7 dias |
+| Respostas privadas por comentário | fixo no código | 1 (confirmado) |
+| Tamanho máximo do texto | `instagram.limite_bytes` | 1000 bytes (confirmado), dividindo em bolhas |
+| Eco de resposta feita no app | o Léo trata qualquer eco que não seja dele como "vendedor assumiu" | a confirmar com a conta real |
+| Marcação de humano (7 dias) | **não usada** pelo Léo: fora das 24 h ele não manda nada | a confirmar |
+| Tamanho da resposta pública | texto fixo curto ("Te chamei no direct.") | a confirmar |
+| Comentário de anúncio no login do Instagram | tratado como comentário comum, origem "comentario" | a confirmar |
+| Versão da API | `INSTAGRAM_API_VERSAO` (.env) | v27.0 |
+| Endereço | `INSTAGRAM_API_URL` (.env) | https://graph.facebook.com |
+
+### Payloads de exemplo
+`tests/payloads/instagram/` (12 arquivos fictícios, com um `LEIA.md` dizendo de onde veio cada
+formato e o que está "a confirmar"): mensagem, várias mensagens, eco do vendedor, eco do Léo, não
+suportado, comentário em post (as duas formas publicadas), comentário em anúncio, comentário da
+própria loja, legenda do post, resposta à mensagem privada e resposta ao envio.
+Teste: `tests/test_ig0_payloads.py` (os arquivos existem, são JSON, são fictícios; a tabela está aqui).
+
+### Como li (sem conta real)
+As páginas foram lidas por um ajudante de leitura (sem login, só páginas públicas da Meta). Uma
+página (`messenger-platform/instagram`) abriu só o menu: o que dependia dela ficou "não confirmado".
