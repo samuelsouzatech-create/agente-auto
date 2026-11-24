@@ -14,6 +14,7 @@ o computador acordado ligado no começo (24/11, 15:42) e desligado no fim.
 |-------|--------|----------|------------------|
 | AR arrumações | arrumacoes | feito (16:20) | 3.002 ok (798 + 1.228 + 976) |
 | SG1 motor × pacote de veículos | segmentos-1 | feito (16:40) | 3.020 ok (802 + 1.242 + 976) |
+| SG2 catálogo e ramo de teste | segmentos-2 | feito (16:50) | 3.034 ok (802 + 1.242 + 990) |
 
 ## Contradições com o roteiro, anotadas no começo (não graves: segui este pedido)
 - `docs/decisoes_e_roteiro.md`, seção 3: o pacote de ramo "não se faz agora; quando o segundo
@@ -242,3 +243,4 @@ quando precisa do item, pergunta ao catálogo pelo id. A migração 22 não foi 
   "veiculos" no nome está **vazia**.
 - **Duas lojas de ramos diferentes ao mesmo tempo** (4 turnos juntos, 2 de cada): cada uma usa a
   sua ferramenta e o seu catálogo; nenhuma resposta nem mensagem cruza de loja.
+- Suíte inteira, 3 partes: 802 + 1.242 + 990 = **3.034 passaram, 0 falhas** (3.020 + 14).

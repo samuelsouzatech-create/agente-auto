@@ -288,3 +288,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
 - 24/11/2026, SG1: **muda a seção 3** ("isso não se faz agora"): por este pedido, o motor foi separado
   do pacote de veículos já (contrato em `docs/pacote_de_ramo.md`, catraca de ramo). O comportamento das
   lojas de carro não mudou (prompt igual letra por letra). Ainda de carro no motor: lista LEGADO.
+- 24/11/2026, SG2: "catálogo" do ramo no motor (veículos = estoque; tabela, API /estoque e painel iguais;
+  sem migração). Ramo de teste oculto `_exemplo_imoveis` (nunca opção para loja real; não é produto).
