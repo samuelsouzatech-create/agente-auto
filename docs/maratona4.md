@@ -384,7 +384,7 @@ Suíte inteira, 3 partes: 802 + 1.231 + 1.004 = **3.037 passaram, 0 falhas** (3.
 - `test_s6_mensagens.py`: o exemplo de "canal sem envio por iniciativa da loja" era o Instagram
   (antes do IG1 era verdade); virou o simulador. A regra testada é a mesma.
 
-### Testes do IG1 (`tests/test_ig1_instagram.py`, 30)
+### Testes do IG1 (`tests/test_ig1_instagram.py`, 28)
 Payloads falsos do IG0, IA falsa, servidor falso no lugar da Meta, duas lojas: texto vira
 `MensagemEntrada`; várias mensagens; não suportado; eco marcado; lixo não derruba; prefixo `ig:`;
 resposta longa dividida no limite; envio pela conta e token da loja certa; token só pelo

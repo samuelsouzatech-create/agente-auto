@@ -264,7 +264,8 @@ def test_loja_desativada(ligada):
     assert _motivo() == "loja_inativa"
 
 
-@pytest.mark.parametrize("canal", ["instagram", "simulador"])
+# IG1 (Maratona 4): o Instagram passou a ter retomada (só dentro da janela; ver test_ig1_instagram).
+@pytest.mark.parametrize("canal", ["simulador"])
 def test_canal_sem_envio_proativo(ligada, canal):
     _conversa(horas=49, canal=canal)
     assert _motivo(canal=canal) == "canal_sem_envio"
