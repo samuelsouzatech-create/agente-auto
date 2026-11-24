@@ -35,7 +35,9 @@
 		}
 	}
 
-	handle /webhook {
+	# IG1: /webhook/instagram também vai para o mesmo servidor do webhook.
+	@webhook path /webhook /webhook/instagram
+	handle @webhook {
 		reverse_proxy webhook:8000 {
 			import repassar
 		}

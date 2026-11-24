@@ -87,6 +87,36 @@ def _token_telegram_do_canal(canal: dict) -> str:
                         "(informe o token_ref em Lojas e canais)")
 
 
+@dataclass(frozen=True)
+class CredencialInstagram:
+    id_conta: str
+    token: str
+
+    def __repr__(self) -> str:          # o token nunca aparece em log
+        return f"CredencialInstagram(id_conta={self.id_conta!r}, token=***)"
+
+
+def _token_instagram_do_canal(canal: dict) -> str:
+    """IG1: o token do Instagram vem SEMPRE do token_ref (nome da variável do .env). Sem atalho."""
+    ref = (canal.get("token_ref") or "").strip()
+    if not ref:
+        raise SemCredencial(f"a conta {canal['id_externo']} não tem token_ref "
+                            "(informe o nome da variável do .env na Configuração > Canais)")
+    token = _do_env(ref)
+    if not token:
+        raise SemCredencial(f"a variável {ref} está vazia ou não existe no .env")
+    return token
+
+
+def credencial_instagram(loja_id) -> CredencialInstagram:
+    """IG1: a conta do Instagram DESTA loja e o token dela (do .env, nunca do banco)."""
+    loja_id = exigir_loja(loja_id)
+    canal = canal_ativo_da_loja(loja_id, "instagram")
+    if not canal:
+        raise SemCredencial(f"a loja {loja_id} não tem Instagram ativo")
+    return CredencialInstagram(canal["id_externo"], _token_instagram_do_canal(canal))
+
+
 def credencial_whatsapp(loja_id) -> CredencialWhatsApp:
     loja_id = exigir_loja(loja_id)
     canal = canal_ativo_da_loja(loja_id, "whatsapp")

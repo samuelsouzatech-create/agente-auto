@@ -267,3 +267,8 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
                              entrada.tipo_original, loja_id)
 
     return Response(status_code=200)
+
+
+# IG1 (Maratona 4): GET/POST /webhook/instagram no MESMO servidor (app/api/webhook_instagram.py).
+from app.api.webhook_instagram import rotas as _rotas_instagram  # noqa: E402
+app.include_router(_rotas_instagram)

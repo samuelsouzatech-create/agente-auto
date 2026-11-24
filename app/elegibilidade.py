@@ -51,7 +51,9 @@ from app.lojas import (
 )
 from app.relogio import dia_local, do_banco, fuso, hora_local, horario_do_dia, para_banco
 
-CANAIS_COM_REMARKETING = ("whatsapp", "telegram")   # telegram: modo de testes
+CANAIS_COM_REMARKETING = ("whatsapp", "telegram", "instagram")   # telegram: modo de testes
+# IG1: no Instagram não existe modelo aprovado: fora da janela de 24 h, nada sai.
+CANAIS_SEM_MODELO = frozenset({"instagram"})
 HORARIO_ENVIO_PADRAO = "09:00-19:00"
 DIAS_ENVIO_PADRAO = (0, 1, 2, 3, 4, 5)
 PRIMEIRO_TOQUE_PADRAO_H = 48

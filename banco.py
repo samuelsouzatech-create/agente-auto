@@ -38,7 +38,7 @@ except ImportError:                     # pragma: no cover
     pass
 
 PASTA_MIGRACOES = Path(__file__).resolve().parent / "migracoes"
-VERSAO_SCHEMA = 20                       # a base do PostgreSQL equivale à v20 do SQLite
+VERSAO_SCHEMA = 21                       # 20 = base do PostgreSQL (v20 do SQLite); 21 = Instagram (IG1)
 POOL_MIN = int(os.getenv("BANCO_POOL_MIN", "1"))
 POOL_MAX = int(os.getenv("BANCO_POOL_MAX", "10"))
 ESPERA_POOL_S = float(os.getenv("BANCO_POOL_ESPERA_S", "30"))

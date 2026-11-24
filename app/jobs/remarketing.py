@@ -117,6 +117,14 @@ class EnviadorReal:
             if canal == "whatsapp":
                 from app.api.enviar_whatsapp import enviar_texto_whatsapp_detalhado
                 return await enviar_texto_whatsapp_detalhado(lead_id, texto, loja_id=loja_id)
+            if canal == "instagram":                      # IG1: pela conta DESTA loja
+                from app.channels.instagram import CanalInstagram
+                from app.instagram import gravar_ids_do_leo
+                ig = CanalInstagram(loja_id)
+                resultado = await ig.enviar_texto_detalhado(lead_id, texto)
+                if resultado.ok:
+                    gravar_ids_do_leo(loja_id, lead_id, ig.ids_enviados)
+                return resultado
             if canal == "telegram":
                 from telegram import Bot
                 from app.credenciais import SemCredencial, token_telegram
@@ -546,6 +554,10 @@ def processar_lead(loja: Loja, decisao: Decisao, agora: datetime, *, real: bool,
                           motivo="carro_vendido", veiculo_id=dados["veiculo_id"])
     if d.janela_aberta:
         return _mensagem_livre(loja, d, agora, dados, real=real, redator=redator, enviador=enviador)
+    from app.elegibilidade import CANAIS_SEM_MODELO
+    if d.canal in CANAIS_SEM_MODELO:          # IG1: Instagram fora da janela de 24 h: não envia
+        return _registrar(loja, d, agora, "bloqueado", real=real, origem="regra",
+                          motivo="janela_fechada", veiculo_id=dados["veiculo_id"])
     return _mensagem_modelo(loja, d, agora, dados, real=real, enviador=enviador)
 
 

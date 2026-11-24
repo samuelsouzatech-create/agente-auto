@@ -109,8 +109,10 @@ def _c_limite_nao_definido(lj):
 
 
 def _c_canal_sem_envio(lj):
-    _conversa(lj, canal="instagram")
-    return lj, L, "instagram", AGORA
+    # IG1 (Maratona 4): o Instagram passou a ter retomada (só dentro da janela); o exemplo de canal
+    # sem envio por iniciativa da loja agora é o simulador.
+    _conversa(lj, canal="simulador")
+    return lj, L, "simulador", AGORA
 
 
 def _c_nao_contatar(lj):

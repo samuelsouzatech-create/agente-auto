@@ -340,3 +340,59 @@ página (`messenger-platform/instagram`) abriu só o menu: o que dependia dela f
 
 ### Testes do IG0
 Suíte inteira, 3 partes: 802 + 1.231 + 1.004 = **3.037 passaram, 0 falhas** (3.034 + 3).
+
+## IG1 — Canal Instagram (branch instagram-1, saiu da instagram-0)
+
+### O que foi feito (I1, I2, I3, I5 do plano mestre)
+- **Migração 21** (`migracoes/021_instagram.sql`), pensada para o IG1, IG2 e IG3 de uma vez; só
+  acrescenta: `mensagens.id_externo` (id de cada bolha que o Léo mandou), `leads.origem` e
+  `origem_detalhe` (anuncio, perfil, comentario, direto), `leads.telefone` e `telefone_em` (IG3),
+  tabelas `instagram_comentarios` (dedup por comentário, uma resposta privada; sem o texto do
+  comentário), `instagram_legendas` (legenda guardada por post), `clientes_vinculados` (IG3, mesmo
+  cliente, sempre na mesma loja) e `pedidos_exclusao` (IG3, só o código e um resumo, sem dado
+  pessoal). `VERSAO_SCHEMA` = 21. Teste de subida: banco novo só com a 20, dados dentro, depois a
+  21: os dados ficam e as colunas novas nascem vazias.
+- **`app/channels/instagram.py`** no contrato de `app/channels/base.py`: lê o direct (várias
+  mensagens por aviso, eco, anexo/compartilhamento como "não suportado", reação e lixo ignorados);
+  lead `ig:<id>`; texto dividido em pedaços de até 1000 bytes; envio pela conta DESTA loja com o
+  token do `token_ref` (`app/credenciais.py: credencial_instagram`, nunca no banco; sem `token_ref`
+  não envia); também lê comentários e manda a resposta privada, a pública e lê a legenda (IG2).
+  Endereço e versão da API configuráveis (`INSTAGRAM_API_URL`, padrão graph.facebook.com;
+  `INSTAGRAM_API_VERSAO`, padrão v27.0).
+- **Porta** (`app/api/webhook_instagram.py`, incluída no MESMO servidor do webhook do WhatsApp):
+  `GET /webhook/instagram` (verificação com `INSTAGRAM_VERIFY_TOKEN`) e `POST` com assinatura
+  `X-Hub-Signature-256` (`INSTAGRAM_APP_SECRET`; sem segredo, recusa). Responde 200 e processa em
+  segundo plano pelo MESMO `executar_turno` (debounce, trava, duplicata, opt-out, guardas, loja em
+  teste P7). Conta desconhecida: 200, ignora e anota (o mesmo registro de canal desconhecido do
+  WhatsApp, `logs/mensagens_recusadas.jsonl`). O que o Léo não entende: "Por aqui eu consigo ler só
+  mensagens de texto. Pode me escrever?" (sem IA, sem emoji). O porteiro (Caddy) passou a mandar
+  `/webhook/instagram` para o webhook.
+- **Eco (I3):** cada bolha que o Léo manda tem o id gravado na fala dele. O eco com esse id é
+  descartado (teste dedicado). Eco com outro id = um vendedor respondeu pelo app do Instagram: a
+  mensagem entra na conversa ("Vendedor (app do Instagram)") e o chamado fica "humano assumiu";
+  o Léo fica quieto. A decisão do eco espera 3 s (a resposta da Meta com o id pode chegar depois
+  do eco).
+- **Origem (I5):** gravada na primeira mensagem (a primeira fica). Mensagem com `referral` de
+  anúncio vira "anuncio" (formato **a confirmar**: o IG0 não achou o `referral` do Instagram).
+- **Remarketing no Instagram só dentro da janela de 24 h:** o Instagram entrou nos canais de
+  retomada; fora da janela, nada sai (não existe modelo aprovado no Instagram): o envio fica
+  "bloqueado" com o motivo `janela_fechada`. Dentro da janela, sai pela conta da loja.
+
+### O que mudou em testes antigos (e por quê)
+- `test_pg1_banco.py`: a versão do banco passou de 20 para 21 e as tabelas/colunas da 21 entraram
+  na conta (a regra de "só acrescenta" continua conferida).
+- `test_s6_mensagens.py`: o exemplo de "canal sem envio por iniciativa da loja" era o Instagram
+  (antes do IG1 era verdade); virou o simulador. A regra testada é a mesma.
+
+### Testes do IG1 (`tests/test_ig1_instagram.py`, 30)
+Payloads falsos do IG0, IA falsa, servidor falso no lugar da Meta, duas lojas: texto vira
+`MensagemEntrada`; várias mensagens; não suportado; eco marcado; lixo não derruba; prefixo `ig:`;
+resposta longa dividida no limite; envio pela conta e token da loja certa; token só pelo
+`token_ref`; verificação GET; assinatura inválida/sem segredo recusa; conta desconhecida 200 e
+anota; turno da loja certa; duplicata uma vez; turno completo; não suportado curto; loja em teste
+em silêncio; duas lojas não se cruzam; eco do Léo descartado; eco do vendedor deixa o Léo quieto;
+eco de outra loja não conta; eco vai para o segundo plano; origem (a primeira fica; anúncio);
+remarketing só dentro da janela; migração 21 aplicada e subida da 20 sem apagar dado.
+(Debounce, trava e duplicata do Redis foram trocados por versões em memória nestes testes: o
+código é o mesmo do WhatsApp, já testado, e o cliente do Redis fica preso ao primeiro laço
+assíncrono do teste.)
