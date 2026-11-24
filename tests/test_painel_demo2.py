@@ -24,16 +24,9 @@ CLIENTE_SIM = "sim-teste01"
 
 
 @pytest.fixture
-def fotos(tmp_path, monkeypatch):
-    pasta = tmp_path / "demo_fotos"
-    monkeypatch.setattr(demo, "PASTA_FOTOS", pasta)
-    return pasta
-
-
-@pytest.fixture
-def loja_demo(fotos):
+def loja_demo():
     with como_sistema("Teste", "job"):
-        return demo.criar_loja_demo(indexar=False, com_historico=False, pasta_fotos=fotos)
+        return demo.criar_loja_demo(indexar=False, com_historico=False)
 
 
 @pytest.fixture
@@ -81,94 +74,43 @@ def test_demo_pausada_continua_amarela(cliente, loja_demo):
     assert r.json()["luz"] == "amarela"
 
 
-# ------------------------------------------------------------ fotos
+# ------------------------------------------------------------ fotos (Maratona Fotos: pelo depósito)
 
-def test_estoque_da_demo_mostra_as_fotos_pelo_endereco_da_api(cliente, loja_demo, fotos):
+def test_estoque_da_demo_mostra_as_fotos_do_deposito(cliente, loja_demo):
     r = cliente.get(f"{PREFIXO}/estoque", headers=_entrar(loja=loja_demo, papel="dono"))
     assert r.status_code == 200, r.text
     _validar("/estoque", "get", r)
     endereco = r.json()["itens"][0]["fotos"][0]
-    assert endereco.startswith("/api/v1/demo/fotos/") and endereco.endswith(".png")
-    texto = json.dumps(r.json(), ensure_ascii=False)
-    assert "\\" not in texto and str(fotos) not in texto
+    assert endereco.startswith("/api/v1/fotos/") and endereco.endswith(".jpg")
     imagem = cliente.get(endereco, headers=_entrar(loja=loja_demo, papel="gestor"))
-    assert imagem.status_code == 200
-    assert imagem.headers["content-type"] == "image/png"
-    assert imagem.content[:8] == b"\x89PNG\r\n\x1a\n"
+    assert imagem.status_code == 200 and imagem.headers["content-type"] == "image/jpeg"
+    assert imagem.content[:3] == bytes([0xFF, 0xD8, 0xFF])          # começo de um JPEG
 
 
-def test_editar_carro_da_demo_funciona_e_guarda_o_arquivo(cliente, loja_demo, fotos):
+def test_editar_carro_da_demo_funciona_e_guarda_a_referencia(cliente, loja_demo):
     h = _entrar(loja=loja_demo, papel="dono")
     carro = cliente.get(f"{PREFIXO}/estoque", headers=h).json()["itens"][0]
     entrada = {k: carro[k] for k in ("marca", "modelo", "ano", "km", "cor", "cambio", "status", "fotos")}
     entrada["preco"] = carro["preco"]["valor"]
-    esperado = dict(entrada)
     r = cliente.put(f"{PREFIXO}/estoque/{carro['id']}", headers=h,
-                    json={"dados": {**entrada, "preco": entrada["preco"] + 100}, "esperado": esperado})
+                    json={"dados": {**entrada, "preco": entrada["preco"] + 100}, "esperado": dict(entrada)})
     assert r.status_code == 200, r.text
-    assert r.json()["preco"]["valor"] == entrada["preco"] + 100
     assert r.json()["fotos"] == carro["fotos"]
     guardado = _um("SELECT fotos FROM estoque WHERE id = ?", (carro["id"],))
-    assert guardado.startswith(str(fotos.resolve())) or guardado.startswith(str(fotos))
+    assert guardado.startswith(f"deposito:loja-{loja_demo}/")
 
 
-def test_link_de_fora_continua_valendo_na_demo(cliente, loja_demo):
-    h = _entrar(loja=loja_demo, papel="dono")
-    carro = cliente.get(f"{PREFIXO}/estoque", headers=h).json()["itens"][0]
-    dados = {k: carro[k] for k in ("marca", "modelo", "ano", "km", "cor", "cambio", "status")}
-    dados.update(preco=carro["preco"]["valor"], fotos=["https://fotos.exemplo.example/a.jpg", *carro["fotos"]])
-    r = cliente.put(f"{PREFIXO}/estoque/{carro['id']}", headers=h, json={"dados": dados})
-    assert r.status_code == 200, r.text
-    assert r.json()["fotos"][0] == "https://fotos.exemplo.example/a.jpg"
+def test_rota_antiga_de_fotos_da_demo_esta_desativada(cliente, loja_demo):
+    r = cliente.get(f"{PREFIXO}/demo/fotos/qualquer-carro.png", headers=_entrar(loja=loja_demo, papel="dono"))
+    assert r.status_code == 404 and r.json()["codigo"] == "nao_encontrado"
 
 
-@pytest.mark.parametrize("ruim", ["/api/v1/demo/fotos/../../banco.py", "/api/v1/demo/fotos/nao-existe.png",
-                                  "/api/v1/demo/fotos/C:/Windows/win.ini", "ftp://x/y.png", "demo_fotos/a.png"])
-def test_foto_invalida_na_demo_e_recusada(cliente, loja_demo, ruim):
-    h = _entrar(loja=loja_demo, papel="dono")
-    carro = cliente.get(f"{PREFIXO}/estoque", headers=h).json()["itens"][0]
-    dados = {k: carro[k] for k in ("marca", "modelo", "ano", "km", "cor", "cambio", "status")}
-    dados.update(preco=carro["preco"]["valor"], fotos=[ruim])
-    r = cliente.put(f"{PREFIXO}/estoque/{carro['id']}", headers=h, json={"dados": dados})
-    assert r.status_code == 422 and "fotos" in r.json()["campos"]
-
-
-def test_loja_que_nao_e_demo_nao_aceita_o_endereco_da_demo(cliente, loja_demo, fotos):
-    from app.lojas import salvar_config
-    salvar_config(1, {"modulos.estoque": True}, "teste")
+def test_foto_da_demo_nao_abre_para_outra_loja_nem_para_vendedor(cliente, loja_demo):
     _no_ar(1)
-    nome = next(fotos.glob("*.png")).name
-    r = cliente.post(f"{PREFIXO}/estoque", headers=_entrar(loja=1, papel="dono"),
-                     json={"marca": "Fiat", "modelo": "Uno", "ano": 2015, "km": 1, "cor": "Branco",
-                           "cambio": "Manual", "preco": 30000, "status": "disponivel",
-                           "fotos": [f"/api/v1/demo/fotos/{nome}"]})
-    assert r.status_code == 422 and "fotos" in r.json()["campos"]
-
-
-@pytest.mark.parametrize("nome", ["..%2F..%2Fbanco.py", "..%5C..%5Cbanco.py", "%2E%2E%2Fsegredo.png",
-                                  "Maiuscula.png", "foto.jpg", "a" * 300 + ".png", "nao-existe.png"])
-def test_rota_de_fotos_nao_le_nada_fora_da_pasta(cliente, loja_demo, nome):
-    r = cliente.get(f"{PREFIXO}/demo/fotos/{nome}", headers=_entrar(loja=loja_demo, papel="dono"))
-    assert r.status_code == 404
-    assert r.headers["content-type"].startswith("application/json")
-
-
-def test_arquivo_da_foto_recusa_caminhos(fotos, loja_demo):
-    fora = fotos.parent / "fora.png"
-    fora.write_bytes(b"x")
-    for nome in ("../fora.png", "..\\fora.png", str(fora), "/etc/passwd", "", "fora.png/../x.png"):
-        assert demo.arquivo_da_foto(nome) is None, nome
-    assert demo.caminho_da_foto("/api/v1/demo/fotos/../fora.png") is None
-    assert demo.endereco_da_foto(str(fora)) is None
-
-
-def test_foto_da_demo_nao_abre_para_outra_loja_nem_para_vendedor(cliente, loja_demo, fotos):
-    nome = next(fotos.glob("*.png")).name
-    _no_ar(1)
-    assert cliente.get(f"{PREFIXO}/demo/fotos/{nome}", headers=_entrar(loja=1, papel="dono")).status_code == 404
-    r = cliente.get(f"{PREFIXO}/demo/fotos/{nome}", headers=_entrar(loja=loja_demo, papel="vendedor"))
-    assert r.status_code == 403
-    assert cliente.get(f"{PREFIXO}/demo/fotos/{nome}").status_code == 401
+    endereco = cliente.get(f"{PREFIXO}/estoque", headers=_entrar(loja=loja_demo, papel="dono")).json()["itens"][0]["fotos"][0]
+    assert cliente.get(endereco, headers=_entrar(loja=1, papel="dono")).status_code == 404
+    assert cliente.get(endereco, headers=_entrar(loja=loja_demo, papel="vendedor")).status_code == 403
+    assert cliente.get(endereco).status_code == 401
 
 
 # ------------------------------------------------------------ responder na demo

@@ -252,7 +252,7 @@ def test_telegram_bot_manda_foto_para_executar_turno_imagem(monkeypatch):
 
     enviados = []
 
-    async def enviar(canal, chat_id, resultado, atraso=0):
+    async def enviar(canal, chat_id, resultado, atraso=0, **kw):
         enviados.append(resultado.texto)
 
     class CanalFalso:

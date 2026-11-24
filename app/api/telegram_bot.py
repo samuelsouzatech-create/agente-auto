@@ -72,7 +72,8 @@ async def _responder(canal: CanalTelegram, chat_id: str, texto: str) -> None:
     atraso = await calcular_atraso(chat_id, loja_id=loja_id)
     resposta, fotos = await processar_texto(chat_id, texto, loja_id=loja_id)
     if resposta or fotos:
-        await enviar_resultado(canal, chat_id, ResultadoTurno(texto=resposta, midias=fotos), atraso)
+        await enviar_resultado(canal, chat_id, ResultadoTurno(texto=resposta, midias=fotos), atraso,
+                               loja_id=loja_id)
 
 
 async def _responder_audio(canal: CanalTelegram, entrada) -> None:
@@ -130,7 +131,7 @@ async def _responder_imagem(canal: CanalTelegram, entrada) -> None:
     finally:
         await liberar_lock(chat_id, token, loja_id=loja_id)
     if not resultado.silenciado and (resultado.texto or resultado.midias):
-        await enviar_resultado(canal, chat_id, resultado, atraso)
+        await enviar_resultado(canal, chat_id, resultado, atraso, loja_id=loja_id)
 
 
 def _leitura_falhou(imagem, mime):

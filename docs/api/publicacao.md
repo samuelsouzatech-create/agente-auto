@@ -31,6 +31,9 @@ proxy_set_header Host $host;
 | `PAINEL_ORIGEM` | Endereço do front, para o CORS (nunca `*`). |
 | `PAINEL_URL` | Para onde o link de senha e o link do vendedor levam. |
 | `API_PUBLICA_URL` | Endereço público da API. Sem ela, o aviso do Telegram sai sem link. |
+| `FOTOS_DEPOSITO` | Onde ficam as fotos do estoque: `local` (padrão) ou `nuvem`. Com `local`, o WhatsApp não consegue mandar foto (precisa de endereço https público): o Léo avisa o cliente e abre chamado. |
+| `FOTOS_PASTA` | Só com `local`: pasta das fotos (padrão `fotos_deposito/`, fora do Git). Entra no backup. |
+| `FOTOS_NUVEM_ENDPOINT`, `FOTOS_NUVEM_BALDE`, `FOTOS_NUVEM_CHAVE_ID`, `FOTOS_NUVEM_SEGREDO`, `FOTOS_NUVEM_URL_PUBLICA` (e `FOTOS_NUVEM_REGIAO`, padrão `auto`) | Só com `nuvem` (S3: Cloudflare R2 e parecidos). Endpoint e endereço público em https. NÃO TESTADO com nuvem real (só com um falso, offline). |
 
 ## 3. Cookie
 

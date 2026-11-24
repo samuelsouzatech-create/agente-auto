@@ -571,13 +571,13 @@ def _prep_demo():
     conexao.commit()
     conexao.close()
     with como_sistema("Teste", "job"):      # a demo nasce na loja 1, sem histórico
-        _demo.criar_loja_demo(loja_id=1, indexar=False, com_historico=False, pasta_fotos=_FOTOS_DEMO)
+        _demo.criar_loja_demo(loja_id=1, indexar=False, com_historico=False)
     return {"id": 1}
 
 
 CENARIOS.update({
     "reiniciar_demo": (
         _prep_demo,
-        lambda s: _demo.reiniciar_demo(s["id"], indexar=False, pasta_fotos=_FOTOS_DEMO),
+        lambda s: _demo.reiniciar_demo(s["id"], indexar=False),
         "SELECT COUNT(*) FROM vendas WHERE loja_id = 1"),
 })

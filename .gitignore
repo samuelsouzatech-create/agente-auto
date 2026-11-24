@@ -39,3 +39,6 @@ bancada/audios/*
 # SQLite em modo WAL (N3): arquivos de apoio do banco
 *.db-wal
 *.db-shm
+
+# Maratona Fotos (F1): depósito local das fotos do estoque (fora do Git)
+fotos_deposito/

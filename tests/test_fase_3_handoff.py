@@ -469,9 +469,10 @@ def test_atualizar_carro(banco_temporario):
     from app.estoque import adicionar_carro, atualizar_carro, buscar_carro
     novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=1)
     atualizar_carro(novo, "Fiat", "Argo", 2021, 31000, "Prata", "Manual", 60500.0,
-                    "disponivel", "http://x/argo.jpg", loja_id=1)
+                    "disponivel", "https://fotos.loja.example/argo.jpg", loja_id=1)
     carro = buscar_carro(novo, 1)
-    assert (carro["km"], carro["preco"], carro["fotos"]) == (31000, 60500.0, "http://x/argo.jpg")
+    assert (carro["km"], carro["preco"]) == (31000, 60500.0)
+    assert carro["fotos"].startswith("deposito:loja-1/")    # Maratona Fotos: o link vira foto do depósito
 
 
 def _vender_na_loja_1(carro_id, lead_id="5581"):

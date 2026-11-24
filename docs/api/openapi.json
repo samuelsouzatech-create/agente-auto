@@ -958,6 +958,9 @@
         "responses": {
           "200": {
             "content": {
+              "application/json": {
+                "schema": {}
+              },
               "image/png": {}
             },
             "description": "A foto."
@@ -1112,6 +1115,44 @@
           }
         },
         "summary": "Editar",
+        "tags": [
+          "Estoque"
+        ]
+      }
+    },
+    "/api/v1/fotos/{nome}": {
+      "get": {
+        "operationId": "foto_api_v1_fotos__nome__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nome",
+            "required": true,
+            "schema": {
+              "title": "Nome",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {}
+            },
+            "description": "A foto."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Foto",
         "tags": [
           "Estoque"
         ]

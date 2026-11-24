@@ -8,13 +8,15 @@ import streamlit as st
 
 from app.config_assunto import DesfazerRecusado, NadaParaDesfazer
 from app.estoque import (
-    OPCOES_CAMBIO, OPCOES_STATUS, CarroMudou, StatusInvalido, adicionar_carro, atualizar_carro,
+    OPCOES_CAMBIO, OPCOES_STATUS, CarroMudou, FotosInvalidas, StatusInvalido, adicionar_carro,
+    atualizar_carro,
 )
 from app.estoque_conhecimento import (
     AJUDA_FOTOS, FONTE_DO_ESTOQUE, NOTA_ESTOQUE, desfazer_ultima, estoque_da_loja,
     o_que_desfazer, rotulo_status, ultima_alteracao,
 )
 from paginas.comum import avisar, exigir_operador, para_streamlit
+from app import fotos as fotos_do_estoque
 
 CONFLITO = ("Outra pessoa mudou este carro enquanto você editava. Nada foi gravado. "
             "Clique em \"Carregar os valores atuais\", confira e salve de novo.")
@@ -72,7 +74,7 @@ def _novo_carro(loja, ger: int) -> None:
     if enviar and not _incompleto(dados):
         try:
             adicionar_carro(loja_id=loja.id, **dados)
-        except StatusInvalido as erro:
+        except (StatusInvalido, FotosInvalidas) as erro:
             st.error(str(erro))
         else:
             _recarregar(loja.id)
@@ -102,7 +104,7 @@ def _carro(loja, c: dict, ger: int) -> None:
         if salvar and not _incompleto(dados):
             try:
                 resultado = atualizar_carro(c["id"], loja_id=loja.id, esperado=visto, **dados)
-            except StatusInvalido as erro:
+            except (StatusInvalido, FotosInvalidas) as erro:
                 st.error(str(erro))
             except CarroMudou:
                 st.warning(CONFLITO)
@@ -113,8 +115,11 @@ def _carro(loja, c: dict, ger: int) -> None:
                     _recarregar(loja.id)
                     avisar(f"{c['titulo']}: alterações salvas.")
                     st.rerun()
-        if c["fotos"]:
-            st.image(c["fotos"], width=200)
+        for ref in fotos_do_estoque.refs_do_carro(loja.id, ", ".join(c["fotos"])):
+            try:                                     # Maratona Fotos: lidas do depósito
+                st.image(fotos_do_estoque.ler(loja.id, ref), width=200)
+            except Exception:
+                st.caption("(foto indisponível)")
 
 
 def _desfazer(loja) -> None:

@@ -1,6 +1,7 @@
 from typing import Annotated
 from langchain_core.tools import tool, InjectedToolArg
 from banco import conectar
+from app import fotos as _fotos
 
 _SELECT = "SELECT id, marca, modelo, ano, cor, fotos FROM estoque"
 
@@ -9,12 +10,13 @@ def _nome(carro) -> str:
     return f"{carro['marca']} {carro['modelo']} {carro['ano']}"
 
 
-def _urls(carro) -> list:
-    return [u.strip() for u in (carro["fotos"] or "").split(",") if u.strip()]
+def _urls(carro, loja_id: int) -> list:
+    """Maratona Fotos: só fotos do depósito desta loja (nunca endereço de terceiros)."""
+    return _fotos.refs_do_carro(loja_id, carro["fotos"])
 
 
-def _enviar(carro):
-    urls = _urls(carro)
+def _enviar(carro, loja_id: int):
+    urls = _urls(carro, loja_id)
     if not urls:
         return (f"O {_nome(carro)} ainda não tem fotos cadastradas no sistema. "
                 "Diga isso ao cliente com honestidade (não é falha do sistema) e "
@@ -67,8 +69,13 @@ def enviar_fotos(id_veiculo: int = 0, marca: str = "", modelo: str = "",
             return ("Nenhum carro do estoque tem fotos cadastradas no momento. Diga isso "
                     "ao cliente com honestidade (não é falha do sistema) e ofereça a "
                     "ficha de um carro ou uma visita.", [])
+        carros = [c for c in carros if _urls(c, loja_id)]
+        if not carros:
+            return ("Nenhum carro do estoque tem fotos cadastradas no momento. Diga isso "
+                    "ao cliente com honestidade (não é falha do sistema) e ofereça a "
+                    "ficha de um carro ou uma visita.", [])
         if len(carros) == 1:
-            return _enviar(carros[0])
+            return _enviar(carros[0], loja_id)
         opcoes = [f"ID {c['id']}: {_nome(c)} ({c['cor']})" for c in carros]
         return ("Estes carros têm fotos. NÃO envie ainda: pergunte ao cliente, de forma "
                 "natural, de qual deles ele quer ver. Opções: " + " | ".join(opcoes), [])
@@ -82,4 +89,4 @@ def enviar_fotos(id_veiculo: int = 0, marca: str = "", modelo: str = "",
                 "Pergunte ao cliente, de forma natural, qual deles ele quer ver. "
                 "Opções disponíveis: " + " | ".join(opcoes), [])
 
-    return _enviar(carros[0])
+    return _enviar(carros[0], loja_id)

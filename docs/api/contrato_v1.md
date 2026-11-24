@@ -262,3 +262,18 @@ Só cresceu: campos novos opcionais e uma rota nova. Nada que existia mudou de f
 - `POST /conversas/{lead}/responder`: na loja demo, conversa do simulador é aceita e a mensagem
   é só gravada (o simulador mostra); nunca é enviada a canal nenhum. Fora da demo, o simulador
   continua recusado ("O simulador não recebe mensagens do painel.").
+
+## Contrato 1.2.0 (Maratona Fotos)
+
+Parte do F1 (depósito único das fotos do estoque):
+- `GET /fotos/{nome}` (nova): a foto (JPEG, sem metadados) de um carro, do depósito. Só dono e
+  gerente; a foto é sempre procurada na loja da sessão (outra loja: 404); nome só no formato do
+  depósito. É o endereço que `Carro.fotos` traz quando o depósito é local; na nuvem, o carro traz
+  o endereço https público.
+- `Carro.fotos`: só fotos do depósito, na ordem (a primeira é a capa), no máximo 20.
+- `CarroEntrada.fotos`: endereços de fotos desta loja (ficam) e links https de fora, que agora
+  são BAIXADOS e passam pelo preparo (não se guarda mais link). Falhou: 422 em `campos.fotos`,
+  com a mensagem pronta; nada é gravado.
+- `GET /demo/fotos/{arquivo}`: marcada `deprecated`, responde sempre 404 (a demo usa o depósito).
+  Continua no contrato porque a v1 só cresce.
+- Mocks do estoque: `fotos` passaram a ser endereços `/api/v1/fotos/<nome>.jpg`.

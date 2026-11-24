@@ -200,8 +200,12 @@ def test_cada_rota_real_responde_no_formato_do_contrato(envios):
         chamar("GET", "/estoque", (200,))
         chamar("GET", "/estoque", (422,), url="/estoque?pagina=abc")
         novo = chamar("POST", "/estoque", (201,), headers=h, json=CARRO)
+        # Maratona Fotos: o link colado virou foto do depósito; a rota entrega a foto (JPEG).
+        foto = novo.json()["fotos"][0]
+        assert foto.startswith("/api/v1/fotos/")
+        chamar("GET", "/fotos/{nome}", (200,), url=foto.removeprefix(PREFIXO))
         chamar("PUT", "/estoque/{id}", (200,), url=f"/estoque/{novo.json()['id']}", headers=h,
-               json={"dados": {**CARRO, "preco": 61900}})
+               json={"dados": {**CARRO, "fotos": novo.json()["fotos"], "preco": 61900}})
 
         chamar("POST", "/auth/trocar-senha", (200, 204), headers=h,
                json={"senha_atual": SENHA, "senha_nova": NOVA})

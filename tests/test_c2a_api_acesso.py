@@ -121,6 +121,13 @@ def _esquema(rota, metodo, status):
     return resp.get("content", {}).get("application/json", {}).get("schema")
 
 
+def _tipos_previstos(rota, metodo, status):
+    resp = DOC["paths"][rota][metodo]["responses"][status]
+    while "$ref" in resp:
+        resp = DOC["components"]["responses"][resp["$ref"].split("/")[-1]]
+    return [t for t in resp.get("content", {}) if t != "application/json"]
+
+
 def _validar(rota, metodo, resposta, exigir_status=True):
     """A resposta real obedece ao openapi.yaml (mesma ideia do conferir_mocks.py)."""
     status = str(resposta.status_code)
@@ -132,6 +139,12 @@ def _validar(rota, metodo, resposta, exigir_status=True):
         rota, metodo = outras[0]
     esquema = _esquema(rota, metodo, status)
     if esquema is None:
+        # Maratona Fotos: resposta que não é JSON (a foto) precisa ser do tipo que o contrato prevê.
+        previstos = _tipos_previstos(rota, metodo, status)
+        tipo = resposta.headers.get("content-type", "").split(";")[0].strip()
+        if previstos:
+            assert tipo in previstos, f"{metodo.upper()} {rota} {status}: {tipo} fora de {previstos}"
+            return
         assert not resposta.content, f"{metodo.upper()} {rota} {status} devia vir sem corpo"
         return
     raiz = {**esquema, "components": DOC["components"]}
@@ -371,6 +384,7 @@ def test_so_as_rotas_do_c2a_todas_em_api_v1():
                      ("GET", PREFIXO + "/estoque"),
                      ("POST", PREFIXO + "/estoque"),
                      ("PUT", PREFIXO + "/estoque/{id}"),
+                     ("GET", PREFIXO + "/fotos/{nome}"),                          # Maratona Fotos
                      ("GET", PREFIXO + "/demo/fotos/{arquivo}"),                    # Q2
                      ("GET", PREFIXO + "/leads"),                          # C2: leituras
                      ("GET", PREFIXO + "/resultado"),

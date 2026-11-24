@@ -55,6 +55,15 @@ class Canal(ABC):
     async def enviar_midia(self, lead_id: str, url: str) -> bool:
         ...
 
+    async def enviar_foto(self, lead_id: str, loja_id: int, ref: str) -> bool:
+        """Maratona Fotos: manda UMA foto do depósito. Padrão: pelo endereço https público
+        (só a tomada nuvem tem); sem endereço, é falha (o canal não tem como mandar)."""
+        from app import fotos
+        url = fotos.endereco_publico(loja_id, ref)
+        if not url:
+            return False
+        return await self.enviar_midia(lead_id, url)
+
     async def marcar_lida(self, id_mensagem: str, digitando: bool = False) -> bool:
         return False
 
@@ -99,10 +108,24 @@ async def enviar_humanizado(canal: Canal, lead_id: str, texto: str | None,
             await asyncio.sleep(canal.pausa_entre_bolhas)
 
 
-async def enviar_resultado(canal: Canal, lead_id: str, resultado, atraso: float = 0.0) -> None:
-    """Envia o resultado de um turno: texto em bolhas, depois as mídias."""
+async def enviar_resultado(canal: Canal, lead_id: str, resultado, atraso: float = 0.0, *,
+                           loja_id: int) -> list[str]:
+    """Envia o resultado de um turno. Maratona Fotos: primeiro as fotos (do depósito), depois o
+    texto em bolhas; se alguma foto falhar, a trava de app/envio_fotos.py corrige o texto e abre
+    o chamado. Devolve as fotos que falharam."""
     if getattr(resultado, "silenciado", False):
-        return
-    await enviar_humanizado(canal, lead_id, resultado.texto, atraso)
-    for url in resultado.midias or []:
-        await canal.enviar_midia(lead_id, url)
+        return []
+    from app.envio_fotos import enviar_fotos_e_texto
+    refs = list(resultado.midias or [])
+    if refs and atraso > 0:
+        await esperar_digitando(canal, lead_id, atraso)
+        atraso = 0.0
+
+    async def _foto(ref: str) -> bool:
+        return await canal.enviar_foto(lead_id, loja_id, ref)
+
+    async def _texto(texto: str) -> None:
+        await enviar_humanizado(canal, lead_id, texto, atraso)
+
+    return await enviar_fotos_e_texto(loja_id=loja_id, lead_id=lead_id, texto=resultado.texto,
+                                      refs=refs, enviar_foto=_foto, enviar_texto=_texto)

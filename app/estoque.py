@@ -33,6 +33,31 @@ class CarroMudou(ValueError):
     """Outra pessoa mudou este carro enquanto a tela estava aberta (S4c)."""
 
 
+class FotosInvalidas(ValueError):
+    """Maratona Fotos: alguma foto não passou no preparo (o texto vem pronto para a loja)."""
+
+
+def _preparar_fotos(loja_id, fotos) -> tuple[str, list]:
+    """Maratona Fotos: TODA entrada de foto do estoque passa aqui (API, telas, importação).
+    Endereço de foto desta loja vira a referência do depósito; link https é baixado e preparado.
+    Devolve (texto para o banco, referências novas guardadas agora)."""
+    from app import fotos as _fotos
+    try:
+        refs, novas = _fotos.normalizar(loja_id, _fotos.separar(fotos))
+    except _fotos.FotoRecusada as erro:
+        raise FotosInvalidas(str(erro)) from None
+    return _fotos.juntar(refs), novas
+
+
+def _apagar_fotos(loja_id, refs) -> None:
+    from app import fotos as _fotos
+    for ref in refs:
+        try:
+            _fotos.apagar(loja_id, ref)
+        except Exception:                  # depósito fora do ar: a foto fica, nada mais quebra
+            pass
+
+
 def _validar_status(status):
     if status == VENDIDO:
         raise StatusInvalido(MENSAGEM_USE_VENDA)
@@ -84,8 +109,9 @@ def adicionar_carro(marca, modelo, ano, km, cor, cambio, preco,
     _validar_status(status)
     from app.registro import conferir_ator, registrar   # aqui dentro: evita import circular
     conferir_ator(loja_id)
+    texto_fotos, novas = _preparar_fotos(loja_id, fotos)
     valores = dict(zip(CAMPOS_DO_CARRO,
-                       (marca, modelo, ano, km, cor, cambio, preco, status, fotos or "")))
+                       (marca, modelo, ano, km, cor, cambio, preco, status, texto_fotos)))
     conexao = conectar()
     try:
         novo_id = conexao.execute(
@@ -95,6 +121,9 @@ def adicionar_carro(marca, modelo, ano, km, cor, cambio, preco,
         registrar("cadastrar_carro", loja_id, None, valores, conexao=conexao,
                   alvo=f"carro:{novo_id}")
         conexao.commit()
+    except BaseException:
+        _apagar_fotos(loja_id, novas)
+        raise
     finally:
         conexao.close()
     return novo_id
@@ -107,12 +136,15 @@ def atualizar_carro(carro_id, marca, modelo, ano, km, cor, cambio, preco,
     situação continua 'vendido'. Nenhum carro vira 'vendido' por aqui."""
     from app.registro import conferir_ator, registrar   # aqui dentro: evita import circular
     conferir_ator(loja_id)
+    texto_fotos, novas = _preparar_fotos(loja_id, fotos)
+    saiu = []
     conexao = conectar()
     try:
         linha = conexao.execute(
             f"SELECT {', '.join(CAMPOS_DO_CARRO)} FROM estoque WHERE id = ? AND loja_id = ?",
             (carro_id, loja_id)).fetchone()
         if linha is None:
+            _apagar_fotos(loja_id, novas)
             return "Carro não encontrado nesta loja."
         atual = valores_do_carro(linha)
         if atual["status"] == VENDIDO:
@@ -124,10 +156,13 @@ def atualizar_carro(carro_id, marca, modelo, ano, km, cor, cambio, preco,
             raise CarroMudou("Outra pessoa mudou este carro enquanto você editava. "
                              "Nada foi gravado.")
         novos = dict(zip(CAMPOS_DO_CARRO,
-                         (marca, modelo, ano, km, cor, cambio, preco, status, fotos or "")))
+                         (marca, modelo, ano, km, cor, cambio, preco, status, texto_fotos)))
         mudou = [c for c in CAMPOS_DO_CARRO if atual[c] != novos[c]]
         if not mudou:
             return "Carro atualizado."
+        from app import fotos as _fotos
+        ficam = set(_fotos.separar(texto_fotos))
+        saiu = [r for r in _fotos.separar(atual["fotos"]) if r not in ficam]
         conexao.execute(
             "UPDATE estoque SET marca = ?, modelo = ?, ano = ?, km = ?, cor = ?, cambio = ?, "
             "preco = ?, status = ?, fotos = ? WHERE id = ? AND loja_id = ?",
@@ -136,8 +171,12 @@ def atualizar_carro(carro_id, marca, modelo, ano, km, cor, cambio, preco,
                   {**{c: novos[c] for c in mudou}, "carro": f"{marca} {modelo} {ano}"},
                   conexao=conexao, alvo=f"carro:{carro_id}")
         conexao.commit()
+    except BaseException:
+        _apagar_fotos(loja_id, novas)
+        raise
     finally:
         conexao.close()
+    _apagar_fotos(loja_id, saiu)          # fotos que saíram do carro saem do depósito
     return "Carro atualizado."
 
 

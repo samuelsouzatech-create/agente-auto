@@ -3,10 +3,12 @@ A venda não é feita aqui: só por "Registrar venda", na conversa do cliente (P
 import streamlit as st
 
 from app.estoque import (
-    OPCOES_CAMBIO, OPCOES_STATUS, VENDIDO, StatusInvalido, adicionar_carro, atualizar_carro,
+    OPCOES_CAMBIO, OPCOES_STATUS, VENDIDO, FotosInvalidas, StatusInvalido, adicionar_carro,
+    atualizar_carro,
     listar_estoque,
 )
 from app.lojas import carregar_loja
+from app import fotos as fotos_do_estoque
 from paginas.comum import formatar_brl, loja_atual
 
 ROTULO_STATUS = {
@@ -53,7 +55,7 @@ with st.expander("➕ Adicionar carro novo", expanded=False):
                         cor=cor.strip(), cambio=cambio, preco=float(preco), status=status,
                         fotos=fotos.strip(), loja_id=loja.id,
                     )
-                except StatusInvalido as erro:
+                except (StatusInvalido, FotosInvalidas) as erro:
                     st.error(str(erro))
                 else:
                     st.success("Carro cadastrado.")
@@ -108,13 +110,17 @@ for carro in carros:
                         km=int(ed_km), cor=ed_cor.strip(), cambio=ed_cambio, preco=float(ed_preco),
                         status=ed_status, fotos=ed_fotos.strip(), loja_id=loja.id,
                     )
-                except StatusInvalido as erro:
+                except (StatusInvalido, FotosInvalidas) as erro:
                     st.error(str(erro))
                 else:
                     st.success("Alterações salvas.")
                     st.rerun()
 
-        urls = [u.strip() for u in (carro.get("fotos") or "").split(",") if u.strip()]
-        if urls:
+        refs = fotos_do_estoque.refs_do_carro(loja.id, carro.get("fotos"))
+        if refs:
             st.markdown("**Fotos cadastradas:**")
-            st.image(urls, width=200)
+            for ref in refs:                     # Maratona Fotos: lidas do depósito
+                try:
+                    st.image(fotos_do_estoque.ler(loja.id, ref), width=200)
+                except Exception:
+                    st.caption("(foto indisponível)")

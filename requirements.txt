@@ -17,3 +17,4 @@ python-telegram-bot==22.8
 argon2-cffi==25.1.0
 # N1: fotos ilustrativas da loja demo (app/demo.py) e imagens da bancada
 pillow==12.3.0
+pillow-heif==1.8.1

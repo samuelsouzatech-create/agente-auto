@@ -230,11 +230,24 @@ def banco_com_fotos(monkeypatch):
     monkeypatch.setattr(banco, "CAMINHO_BANCO", caminho)
     criar_tabelas()
     popular_estoque_exemplo()
+    # Maratona Fotos: as fotos ficam no depósito; o WhatsApp usa o endereço público (nuvem).
+    import io
+    from PIL import Image
+    from app import fotos as _fotos
+
+    def _png():
+        saida = io.BytesIO()
+        Image.new("RGB", (40, 30), (10, 10, 200)).save(saida, format="PNG")
+        return saida.getvalue()
+
+    leitura = banco.conectar()
+    loja = leitura.execute("SELECT loja_id FROM estoque WHERE modelo = 'Corolla'").fetchone()[0]
+    leitura.close()
+    refs = [_fotos.guardar(loja, _png()), _fotos.guardar(loja, _png())]
+    monkeypatch.setattr(_fotos, "endereco_publico",
+                        lambda loja_id, ref: "https://fotos.teste/" + ref.rsplit("/", 1)[-1])
     conexao = banco.conectar()
-    conexao.execute(
-        "UPDATE estoque SET fotos = ? WHERE modelo = 'Corolla'",
-        ("http://fotos.teste/corolla1.jpg,http://fotos.teste/corolla2.jpg",),
-    )
+    conexao.execute("UPDATE estoque SET fotos = ? WHERE modelo = 'Corolla'", (", ".join(refs),))
     conexao.commit()
     conexao.close()
     yield caminho

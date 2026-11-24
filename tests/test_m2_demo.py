@@ -45,7 +45,7 @@ def loja_demo(fotos):
          "VALUES (1, 'Fiat', 'Uno', 2015, 90000, 'Branco', 'Manual', 30000)")
     _sql("INSERT INTO mensagens (lead_id, loja_id, canal, direcao, conteudo) VALUES ('real-1', 1, 'whatsapp', 'cliente', 'oi')")
     with como_sistema("Teste", "job"):
-        loja_id = demo.criar_loja_demo(indexar=False, pasta_fotos=fotos)
+        loja_id = demo.criar_loja_demo(indexar=False)
     return loja_id
 
 
@@ -75,11 +75,14 @@ def test_loja_demo_completa_e_segura(loja_demo, fotos):
 
 
 def test_fotos_ilustrativas_geradas_localmente(loja_demo, fotos):
-    caminhos = [l["fotos"] for l in _ler("SELECT fotos FROM estoque WHERE loja_id = ?", (loja_demo,))]
-    assert caminhos and all(c and os.path.exists(c) and c.endswith(".png") for c in caminhos)
-    assert all(str(fotos) in c for c in caminhos)
+    # Maratona Fotos: as fotos da demo passam pelo preparo e ficam no depósito (referências).
+    import io
+    from app import fotos as deposito_de_fotos
+    refs = [l["fotos"] for l in _ler("SELECT fotos FROM estoque WHERE loja_id = ?", (loja_demo,))]
+    assert refs and all(deposito_de_fotos.chave_da_ref(loja_demo, r) for r in refs)
     from PIL import Image
-    assert Image.open(caminhos[0]).size == (800, 450)
+    imagem = Image.open(io.BytesIO(deposito_de_fotos.ler(loja_demo, refs[0])))
+    assert imagem.format == "JPEG" and imagem.size == (800, 450)
 
 
 def test_politicas_na_base(loja_demo):
@@ -93,9 +96,9 @@ def test_reiniciar_duas_vezes_termina_igual_e_nao_toca_outra_loja(loja_demo, fot
     from app.ator import como
     antes_real = (_contagem(1), _ler("SELECT * FROM mensagens WHERE loja_id = 1"))
     with como("Operador", "operador", "painel"):
-        demo.reiniciar_demo(loja_demo, indexar=False, pasta_fotos=fotos)
+        demo.reiniciar_demo(loja_demo, indexar=False)
         primeira = _contagem(loja_demo)
-        demo.reiniciar_demo(loja_demo, indexar=False, pasta_fotos=fotos)
+        demo.reiniciar_demo(loja_demo, indexar=False)
     assert _contagem(loja_demo) == primeira
     assert (_contagem(1), _ler("SELECT * FROM mensagens WHERE loja_id = 1")) == antes_real
     assert len(_ler("SELECT id FROM registro_acoes WHERE acao = 'reiniciar_demo' AND loja_id = ?", (loja_demo,))) == 2
@@ -105,7 +108,7 @@ def test_reiniciar_recusa_loja_que_nao_e_demo(loja_demo, fotos):
     from app.ator import como
     antes = _contagem(1)
     with como("Operador", "operador", "painel"), pytest.raises(demo.LojaNaoEDemo):
-        demo.reiniciar_demo(1, indexar=False, pasta_fotos=fotos)
+        demo.reiniciar_demo(1, indexar=False)
     assert _contagem(1) == antes
 
 
@@ -114,7 +117,7 @@ def test_reiniciar_apaga_o_que_a_demonstracao_criou(loja_demo, fotos):
     _sql("INSERT INTO mensagens (lead_id, loja_id, canal, direcao, conteudo) VALUES ('sim-x', ?, 'simulador', 'cliente', 'oi')",
          (loja_demo,))
     with como("Operador", "operador", "painel"):
-        demo.reiniciar_demo(loja_demo, indexar=False, pasta_fotos=fotos)
+        demo.reiniciar_demo(loja_demo, indexar=False)
     assert _ler("SELECT id FROM mensagens WHERE lead_id = 'sim-x'") == []
 
 

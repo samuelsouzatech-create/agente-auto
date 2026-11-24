@@ -42,11 +42,19 @@ class GrafoFalso:
         return {"messages": [HumanMessage(content=texto), *self.responder(texto, entrada)]}
 
 
+def _refs(modelo):
+    """Maratona Fotos: as fotos de verdade (do depósito) do carro na loja da bancada."""
+    linha = rb._ler("SELECT fotos FROM estoque WHERE modelo = ?", (modelo,))[0]
+    return [u.strip() for u in linha["fotos"].split(",") if u.strip()]
+
+
 def _fotos(urls, resposta="Seguem as fotos!"):
+    """urls: lista de referências, ou uma função que as monta (o banco da rodada já existe)."""
     def responder(texto, entrada):
+        lista = urls() if callable(urls) else urls
         return [AIMessage(content="", tool_calls=[{"name": "enviar_fotos", "args": {}, "id": "f1"}]),
                 ToolMessage(content="Enviando.", tool_call_id="f1", name="enviar_fotos",
-                            artifact={"tipo": "fotos", "urls": urls}),
+                            artifact={"tipo": "fotos", "urls": lista}),
                 AIMessage(content=resposta)]
     return responder
 
@@ -77,8 +85,16 @@ def test_turno_sem_foto_que_promete_foto_e_corrigido():
 
 def test_turno_com_foto_nao_e_mexido():
     rodada = rodar([roteiro(falas=["me manda fotos do Civic"])],
-                   GrafoFalso(_fotos(["file:///x/civic_1.png"])))
+                   GrafoFalso(_fotos(lambda: _refs("Civic")[:1])))
     assert "Seguem as fotos!" in rodada.resultados[0].texto_do_leo
+
+
+def test_foto_que_nao_e_do_deposito_nao_sai_e_o_texto_e_honesto():
+    # Maratona Fotos: o simulador recusa o que não é do depósito; a trava troca o texto.
+    rodada = rodar([roteiro(falas=["me manda fotos do Civic"])],
+                   GrafoFalso(_fotos(["file:///x/civic_1.png"])))
+    texto = rodada.resultados[0].texto_do_leo
+    assert "Seguem as fotos!" not in texto and "Vou pedir para a equipe te mandar as fotos." in texto
 
 
 # ------------------------------------------------------------ fotos fictícias da loja
@@ -92,19 +108,21 @@ def test_bancada_gera_fotos_ficticias_fora_do_git_e_hb20_fica_sem():
 
     rodar([roteiro()], GrafoFalso(responder))
     assert vistos["HB20"] == ""
-    civic = vistos["Civic"].split(",")
-    assert len(civic) == rb.FOTOS_POR_CARRO and all(u.startswith("file:///") for u in civic)
-    caminho = rb._PASTA_TEMP / "fotos" / "civic_1.png"
-    assert caminho.read_bytes().startswith(b"\x89PNG")
-    assert ".git" not in str(caminho)
+    civic = [u.strip() for u in vistos["Civic"].split(",")]
+    assert len(civic) == rb.FOTOS_POR_CARRO and all(u.startswith("deposito:loja-1/") for u in civic)
+    # Maratona Fotos: passaram pelo preparo e estão no depósito TEMPORÁRIO da bancada
+    pasta = rb._PASTA_TEMP / "fotos_deposito" / "loja-1"
+    arquivo = pasta / civic[0].rsplit("/", 1)[-1]
+    assert arquivo.read_bytes()[:3] == bytes([0xFF, 0xD8, 0xFF])
+    assert ".git" not in str(arquivo)
 
 
 def test_fotos_de_passa_so_com_fotos_do_carro_pedido():
     ok = rodar([roteiro(falas=["fotos do civic"], deve={"fotos_de": "Civic"})],
-               GrafoFalso(_fotos(["file:///t/fotos/civic_1.png", "file:///t/fotos/civic_2.png"])))
+               GrafoFalso(_fotos(lambda: _refs("Civic"))))
     assert ok.resultados[0].status == rb.PASSOU
     errado = rodar([roteiro(falas=["fotos do civic"], deve={"fotos_de": "Civic"})],
-                   GrafoFalso(_fotos(["file:///t/fotos/civic_1.png", "file:///t/fotos/corolla_1.png"])))
+                   GrafoFalso(_fotos(lambda: _refs("Civic")[:1] + _refs("Corolla")[:1])))
     assert errado.resultados[0].status == rb.FALHOU
     nada = rodar([roteiro(falas=["fotos do civic"], deve={"fotos_de": "Civic"})],
                  GrafoFalso(lambda t, e: [AIMessage(content="Não tenho fotos.")]))
@@ -112,7 +130,7 @@ def test_fotos_de_passa_so_com_fotos_do_carro_pedido():
 
 
 def test_numero_exato_de_fotos():
-    rodada = rodar([roteiro(deve={"fotos": 0})], GrafoFalso(_fotos(["file:///t/fotos/hb20_1.png"])))
+    rodada = rodar([roteiro(deve={"fotos": 0})], GrafoFalso(_fotos(lambda: _refs("Civic")[:1])))
     assert rodada.resultados[0].status == rb.FALHOU
 
 

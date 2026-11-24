@@ -13,8 +13,8 @@
   "status": "disponivel",
   "status_rotulo": "Disponível",
   "fotos": [
-    "https://fotos.exemplo.example/hb20-1.jpg",
-    "https://fotos.exemplo.example/hb20-2.jpg"
+    "/api/v1/fotos/xmCuzxuIyTRXzONTx_30DEY_xr1J6Ngm.jpg",
+    "/api/v1/fotos/OXJK2EUQ8h7d9FiFulXNJZmrthSmjz8j.jpg"
   ],
   "interessados": 3,
   "pode_editar": true
