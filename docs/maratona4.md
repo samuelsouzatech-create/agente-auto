@@ -18,6 +18,7 @@ o computador acordado ligado no começo (24/11, 15:42) e desligado no fim.
 | IG0 documentação da Meta | instagram-0 | feito (17:00) | 3.037 ok (802 + 1.231 + 1.004) |
 | IG1 canal Instagram | instagram-1 | feito (17:15) | 3.064 ok (835 + 1.239 + 990) |
 | IG2 comentários viram conversa | instagram-2 | feito (17:30) | 3.085 ok (835 + 1.246 + 1.004) |
+| IG3 Instagram → WhatsApp e fechamento | instagram-3 (+ `painel-instagram` no leo-painel-web) | feito (17:55) | 3.104 ok (893 + 1.207 + 1.004); tela 91 ok, build ok |
 
 ## Contradições com o roteiro, anotadas no começo (não graves: segui este pedido)
 - `docs/decisoes_e_roteiro.md`, seção 3: o pacote de ramo "não se faz agora; quando o segundo
@@ -505,3 +506,27 @@ entrarem numa rodada sem querer. Rodar quando houver crédito (e conferir se a b
 
 ### Testes do IG3
 `tests/test_ig3_instagram_whatsapp.py` (17) e `tests/test_ig3_ponta_a_ponta.py` (2).
+- Suíte inteira, 3 partes: 893 + 1.207 + 1.004 = **3.104 passaram, 0 falhas** (3.085 + 19).
+
+## Fim da maratona
+- Script de manter o computador acordado: desligado no fim (17:55).
+- Nada foi rodado com IA real, bancada, canal real, túnel ou conta da Meta. Nenhum `.env`, senha ou
+  token entrou no Git (conferido a cada commit com `git status`).
+
+### Decisões para o analista
+1. **Login da Meta:** recomendo o **login do Facebook** (legenda do post e comentário de anúncio só
+   existem nele, pelo IG0). A loja precisa da Página do Facebook ligada.
+2. **Itens "a confirmar" do IG0** (tabela acima): eco de resposta feita pelo app, `referral` de
+   anúncio no direct, marcação de humano (7 dias), tamanho da resposta pública.
+3. **Pacote de ramo antes do 2º ramo real** (contradiz a seção 3 do roteiro, feito por este pedido):
+   conferir se o contrato serve; o LEGADO da catraca (26 pares) e as palavras "carro"/"veículo" em
+   ~44 arquivos ficam para o bloco do 2º ramo real.
+4. **Casos limítrofes do SG1** (o que o teste espera não mudou, mas o arquivo lido mudou): os 3 da
+   seção "Regra de ouro".
+5. **Palavras do comentário**: a regra antiga exige 1 a 30 palavras (padrão "quero, valor, preço,
+   info"); um comentário como "Ainda tem?" não recebe mensagem com o padrão. Decidir se o padrão
+   deve ser mais amplo.
+6. **Frase do WhatsApp no Instagram** é código (fixa). Se quiserem que o Léo peça o telefone com as
+   palavras dele, é mudança de prompt e pede rodada com IA real.
+7. `app/vendas.py` continua lendo o estoque direto (a venda marca o carro como vendido na mesma
+   transação): passar pelo catálogo exigiria repensar essa transação.

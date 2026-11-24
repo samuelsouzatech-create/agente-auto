@@ -296,3 +296,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   Instagram só dentro da janela de 24 h (fora dela não sai nada: não há modelo aprovado no Instagram).
 - 24/11/2026, IG2: comentário -> UMA mensagem privada que cita o carro do post (Opção B do Samuel), sem
   preço; chaves de comentário e de resposta pública nascem desligadas. Sem emoji (o plano tinha 🙂: L10 vale).
+- 24/11/2026, IG3: contrato da API **1.3.0** (canais e "como chegou"); o mesmo cliente do Instagram e do
+  WhatsApp vira um cartão só, nunca entre lojas. `/dados/excluir` pronto; textos da Meta em rascunho.
