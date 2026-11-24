@@ -5,7 +5,7 @@ Quatro blocos em cadeia: PG0 → PG1 → PG2 → PG3. Branches `postgres-p0` (sa
 
 | Bloco | Branch | Situação | Commit | Testes |
 |-------|--------|----------|--------|--------|
-| PG0 documentos e E2-1 | postgres-p0 | em andamento | | |
+| PG0 documentos e E2-1 | postgres-p0 | feito | cd84e11 + diário | suíte 2.928 ok |
 | PG1 banco PostgreSQL | postgres-p1 | a fazer | | |
 | PG2 memória e importação | postgres-p2 | a fazer | | |
 | PG3 teste de carga | postgres-p3 | a fazer | | |
@@ -57,3 +57,11 @@ com a retomada), mas nenhum limite por dia e nenhum teste disso.
 - **Aviso:** o texto diz que "a 22 já foi usada". No repositório (todas as branches) não existe
   migração 22. As usadas são 1 a 17, 19 e 20; a 21 é do Instagram; a próxima livre é a 22.
   Anotado no Registro de mudanças, sem mexer no texto.
+
+### Testes do PG0
+- Suíte inteira (em 3 partes, ainda no SQLite): 766 + 1.042 + 1.120 = **2.928 passaram**, 0
+  falhas (eram 2.919; + 8 do E2-1 + 1 parametrização nova). A primeira rodada pegou 1 falha:
+  a tela de envios não pode importar `app.jobs` (regra antiga); a conta do dia foi para
+  `app/reativacao.py` e a suíte passou.
+- O que NÃO fiz no PG0: nada de banco novo (isso é o PG1); o número final do limite diário é
+  decisão do Samuel (A8).
