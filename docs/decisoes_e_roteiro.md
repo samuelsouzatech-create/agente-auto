@@ -282,3 +282,6 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   sem a trava única e transação só quando precisa no banco.py. Turno médio −33%, espera do cliente
   −50%, 0 perdidas e 0 cruzadas. Nenhuma decisão mudou. Pendência resolvida: "turno lento com
   muitas lojas" (PG3).
+- 24/11/2026, AR (Maratona 4): **Streamlit do cliente aposentado** (decisão do analista pela D11:
+  no piloto o operador faz Configuração, Conhecimento e Equipe pelo lojista). Teste de carga na
+  gaveta 14 do Redis (nunca na 0). Portas documentadas: operador 8502, simulador 8501, webhook 8000.

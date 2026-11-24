@@ -12,7 +12,7 @@ o computador acordado ligado no começo (24/11, 15:42) e desligado no fim.
 
 | Bloco | Branch | Situação | Suíte (3 partes) |
 |-------|--------|----------|------------------|
-| AR arrumações | arrumacoes | feito | ver AR |
+| AR arrumações | arrumacoes | feito (16:20) | 3.002 ok (798 + 1.228 + 976) |
 
 ## Contradições com o roteiro, anotadas no começo (não graves: segui este pedido)
 - `docs/decisoes_e_roteiro.md`, seção 3: o pacote de ramo "não se faz agora; quando o segundo
@@ -74,3 +74,16 @@ passaram nas 5**.
 README: tabela "Peças fora do Docker" com operador 8502, simulador 8501, webhook 8000 com o
 comando escrito (`python -m uvicorn app.api.webhook:app --host 127.0.0.1 --port 8000`), API
 8001 e o relógio. `operador.py`: o comando do topo dizia 8501; agora 8502, com as outras portas.
+
+### Testes do AR
+- Suíte inteira contra o PostgreSQL, em 3 partes: 798 + 1.228 + 976 = **3.002 passaram, 0
+  falhas**. (O DK3 tinha 3.021: saíram os testes que só abriam ou compilavam as telas do painel
+  aposentado, entraram os novos da gaveta 14 e da aposentadoria.)
+- Lição anotada: na 1ª tentativa rodei um arquivo de teste AO MESMO TEMPO que a suíte; cada rodada
+  recria o banco `_teste` e derrubou a outra (erros "terminating connection" e "relation does not
+  exist" no `test_l10`). Não era defeito do código. Refeita sozinha, passou. Também apareceram 7
+  testes antigos que liam as telas apagadas por caminhos que a minha 1ª busca não pegou
+  (`os.path.join`, `RAIZ / "paginas" / ...`): viraram "a tela saiu".
+- Os arquivos `tests/prompt_de_referencia.py` e `tests/dados/prompt_veiculos_antes_do_sg1.json`
+  entraram nesta branch: são a "foto" do prompt de uma loja de carros tirada com o código de ANTES
+  do SG1 (usada no SG1 para provar que nada mudou). Não são testes (o pytest não os coleta).
