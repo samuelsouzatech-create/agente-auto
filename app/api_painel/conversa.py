@@ -18,7 +18,7 @@ from app.api_painel.atender import (AGUARDANDO, ASSUMIDO, CANAL_SEM_RESPOSTA, JA
 from app.api_painel.formato import horario
 from app.api_painel.saude import FAIXA_EM_TESTE
 from app.demo import e_demo
-from app.envio_painel import CANAIS_COM_ENVIO
+from app.envio_painel import CANAIS_COM_ENVIO, SIMULADOR_RECUSADO
 from app.estado_loja import esta_no_ar
 from app.interesse import situacao_do_lead
 from app.lojas import carregar_loja
@@ -116,7 +116,7 @@ def motivo_para_nao_responder(f: dict, janela: dict, nome: str, *, demo: bool):
     canal = f["canal"]
     if canal not in CANAIS_COM_ENVIO:
         if canal == "simulador":
-            return None if demo else "O simulador não recebe mensagens do painel."
+            return None if demo else SIMULADOR_RECUSADO
         return CANAL_SEM_RESPOSTA if canal else SEM_MENSAGEM
     if not janela["aberta"]:
         return FORA_DA_JANELA

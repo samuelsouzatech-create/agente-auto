@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.ator import como
 from app.autenticacao import (
-    DadosInvalidos, autenticar, bloqueado_por_tentativas, criar_usuario_com_login,
+    ORIGEM_LOCAL, DadosInvalidos, autenticar, bloqueado_por_tentativas, criar_usuario_com_login,
     definir_email, definir_senha, listar_logins,
 )
 from app.identidade import SemNomeOperador, nome_do_operador
@@ -46,12 +46,12 @@ def _listar() -> None:
 
 
 def _testar(email: str) -> int:
-    resultado = autenticar(email, getpass.getpass("Senha: "))
+    resultado = autenticar(email, getpass.getpass("Senha: "), origem=ORIGEM_LOCAL)
     if resultado:
         loja = f"loja {resultado['loja_id']}" if resultado["loja_id"] else "todas as lojas"
         print(f"Entrou: {resultado['nome']} ({resultado['rotulo_papel']}, {loja}).")
         return 0
-    if bloqueado_por_tentativas(email):
+    if bloqueado_por_tentativas(email, origem=ORIGEM_LOCAL):
         print("Recusado: muitas tentativas erradas. Espere 15 minutos.")
     else:
         print("Recusado: e-mail ou senha errados.")

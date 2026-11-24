@@ -14,6 +14,7 @@ Regras:
     Em qualquer outra loja, o simulador continua recusado.
 """
 import asyncio
+import logging
 
 from app.credenciais import SemCredencial, credencial_whatsapp, token_telegram
 from app.handoff import estado_do_handoff, quem_assumiu
@@ -22,6 +23,9 @@ from app.permissoes import exigir_pode_agir
 
 CANAIS_COM_ENVIO = ("whatsapp", "telegram")
 CANAL_SIMULADOR = "simulador"
+# Maratona Fotos, F2: frases da tela em linguagem de loja (o detalhe técnico vai só para o log).
+SIMULADOR_RECUSADO = "Esta conversa é de teste e não recebe resposta pelo painel."
+_log = logging.getLogger("leo.envio_painel")
 LIMITE_CARACTERES = 4000
 
 
@@ -34,19 +38,21 @@ async def _despachar(loja_id: int, canal: str, lead_id: str, texto: str) -> bool
         try:
             credencial_whatsapp(loja_id)
         except SemCredencial as erro:
-            raise EnvioRecusado(f"O WhatsApp desta loja não está configurado neste computador: {erro}.")
+            _log.warning(f"[Painel][loja {loja_id}] WhatsApp sem credencial: {erro}")
+            raise EnvioRecusado("O WhatsApp da loja ainda não está ligado ao painel. Fale com quem cuida do Léo para a sua loja.")
         from app.api.enviar_whatsapp import enviar_texto_whatsapp
         return await enviar_texto_whatsapp(lead_id, texto, loja_id=loja_id)
     if canal == "telegram":
         try:
             token = token_telegram(loja_id)
         except SemCredencial as erro:
-            raise EnvioRecusado(f"O bot de Telegram desta loja não está configurado neste computador: {erro}.")
+            _log.warning(f"[Painel][loja {loja_id}] Telegram sem credencial: {erro}")
+            raise EnvioRecusado("O Telegram da loja ainda não está ligado ao painel. Fale com quem cuida do Léo para a sua loja.")
         from telegram import Bot
         async with Bot(token) as bot:
             await bot.send_message(chat_id=lead_id, text=texto)
         return True
-    raise EnvioRecusado("Este canal não recebe mensagens do painel.")
+    raise EnvioRecusado("Não dá para responder esta conversa pelo painel.")
 
 
 def enviar_pelo_painel(loja_id: int, canal: str, lead_id: str, texto: str, vendedor: str) -> None:
@@ -62,7 +68,7 @@ def enviar_pelo_painel(loja_id: int, canal: str, lead_id: str, texto: str, vende
         if canal == CANAL_SIMULADOR and e_demo(loja_id):
             simulado = True                  # Q2: na demo, só grava (o simulador mostra)
         else:
-            raise EnvioRecusado("O simulador não recebe mensagens do painel. Teste pelo Telegram.")
+            raise EnvioRecusado(SIMULADOR_RECUSADO)
     if estado_do_handoff(lead_id, loja_id) != "humano_assumiu":
         raise EnvioRecusado("Assuma a conversa antes de responder. Assim o assistente fica "
                             "em silêncio e vocês não falam ao mesmo tempo.")
@@ -77,7 +83,8 @@ def enviar_pelo_painel(loja_id: int, canal: str, lead_id: str, texto: str, vende
     except EnvioRecusado:
         raise
     except Exception as erro:
-        raise EnvioRecusado(f"Não consegui enviar: {erro}") from erro
+        _log.warning(f"[Painel][loja {loja_id}] envio falhou: {type(erro).__name__}: {erro}")
+        raise EnvioRecusado("Não consegui enviar a mensagem agora. Tente de novo em alguns minutos.") from erro
     if not ok:
-        raise EnvioRecusado("O canal não aceitou o envio. Veja o terminal do painel.")
+        raise EnvioRecusado("A mensagem não foi entregue. Tente de novo em alguns minutos.")
     salvar_mensagem(lead_id, "vendedor", texto, canal=canal, loja_id=loja_id, autor=vendedor)

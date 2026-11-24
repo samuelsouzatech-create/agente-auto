@@ -1,7 +1,7 @@
 {
   "luz": "vermelha",
   "titulo": "Léo fora do ar",
-  "detalhe": "Nenhum canal está ativo.",
+  "detalhe": "Nenhum WhatsApp, Telegram ou Instagram está ligado.",
   "estado": {
     "codigo": "no_ar",
     "rotulo": "No ar"

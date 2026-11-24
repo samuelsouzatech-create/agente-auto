@@ -277,3 +277,13 @@ Parte do F1 (depósito único das fotos do estoque):
 - `GET /demo/fotos/{arquivo}`: marcada `deprecated`, responde sempre 404 (a demo usa o depósito).
   Continua no contrato porque a v1 só cresce.
 - Mocks do estoque: `fotos` passaram a ser endereços `/api/v1/fotos/<nome>.jpg`.
+
+Parte do F2 (fotos pelo painel):
+- `POST /estoque/{id}/fotos` (multipart, campo `arquivos`, uma ou várias): cada foto passa pelo
+  preparo e entra no fim da lista; recusadas vêm em `recusadas` sem impedir as outras; nenhuma
+  entrou: 422. `POST /estoque/{id}/fotos/link` (`{link}`), `PUT /estoque/{id}/fotos/ordem`
+  (`{fotos}`: as mesmas, na ordem nova) e `DELETE /estoque/{id}/fotos/{nome}`. Todas respondem
+  `FotosDoCarro` (`fotos` na ordem, a primeira é a capa). Só dono e gerente, só carros da loja da
+  sessão (outra loja: 404), carro vendido: 422, no máximo 20 por carro.
+- Sem mudança de formato: `POST /auth/login` e `/auth/trocar-senha` passam a contar os 5 erros de
+  senha por e-mail + origem (erro vindo de outro lugar não bloqueia o dono).

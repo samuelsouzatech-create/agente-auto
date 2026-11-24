@@ -14,12 +14,12 @@ from __future__ import annotations
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
 
 from app import estoque
-from app.api_painel.carros import (TAMANHO_PADRAO, interessados, montar_carro, montar_estoque,
-                                   valores_da_api)
+from app.api_painel.carros import (TAMANHO_PADRAO, fotos_para_o_painel, interessados, montar_carro,
+                                   montar_estoque, valores_da_api)
 from app.api_painel.erros import ErroApi
 from app.api_painel.modulos import ESTOQUE, escrita, leitura
 from app.ator import como
@@ -158,3 +158,67 @@ def editar(id: int, entrada: CarroEdicao, sessao: dict = Depends(escrita(ESTOQUE
         except estoque.StatusInvalido as erro:
             raise ErroApi("invalido", {"status": str(erro)}, str(erro)) from None
     return _resposta(loja_id, id)
+
+
+# ------------------------------------------------------------ fotos do carro (Maratona Fotos, F2)
+
+class FotoPorLinkEntrada(BaseModel):
+    link: str = ""
+
+
+class OrdemDasFotosEntrada(BaseModel):
+    fotos: List[str] = []
+
+
+def _fotos_do_carro(loja_id: int, refs: list, recusadas: list | None = None) -> dict:
+    return {"fotos": fotos_para_o_painel(loja_id, _fotos.juntar(refs)),
+            "recusadas": [{"arquivo": n, "mensagem": m} for n, m in (recusadas or [])]}
+
+
+def _fazer(sessao: dict, campo: str, acao):
+    """Roda a operação de foto com o ator da sessão e traduz os erros para o contrato."""
+    with _como(sessao):
+        try:
+            return acao()
+        except estoque.CarroNaoEncontrado as erro:
+            raise ErroApi("nao_encontrado", mensagem=str(erro)) from None
+        except estoque.StatusInvalido as erro:
+            raise ErroApi("invalido", mensagem=str(erro)) from None
+        except FotosInvalidas as erro:
+            raise ErroApi("invalido", {campo: str(erro)}, str(erro)) from None
+
+
+def _ler_arquivo(arquivo: UploadFile) -> bytes:
+    """Lê no máximo o limite + 1 byte (passou do limite, o preparo recusa sem ler o resto)."""
+    return arquivo.file.read(_fotos.MAX_BYTES + 1)
+
+
+@router.post("/estoque/{id}/fotos", status_code=201)
+def enviar_fotos(id: int, arquivos: List[UploadFile] = File(...), sessao: dict = Depends(escrita(ESTOQUE))):
+    loja_id = sessao["loja_id"]
+    if len(arquivos) > _fotos.MAX_FOTOS_POR_CARRO:
+        raise ErroApi("invalido", {"arquivos": _fotos.MSG_DEMAIS}, _fotos.MSG_DEMAIS)
+    lidos = [(a.filename or "foto", _ler_arquivo(a)) for a in arquivos]
+    refs, recusadas = _fazer(sessao, "arquivos", lambda: estoque.adicionar_fotos(id, lidos, loja_id=loja_id))
+    return _fotos_do_carro(loja_id, refs, recusadas)
+
+
+@router.post("/estoque/{id}/fotos/link", status_code=201)
+def adicionar_por_link(id: int, entrada: FotoPorLinkEntrada, sessao: dict = Depends(escrita(ESTOQUE))):
+    loja_id = sessao["loja_id"]
+    refs = _fazer(sessao, "link", lambda: estoque.adicionar_foto_por_link(id, entrada.link, loja_id=loja_id))
+    return _fotos_do_carro(loja_id, refs)
+
+
+@router.put("/estoque/{id}/fotos/ordem")
+def mudar_ordem(id: int, entrada: OrdemDasFotosEntrada, sessao: dict = Depends(escrita(ESTOQUE))):
+    loja_id = sessao["loja_id"]
+    refs = _fazer(sessao, "fotos", lambda: estoque.ordenar_fotos(id, entrada.fotos, loja_id=loja_id))
+    return _fotos_do_carro(loja_id, refs)
+
+
+@router.delete("/estoque/{id}/fotos/{nome}")
+def apagar_foto(id: int, nome: str, sessao: dict = Depends(escrita(ESTOQUE))):
+    loja_id = sessao["loja_id"]
+    refs = _fazer(sessao, "fotos", lambda: estoque.apagar_foto(id, nome, loja_id=loja_id))
+    return _fotos_do_carro(loja_id, refs)

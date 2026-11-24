@@ -448,5 +448,65 @@
     "metodo": "get",
     "status": "200",
     "tipo": "resposta"
+  },
+  "estoque_fotos__ok.json": {
+    "rota": "/estoque/{id}/fotos",
+    "metodo": "post",
+    "status": "201",
+    "tipo": "resposta"
+  },
+  "estoque_fotos__uma_recusada.json": {
+    "rota": "/estoque/{id}/fotos",
+    "metodo": "post",
+    "status": "201",
+    "tipo": "resposta"
+  },
+  "estoque_fotos__recusada.json": {
+    "rota": "/estoque/{id}/fotos",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "estoque_fotos_link__ok.json": {
+    "rota": "/estoque/{id}/fotos/link",
+    "metodo": "post",
+    "status": "201",
+    "tipo": "resposta"
+  },
+  "estoque_fotos_link__falhou.json": {
+    "rota": "/estoque/{id}/fotos/link",
+    "metodo": "post",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "estoque_fotos_ordem__ok.json": {
+    "rota": "/estoque/{id}/fotos/ordem",
+    "metodo": "put",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "estoque_fotos_ordem__invalida.json": {
+    "rota": "/estoque/{id}/fotos/ordem",
+    "metodo": "put",
+    "status": "422",
+    "tipo": "resposta"
+  },
+  "estoque_fotos_apagar__ok.json": {
+    "rota": "/estoque/{id}/fotos/{nome}",
+    "metodo": "delete",
+    "status": "200",
+    "tipo": "resposta"
+  },
+  "pedido_estoque_fotos_link.json": {
+    "rota": "/estoque/{id}/fotos/link",
+    "metodo": "post",
+    "status": "",
+    "tipo": "pedido"
+  },
+  "pedido_estoque_fotos_ordem.json": {
+    "rota": "/estoque/{id}/fotos/ordem",
+    "metodo": "put",
+    "status": "",
+    "tipo": "pedido"
   }
 }

@@ -204,8 +204,28 @@ def test_cada_rota_real_responde_no_formato_do_contrato(envios):
         foto = novo.json()["fotos"][0]
         assert foto.startswith("/api/v1/fotos/")
         chamar("GET", "/fotos/{nome}", (200,), url=foto.removeprefix(PREFIXO))
+        # F2: enviar (arquivo), por link, ordem e apagar
+        cid = novo.json()["id"]
+        enviadas = chamar("POST", "/estoque/{id}/fotos", (201,), url=f"/estoque/{cid}/fotos", headers=h,
+                          files=[("arquivos", ("a.png", _png(), "image/png")),
+                                 ("arquivos", ("nao-e-foto.txt", b"texto", "text/plain"))])
+        assert len(enviadas.json()["recusadas"]) == 1
+        chamar("POST", "/estoque/{id}/fotos", (422,), url=f"/estoque/{cid}/fotos", headers=h,
+               files=[("arquivos", ("x.txt", b"texto", "text/plain"))])
+        por_link = chamar("POST", "/estoque/{id}/fotos/link", (201,), url=f"/estoque/{cid}/fotos/link", headers=h,
+                          json={"link": "https://fotos.loja.example/b.jpg"})
+        ordem = list(reversed(por_link.json()["fotos"]))
+        chamar("PUT", "/estoque/{id}/fotos/ordem", (200,), url=f"/estoque/{cid}/fotos/ordem", headers=h,
+               json={"fotos": ordem})
+        chamar("PUT", "/estoque/{id}/fotos/ordem", (422,), url=f"/estoque/{cid}/fotos/ordem", headers=h,
+               json={"fotos": ordem[:1]})
+        nome = ordem[0].rsplit("/", 1)[-1]
+        restantes = chamar("DELETE", "/estoque/{id}/fotos/{nome}", (200,), url=f"/estoque/{cid}/fotos/{nome}", headers=h)
+        assert len(restantes.json()["fotos"]) == len(ordem) - 1
+        carro_atual = c.get(PREFIXO + "/estoque", headers=h).json()["itens"]
+        fotos_atuais = next(x for x in carro_atual if x["id"] == cid)["fotos"]
         chamar("PUT", "/estoque/{id}", (200,), url=f"/estoque/{novo.json()['id']}", headers=h,
-               json={"dados": {**CARRO, "fotos": novo.json()["fotos"], "preco": 61900}})
+               json={"dados": {**CARRO, "fotos": fotos_atuais, "preco": 61900}})
 
         chamar("POST", "/auth/trocar-senha", (200, 204), headers=h,
                json={"senha_atual": SENHA, "senha_nova": NOVA})
@@ -220,3 +240,11 @@ def test_cada_rota_real_responde_no_formato_do_contrato(envios):
 
     faltou = _da_api() - vistos
     assert not faltou, f"rotas sem cenário neste teste (acrescente): {sorted(faltou)}"
+
+
+def _png() -> bytes:
+    import io
+    from PIL import Image
+    saida = io.BytesIO()
+    Image.new("RGB", (40, 30), (10, 120, 10)).save(saida, format="PNG")
+    return saida.getvalue()

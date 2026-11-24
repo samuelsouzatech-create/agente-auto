@@ -143,6 +143,6 @@ if estado == "humano_assumiu" and dono == vendedor and canal in CANAIS_COM_ENVIO
 elif estado == "humano_assumiu" and dono != vendedor:
     st.info(f"Esta conversa está com {dono}. Só quem assumiu responde por aqui.")
 elif estado == "humano_assumiu":
-    st.caption("O simulador não recebe mensagens do painel. Para testar a resposta, use o Telegram.")
+    st.caption("Esta conversa é de teste e não recebe resposta pelo painel.")
 else:
     st.caption(f"Para escrever ao cliente, assuma a conversa. O {agente} fica em silêncio enquanto isso.")

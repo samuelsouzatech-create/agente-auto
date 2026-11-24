@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app import demo, sessoes
 from app.api_painel.main import PREFIXO, criar_app
 from app.api_painel.saude import DETALHE_DEMO
+from app.envio_painel import SIMULADOR_RECUSADO
 from app.ator import como_sistema
 from tests.test_c2c_conversas import (_entrar, _executar, _ha, _handoff, _linha, _no_ar, _um, _validar,
                                       envios)  # noqa: F401
@@ -141,7 +142,7 @@ def test_fora_da_demo_o_simulador_continua_recusado(cliente, loja_demo, envios):
     h = _entrar(loja=1, papel="vendedor", nome="Vendedor Real")
     assert cliente.post(f"{PREFIXO}/conversas/sim-real/assumir", headers=h).status_code == 200
     conversa = cliente.get(f"{PREFIXO}/conversas/sim-real", headers=h).json()
-    assert conversa["acoes"]["responder"]["motivo"] == "O simulador não recebe mensagens do painel."
+    assert conversa["acoes"]["responder"]["motivo"] == SIMULADOR_RECUSADO
     r = cliente.post(f"{PREFIXO}/conversas/sim-real/responder", headers=h, json={"texto": "Oi"})
     assert r.status_code == 422
     assert envios == []

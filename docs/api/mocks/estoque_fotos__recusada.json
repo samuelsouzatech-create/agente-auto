@@ -1,0 +1,7 @@
+{
+  "codigo": "invalido",
+  "mensagem": "Esse arquivo não é uma foto. Use uma foto em JPG, PNG, WebP ou HEIC (iPhone).",
+  "campos": {
+    "arquivos": "Esse arquivo não é uma foto. Use uma foto em JPG, PNG, WebP ou HEIC (iPhone)."
+  }
+}

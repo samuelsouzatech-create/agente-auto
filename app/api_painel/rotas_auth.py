@@ -57,10 +57,10 @@ def login(entrada: LoginEntrada, resposta: Response, request: Request):
     origem = _origem(request)
     if autenticacao.origem_bloqueada(origem):        # revisão geral #5: limite por origem
         raise ErroApi("muitas_tentativas")
-    achado = autenticacao.autenticar(email, entrada.senha)
+    achado = autenticacao.autenticar(email, entrada.senha, origem=origem)
     if achado is None:
         autenticacao.anotar_login_errado_da_origem(origem)
-        if autenticacao.bloqueado_por_tentativas(email):
+        if autenticacao.bloqueado_por_tentativas(email, origem=origem):
             raise ErroApi("muitas_tentativas")
         raise ErroApi("credenciais_invalidas")
     pessoa = _pessoa(achado["id"])
@@ -99,7 +99,7 @@ def trocar_senha(entrada: TrocarSenhaEntrada, request: Request,
     with como(sessao["nome"], "cliente", "api", sessao["loja_id"]):
         try:
             autenticacao.trocar_senha(sessao["usuario_id"], entrada.senha_atual, entrada.senha_nova,
-                                      manter_sessao=token_do_pedido(request))
+                                      manter_sessao=token_do_pedido(request), origem=_origem(request))
         except autenticacao.SenhaAtualErrada:
             raise ErroApi("invalido", {"senha_atual": "Senha atual incorreta."}) from None
         except autenticacao.MuitasTentativas:

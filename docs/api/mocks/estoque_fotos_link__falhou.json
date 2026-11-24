@@ -1,0 +1,7 @@
+{
+  "codigo": "invalido",
+  "mensagem": "Não consegui baixar a foto desse link. Confira se o link abre a foto direto (começando com https://) ou envie o arquivo da foto.",
+  "campos": {
+    "link": "Não consegui baixar a foto desse link."
+  }
+}
