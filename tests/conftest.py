@@ -37,11 +37,34 @@ from app import ator, lojas, logs, permissoes
 REDIS_BANCO_DE_TESTE = 15      # o Redis tem 16 "gavetas" (0 a 15); o Léo usa a 0
 
 
-def redis_de_teste(url_de_uso: str) -> str:
-    """Mesmo Redis, gaveta 15 (ou REDIS_URL_TESTE). Nunca a gaveta de uso."""
+REDIS_BANCO_DE_CARGA = 14      # AR (Maratona 4): o teste de carga (-m carga) tem gaveta própria
+REDIS_BANCO_DE_USO = 0
+
+
+def _na_gaveta(url_de_uso: str, gaveta: int) -> str:
     from urllib.parse import urlsplit, urlunsplit
     partes = urlsplit(url_de_uso or "redis://localhost:6379/0")
-    return urlunsplit(partes._replace(path=f"/{REDIS_BANCO_DE_TESTE}"))
+    return urlunsplit(partes._replace(path=f"/{gaveta}"))
+
+
+def redis_de_teste(url_de_uso: str) -> str:
+    """Mesmo Redis, gaveta 15 (ou REDIS_URL_TESTE). Nunca a gaveta de uso."""
+    return _na_gaveta(url_de_uso, REDIS_BANCO_DE_TESTE)
+
+
+def redis_de_carga(url_de_uso: str) -> str:
+    """AR: mesmo Redis, gaveta 14 (ou REDIS_URL_CARGA). Nunca a gaveta de uso."""
+    return _na_gaveta(url_de_uso, REDIS_BANCO_DE_CARGA)
+
+
+def _gaveta(url: str) -> str:
+    """Número da gaveta no endereço ("redis://h:1" sem gaveta = 0)."""
+    from urllib.parse import urlsplit
+    return urlsplit(url or "").path.strip("/") or "0"
+
+
+def _mesmo_redis_e_gaveta(a: str, b: str) -> bool:
+    return _gaveta(a) == _gaveta(b) and a.split("@")[-1].split("/")[0] == b.split("@")[-1].split("/")[0]
 
 
 def pytest_configure(config):
@@ -51,15 +74,19 @@ def pytest_configure(config):
     REDIS_URL_TESTE), esvaziada no começo de cada rodada, como o banco "_teste" do PostgreSQL.
     (Apontar para um Redis desligado também isolava, mas cada tentativa recusada leva ~2 s no
     Windows e a suíte passou de 13 para ~75 minutos.) Só o teste de carga (-m carga) usa o
-    REDIS_URL de uso. Roda antes de qualquer teste importar app.redis_cliente (que lê o REDIS_URL)."""
+    REDIS_URL de uso. Roda antes de qualquer teste importar app.redis_cliente (que lê o REDIS_URL).
+    AR (Maratona 4): o teste de carga (-m carga) também deixou de usar a gaveta de uso: ele usa a
+    gaveta 14 (ou REDIS_URL_CARGA), esvaziada no começo, e recusa rodar na gaveta 0."""
     expressao = (config.getoption("markexpr") or "").replace("not carga", "")
-    if "carga" in expressao:
-        return
     uso = os.environ.get("REDIS_URL", "")
-    teste = os.environ.get("REDIS_URL_TESTE") or redis_de_teste(uso)
-    if teste.rstrip("/").split("/")[-1] == (uso.rstrip("/").split("/")[-1] if uso else "0") \
-            and teste.split("@")[-1].split("/")[0] == uso.split("@")[-1].split("/")[0]:
-        pytest.exit("O Redis dos testes não pode ser a mesma gaveta do Redis de uso.", returncode=4)
+    if "carga" in expressao:
+        teste = os.environ.get("REDIS_URL_CARGA") or redis_de_carga(uso)
+        if _gaveta(teste) == str(REDIS_BANCO_DE_USO) or _mesmo_redis_e_gaveta(teste, uso):
+            pytest.exit("O teste de carga não pode rodar na gaveta de uso do Redis (0).", returncode=4)
+    else:
+        teste = os.environ.get("REDIS_URL_TESTE") or redis_de_teste(uso)
+        if _mesmo_redis_e_gaveta(teste, uso or "redis://localhost:6379/0"):
+            pytest.exit("O Redis dos testes não pode ser a mesma gaveta do Redis de uso.", returncode=4)
     os.environ["REDIS_URL"] = teste
     try:
         import redis

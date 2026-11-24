@@ -26,7 +26,12 @@
           "texto": "amanhã 21:40"
         },
         "explicacao": null
-      }
+      },
+      "canais": [
+        "Instagram",
+        "WhatsApp"
+      ],
+      "como_chegou": "Comentário"
     },
     {
       "lead": "5581999990001",
@@ -53,7 +58,11 @@
           "texto": "amanhã 21:40"
         },
         "explicacao": null
-      }
+      },
+      "canais": [
+        "WhatsApp"
+      ],
+      "como_chegou": null
     }
   ],
   "com_vendedor": [
@@ -76,7 +85,11 @@
         "aberta": false,
         "fecha_em": null,
         "explicacao": "Faz mais de 24 h que o cliente não escreve."
-      }
+      },
+      "canais": [
+        "WhatsApp"
+      ],
+      "como_chegou": null
     }
   ],
   "conversas_de_hoje": [
@@ -105,7 +118,11 @@
           "texto": "amanhã 21:40"
         },
         "explicacao": null
-      }
+      },
+      "canais": [
+        "WhatsApp"
+      ],
+      "como_chegou": null
     },
     {
       "lead": "5581999990002",
@@ -129,7 +146,11 @@
           "texto": "amanhã 21:40"
         },
         "explicacao": null
-      }
+      },
+      "canais": [
+        "WhatsApp"
+      ],
+      "como_chegou": null
     }
   ]
 }

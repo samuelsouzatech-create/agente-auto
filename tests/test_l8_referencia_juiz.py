@@ -152,7 +152,7 @@ def test_validade_do_recado_sem_perguntar_vira_aviso(pasta_temporaria_da_bancada
 
 
 def test_checagem_de_trocas(pasta_temporaria_da_bancada):
-    from tools.registrar_troca import gravar_troca
+    from segmentos.veiculos.registrar_troca import gravar_troca
 
     class GrafoTroca(GrafoBancada):
         def invoke(self, entrada, config=None):

@@ -18,7 +18,7 @@ from app.jobs.pos_venda import rodar_pos_venda
 from app.jobs.remarketing import rodar_remarketing
 from app.lojas import criar_loja, salvar_config
 from app.relogio import para_banco
-from paginas.menu import CLIENTE, OPERADOR, arquivos
+from paginas.menu import OPERADOR, arquivos
 
 RAIZ = Path(__file__).resolve().parent.parent
 AGORA = datetime(2026, 10, 30, 13, 0, tzinfo=timezone.utc)
@@ -193,12 +193,10 @@ def test_modo_de_envio_le_o_env(monkeypatch):
 
 # ------------------------------------------------------------ tela
 
-def test_tela_e_dos_dois_paineis_e_compila():
-    assert "paginas/envios.py" in arquivos(CLIENTE)
+def test_tela_antiga_saiu_e_nao_esta_no_operador():
+    # AR (Maratona 4): paginas/envios.py era do painel do cliente (aposentado).
+    assert not (RAIZ / "paginas/envios.py").exists()
     assert "paginas/envios.py" not in arquivos(OPERADOR)
-    fonte = (RAIZ / "paginas/envios.py").read_text(encoding="utf-8")
-    assert "papel_atual()" in fonte and "exigir_operador" not in fonte
-    py_compile.compile(str(RAIZ / "paginas/envios.py"), doraise=True)
 
 
 def test_dados_da_tela_nao_importam_o_operador_nem_os_jobs():

@@ -174,7 +174,7 @@ def test_nome_do_cliente_exige_a_loja():
 def _textos_das_telas():
     """Todos os textos (strings) das telas, sem os docstrings (que ninguém vê)."""
     arquivos = sorted((RAIZ / "paginas").rglob("*.py"))
-    arquivos += [RAIZ / n for n in ("painel.py", "operador.py") if (RAIZ / n).exists()]
+    arquivos += [RAIZ / n for n in ("operador.py",) if (RAIZ / n).exists()]
     saida = []
     for caminho in arquivos:
         arvore = ast.parse(caminho.read_text(encoding="utf-8"))

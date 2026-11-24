@@ -287,3 +287,13 @@ Parte do F2 (fotos pelo painel):
   sessão (outra loja: 404), carro vendido: 422, no máximo 20 por carro.
 - Sem mudança de formato: `POST /auth/login` e `/auth/trocar-senha` passam a contar os 5 erros de
   senha por e-mail + origem (erro vindo de outro lugar não bloqueia o dono).
+
+## Contrato 1.3.0 (Maratona 4, IG3: Instagram)
+Só cresce (campos novos opcionais, nada removido nem renomeado):
+- `LinhaLead`, `CartaoConversa` e `CartaoCliente` ganham `canais` (lista com o nome dos canais do
+  cliente, ex. `["Instagram", "WhatsApp"]` quando é o mesmo cliente nos dois) e `como_chegou`
+  (`Anúncio`, `Perfil`, `Comentário`, `Direto` ou `null`).
+- `GET /leads` e `GET /atender` mostram UM cartão para o mesmo cliente do Instagram e do WhatsApp
+  (o do Instagram, que chegou primeiro). `GET /conversas/{lead}` traz o histórico dos dois canais,
+  em ordem; cada `Mensagem` já dizia o `canal`. Responder continua pelo canal da própria conversa.
+- Dados falsos atualizados: `leads__com_dados`, `atender__com_dados`, `conversas_lead__aguardando`.

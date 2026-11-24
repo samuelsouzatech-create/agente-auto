@@ -15,7 +15,8 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import banco
-from app.guarda_politica import (FRASE_CONTATO, FRASE_ESTADO, cortar_estado_inventado, tirar_palavra_de_tempo,
+from segmentos.veiculos.guardas import FRASE_ESTADO, cortar_estado_inventado                 # SG1: guardas do ramo
+from app.guarda_politica import (FRASE_CONTATO, tirar_palavra_de_tempo,
                                  tirar_texto_interno, trocar_frases_proibidas)
 
 RAIZ = Path(__file__).resolve().parents[1]

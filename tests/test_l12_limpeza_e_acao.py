@@ -14,8 +14,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import banco
 from app import lojas
-from app.guarda_politica import (FRASE_AGENDA, FRASE_CNH, FRASE_CONTATO, FRASE_ESTADO,
-                                 cortar_estado_inventado, limpar_repeticoes, tirar_agendamento_falso)
+from app.guarda_politica import FRASE_AGENDA, FRASE_CONTATO, limpar_repeticoes, tirar_agendamento_falso
+import segmentos.veiculos.guardas as guardas_veiculos                                     # SG1: guardas do ramo
+from segmentos.veiculos.guardas import FRASE_CNH, FRASE_ESTADO, cortar_estado_inventado
 
 LOJA_A, LOJA_B = 1, 2
 
@@ -285,7 +286,7 @@ def test_bancada_falha_acao_sem_ferramenta(bancada, monkeypatch):
 def test_bancada_falha_estado_sem_ficha(bancada, monkeypatch):
     rb = bancada
     from app.core import turno
-    monkeypatch.setattr(turno, "cortar_estado_inventado", lambda r, ficha="", **k: (r, False))   # desliga a guarda
+    monkeypatch.setattr(guardas_veiculos, "cortar_estado_inventado", lambda r, ficha="", **k: (r, False))   # desliga a guarda
     rodada = asyncio.run(rb.rodar([rb.validar_roteiro({"nome": "x", "falas": ["o civic é bom?"]}, "t")],
                                   Grafo("É um excelente carro."), teto=1.0))
     assert rodada.resultados[0].status == rb.FALHOU

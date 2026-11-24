@@ -361,5 +361,6 @@ def test_migracao_3():
     assert "autor" in col_m
 
 
-def test_pagina_conversas_compila():
-    py_compile.compile(str(RAIZ / "paginas" / "conversas.py"), doraise=True)
+def test_pagina_conversas_saiu_no_ar():
+    # AR (Maratona 4): a tela Conversas era do painel Streamlit do cliente (aposentado).
+    assert not (RAIZ / "paginas" / "conversas.py").exists()

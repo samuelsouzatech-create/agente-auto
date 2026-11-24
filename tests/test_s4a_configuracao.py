@@ -314,11 +314,8 @@ def test_tela_avisa_conflito_e_nao_grava(nome_operador):
     assert any("Outra pessoa salvou" in w.value for w in at.warning)
 
 
-def test_telas_antigas_continuam_abrindo(nome_operador):
-    cliente = AppTest.from_file(str(RAIZ / "paginas" / "configuracao.py"), default_timeout=30)
-    cliente.session_state["_papel"] = "cliente"
-    cliente.session_state["_loja_cliente"] = 1
-    cliente.run()
-    assert not cliente.exception, cliente.exception
+def test_telas_antigas_sairam(nome_operador):
+    # AR (Maratona 4): a Configuração do cliente (painel Streamlit do cliente) saiu.
+    assert not (RAIZ / "paginas" / "configuracao.py").exists()
     # S10b: a tela antiga "Plano e limites" saiu (o assunto Plano e limites ficou).
     assert not (RAIZ / "paginas" / "plano.py").exists()

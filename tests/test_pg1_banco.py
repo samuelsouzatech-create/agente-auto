@@ -89,9 +89,12 @@ def _executar(comando, parametros=()):
 
 def test_base_tem_as_mesmas_tabelas_e_colunas_do_sqlite_v20():
     memoria = {"checkpoints", "checkpoint_blobs", "checkpoint_writes", "checkpoint_migrations"}
-    assert set(banco.tabelas()) == set(ESQUEMA_V20) | memoria     # PG2: + memória das conversas
+    # IG1 (Maratona 4): a migração 21 (Instagram) só ACRESCENTA tabelas e colunas, no fim.
+    mig21 = {"instagram_comentarios", "instagram_legendas", "clientes_vinculados", "pedidos_exclusao"}
+    novas_21 = {"mensagens": ("id_externo",), "leads": ("origem", "origem_detalhe", "telefone", "telefone_em")}
+    assert set(banco.tabelas()) == set(ESQUEMA_V20) | memoria | mig21     # PG2: + memória das conversas
     for tabela, colunas in ESQUEMA_V20.items():
-        assert tuple(banco.colunas(tabela)) == colunas, tabela
+        assert tuple(banco.colunas(tabela)) == colunas + novas_21.get(tabela, ()), tabela
 
 
 def test_base_tem_os_mesmos_indices_e_o_do_email():
@@ -106,10 +109,12 @@ def test_base_tem_os_mesmos_indices_e_o_do_email():
 
 
 def test_registro_de_migracoes_e_rodar_de_novo_nao_refaz_nada():
-    assert banco.versao_schema() == banco.VERSAO_SCHEMA == 20
+    # IG1 (Maratona 4): + a migração 21 (Instagram).
+    assert banco.versao_schema() == banco.VERSAO_SCHEMA == 21
     assert _um("SELECT nome FROM migracoes_aplicadas WHERE versao = 20") == "base_postgres"
+    assert _um("SELECT nome FROM migracoes_aplicadas WHERE versao = 21") == "instagram"
     assert banco.migrar() == []
-    assert _um("SELECT COUNT(*) FROM migracoes_aplicadas") == 1
+    assert _um("SELECT COUNT(*) FROM migracoes_aplicadas") == 2
     assert _um("SELECT COUNT(*) FROM lojas") == 1      # a semente não duplica
 
 
@@ -143,7 +148,7 @@ def test_migracao_com_erro_no_meio_nao_deixa_nada_pela_metade(tmp_path, monkeypa
     with pytest.raises(Exception):
         banco.migrar()
     assert "tabela_nova" not in banco.tabelas()
-    assert banco.versao_schema() == 20
+    assert banco.versao_schema() == 21      # IG1: a 21 (Instagram) já estava aplicada
 
 
 # ------------------------------------------------------------ tradução do SQL

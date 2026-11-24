@@ -255,6 +255,11 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
             continue
 
         _lembrar_ultima(loja_id, entrada.lead_id, entrada.id_externo)
+        try:                                   # IG3: o telefone que um lead do Instagram passou?
+            from app.instagram_whatsapp import vincular_mesmo_cliente
+            vincular_mesmo_cliente(loja_id, CANAL, entrada.lead_id)
+        except Exception:
+            _log.exception("[WhatsApp] Não consegui conferir o mesmo cliente do Instagram.")
         anotar_recebida(loja_id, CANAL, entrada.lead_id, entrada.id_externo)   # N3: antes do 200
         if entrada.tipo == "texto":
             tarefas.add_task(processar_mensagem, entrada.lead_id, entrada.texto, None, loja_id)
@@ -267,3 +272,12 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
                              entrada.tipo_original, loja_id)
 
     return Response(status_code=200)
+
+
+# IG1 (Maratona 4): GET/POST /webhook/instagram no MESMO servidor (app/api/webhook_instagram.py).
+from app.api.webhook_instagram import rotas as _rotas_instagram  # noqa: E402
+app.include_router(_rotas_instagram)
+
+# IG3 (I6): exclusão de dados a pedido da Meta (app/api/dados.py).
+from app.api.dados import rotas as _rotas_dados  # noqa: E402
+app.include_router(_rotas_dados)

@@ -17,5 +17,5 @@ def test_dono_pode_ser_cadastrado_na_loja():
 
 
 def test_arquivos_compilam():
-    for arquivo in ("paginas/usuarios.py", "scripts/login.py"):
+    for arquivo in ("scripts/login.py",):   # AR: paginas/usuarios.py saiu
         py_compile.compile(str(RAIZ / arquivo), doraise=True)

@@ -358,18 +358,8 @@ def assunto_da_equipe(texto: str) -> str | None:
     return next((nome for nome, p in _ASSUNTOS_COMPILADOS if p.search(frase)), None)
 
 
-# L5b: cliente pedindo valor do carro DELE ("quanto vocês pagam no meu", "quanto vale o meu").
-_VALOR_DA_TROCA = [
-    re.compile(r"\bquanto\s+(voces\s+|vcs\s+|vc\s+|voce\s+|a loja\s+)?"
-               r"(pagam|paga|dao|da|avaliam|avalia|oferecem|oferece)\s+(no|na|pelo|pela|pro|pra|por)\s+"
-               r"(meu|minha|o meu|a minha)\b"),
-    re.compile(r"\bquanto\s+(vale|valeria|sai)\s+(o\s+|a\s+)?(meu|minha)\b"),
-]
-
-
-def pediu_valor_da_troca(texto: str) -> bool:
-    frase = _sem_acento(texto)
-    return any(p.search(frase) for p in _VALOR_DA_TROCA)
+# SG1 (Maratona 4): "valor da troca" (pediu_valor_da_troca) é do ramo de veículos:
+# pacote do ramo de veículos (segmentos/<ramo>/guardas.py).
 
 
 def pergunta_curta(texto: str, limite: int = 120) -> str:
@@ -397,16 +387,8 @@ _REGRA_ENTRADA = re.compile(r"\bflexive\w*|\bvoce\s+(define|escolhe|decide)\b|\b
                             r"|\bqualquer\s+valor\b|\bentrada\s+minima\s+(e|de)\b")
 _RESSALVA_ENTRADA = re.compile(r"\b(depende|analise|aprovacao)\b")
 
-# Foto do carro do cliente: o Léo não avalia nem elogia o estado.
-ELOGIO_DO_ESTADO = re.compile(
-    r"\bbem\s+(conservad\w*|cuidad\w*)|\b(otimo|excelente|bom|perfeito|lindo|belo)\s+estado\b"
-    r"|\bestado\s+(impecavel|otimo|excelente|perfeito)\b|\bimpecave\w*|\bmuito\s+conservad\w*"
-    r"|\bparece\s+(estar\s+)?(muito\s+)?(bem|otimo|novo|novinho|conservad\w*)\b|\bnovinho\b")
-FRASE_FOTO_CARRO = "Obrigado pela foto!"
-
-# Pergunta sobre a loja aceitar troca (quando o cadastro não diz).
-_PERGUNTA_TROCA = re.compile(r"\b(aceita\w*|pega\w*|recebe\w*|trabalha\w*\s+com)\b[^.!?]{0,30}\btroca\b"
-                             r"|\bdar\b[^.!?]{0,30}\bna\s+troca\b|\b(da|daria)\s+pra\s+trocar\b|\btroca\s+(o|a|meu|minha)\b")
+# SG1: elogio ao estado do carro da foto do cliente e "aceita troca?" são do ramo de veículos
+# (pacote do ramo de veículos (segmentos/<ramo>/guardas.py)).
 
 
 # N5: palavra de tempo em promessa de contato ("logo vai falar", "em breve", "já já"): sai. A equipe
@@ -564,52 +546,8 @@ def trocar_politica_sem_base(resposta: str) -> tuple[str, list[str]]:
     return (" ".join(saida) if trocados else resposta), trocados
 
 
-@_mantem_linhas
-def tirar_elogio_do_estado(resposta: str) -> tuple[str, bool]:
-    """Foto do carro do cliente: tira as frases que avaliam/elogiam o estado.
-    Se não sobrar nada, fica só "Obrigado pela foto!"."""
-    frases = _frases_originais(resposta)
-    ficam = [f for f in frases if not ELOGIO_DO_ESTADO.search(_sem_acento(f))]
-    if len(ficam) == len(frases):
-        return resposta, False
-    return (" ".join(ficam) if ficam else FRASE_FOTO_CARRO), True
-
-
-# N5b (item 10): palavras de estado que também saem da descrição da foto.
-_ESTADO_NA_DESCRICAO = re.compile(r"\bconservacao\b|\bboas?\s+condic\w*|\bconservad\w*|\bbrilhant\w*"
-                                  r"|\bcuidad\w*|\bzerad\w*|\bimpecave\w*|\btinindo\b|\bnovinho\b")
-
-
-def tirar_elogio_da_descricao(descricao: str) -> str:
-    """Descrição da foto do carro sem julgamento de estado ("bom estado", "bem conservado",
-    "boas condições", "brilhante"). Só as palavras de estado saem; modelo, cor e riscos ficam."""
-    texto = str(descricao or "")
-    sem = _sem_acento(texto)
-    if not ELOGIO_DO_ESTADO.search(sem) and not _ESTADO_NA_DESCRICAO.search(sem):
-        return texto
-    trechos = [(m.start(), m.end()) for r in (ELOGIO_DO_ESTADO, _ESTADO_NA_DESCRICAO) for m in r.finditer(sem)]
-    trechos.sort()
-    saida, pos = [], 0
-    for ini, fim_ in trechos:                  # sem acento e original têm o mesmo tamanho
-        if ini >= pos:
-            saida.append(texto[pos:ini])
-            pos = fim_
-    saida.append(texto[pos:])
-    novo = "".join(saida)
-    # sobras: "em ," / "e ," / "muito ," / "de conservação" sem nada
-    anterior = None
-    while anterior != novo:                    # "em excelente estado de conservação" -> "em  de " -> ""
-        anterior = novo
-        novo = re.sub(r"\s*\b(em|e|com|muito|bem|de|num|em um|em uma)\s*(?=[,;.]|$)", "", novo,
-                      flags=re.IGNORECASE).rstrip()
-    novo = re.sub(r"\s*,\s*(,\s*)+", ", ", novo)
-    novo = re.sub(r"\s+([,;.])", r"\1", novo)
-    novo = re.sub(r"\s{2,}", " ", novo).strip(" ,.;")
-    return novo
-
-
-def pergunta_se_aceita_troca(texto: str) -> bool:
-    return bool(_PERGUNTA_TROCA.search(_sem_acento(texto)))
+# SG1: tirar_elogio_do_estado, tirar_elogio_da_descricao e pergunta_se_aceita_troca moram em
+# pacote do ramo de veículos (segmentos/<ramo>/guardas.py) (ganchos do ramo).
 
 
 # ======================================================================
@@ -763,69 +701,13 @@ def motivo_com_marcas(motivo: str, *, pos_venda: bool, urgente: bool) -> str:
 
 
 # ======================================================================
-# L12: estado do carro, agendamento sem ferramenta e limpeza de repetição
+# L12: agendamento sem ferramenta e limpeza de repetição
 # ======================================================================
-# Frase que afirma estado/qualidade de carro do estoque. Só fica se o fato vier da ficha
-# (o que as ferramentas devolveram no turno); hoje a ficha não tem estado, então sai.
-ESTADO_AFIRMADO = re.compile(
-    r"\bbem\s+(conservad\w*|cuidad\w*)|\bconservadissim\w*|\bmuito\s+conservad\w*"
-    r"|\b(otimo|excelente|bom|perfeito|impecavel)\s+estado\b|\bestado\s+(impecavel|otimo|excelente|perfeito)\b"
-    r"|\bimpecave\w*|\brevisad[oa]s?\b|\b(unico|um\s+so)\s+dono\b|\bnunca\s+(bateu|foi\s+batid\w*)"
-    r"|\bsem\s+(batida\w*|detalhe\w*|nenhum\s+detalhe|arranh\w*)|\btodo\s+original\b"
-    r"|\b(excelente|otimo|belo|lindo)\s+carro\b|\bcarro\s+(excelente|impecavel|perfeito)\b|\bnovinho\b")
-FRASE_ESTADO = "O estado do carro o pessoal da equipe confirma, e você pode ver pessoalmente aqui na loja."
-
-
-def _estado_com_assunto(original: str) -> str:
-    """N5: se a frase cortada falava de histórico/leilão/laudo/IPVA, a equipe confirma ESSE assunto."""
-    assunto = assunto_da_frase(original)
-    if not assunto or assunto == "a vistoria":
-        return FRASE_ESTADO
-    return f"O pessoal da equipe confirma {assunto} com você, e você pode ver o carro pessoalmente aqui na loja."
-ESTADO_VERIFICADO = re.compile(r"\b(verificac\w*|vistori\w*|inspec\w*|revis(ao|oes|ad\w*)|garant(ir|o|imos)\s+que)")
+# SG1: a guarda do estado do carro (cortar_estado_inventado, FRASE_ESTADO) mora em
+# pacote do ramo de veículos (segmentos/<ramo>/guardas.py) (gancho do ramo, passo 8 da lista N4).
+# Continua AQUI (usada também por tirar_fragmentos, do motor): nomes do item que nunca são "pedaço
+# solto". Pendência anotada no SG1: o vocabulário do item deveria vir do ramo.
 _PALAVRA_DE_CARRO = re.compile(r"\b(carros?|veiculos?|estoque|seminov\w*|modelo|civic|corolla|onix|gol|hb20|renegade)\b")
-ELOGIO_DE_CARRO = re.compile(r"\b(excelente|otimo|belo|lindo)\s+carro\b|\bcarro\s+(excelente|impecavel|perfeito)\b"
-                             r"|\bnovinho\b|\bimpecave\w*|\bbem\s+(conservad\w*|cuidad\w*)|\bconservadissim\w*")
-
-
-_VIRADA = re.compile(r"\b(mas|porem|contudo|entretanto|so\s+que)\b")
-
-
-def _negacao_perto(frase_normal: str, inicio: int) -> bool:
-    antes = frase_normal[max(0, inicio - 40):inicio]
-    viradas = list(_VIRADA.finditer(antes))
-    if viradas:
-        antes = antes[viradas[-1].end():]
-    return bool(_NEGA.search(antes))
-
-
-@_mantem_linhas
-def cortar_estado_inventado(resposta: str, ficha: str = "", substituir: bool = True) -> tuple[str, bool]:
-    """Corta a frase que afirma estado/qualidade do carro sem estar na ficha do turno.
-    A primeira vira FRASE_ESTADO; pergunta e negação ficam.
-    M1 (L13): pega também verificação/vistoria/inspeção/revisão/"garanto que" ligados ao carro ou
-    ao estoque. Elogio ("excelente carro", "bem conservado") ou conversa de pós-venda
-    (substituir=False): a frase só sai, sem frase no lugar."""
-    ficha_n = _sem_acento(ficha)
-    saida, trocou = [], False
-    for frase in _frases_originais(resposta):
-        f = _sem_acento(frase)
-        achado = ESTADO_AFIRMADO.search(f)
-        if not achado and _PALAVRA_DE_CARRO.search(f):
-            achado = ESTADO_VERIFICADO.search(f)
-        # "nunca bateu" é a própria afirmação. L14: a negação só protege se estiver PERTO, antes do
-        # trecho (até 40 letras) e sem "mas/porém" no meio ("não tenho acesso..., mas posso te
-        # garantir que todos passam por verificação" é afirmação).
-        if (not achado or f.rstrip().endswith("?") or _negacao_perto(f, achado.start())
-                or achado.group(0) in ficha_n):
-            saida.append(frase)
-            continue
-        if not trocou and substituir and not ELOGIO_DE_CARRO.search(f):
-            saida.append(_estado_com_assunto(frase))                  # N5: mantém o assunto
-        trocou = True
-    if trocou and not saida:
-        return "", True
-    return (" ".join(saida) if trocou else resposta), trocou
 
 
 # Disse que agendou, mas a ferramenta de agenda não gravou neste turno.
@@ -833,7 +715,6 @@ AGENDOU_DITO = re.compile(r"\b(agendei|marquei|deixei\s+(agendad|marcad)\w*|(est
                           r"|agendad[oa]\s+(para|pra)|confirmad[oa]\s+(para|pra)\s+(o\s+|a\s+)?(sabado|domingo|segunda"
                           r"|terca|quarta|quinta|sexta|amanha|hoje|dia))\b")
 FRASE_AGENDA = "Vou pedir para a equipe confirmar o horário."
-FRASE_CNH = "Para o test-drive, traga sua CNH válida."
 
 
 @_mantem_linhas

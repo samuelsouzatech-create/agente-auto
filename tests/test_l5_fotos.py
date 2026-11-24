@@ -114,7 +114,7 @@ def test_foto_de_carro_vai_ao_leo_com_chamado_de_avaliacao(duas_lojas):
 
 
 def test_foto_de_carro_anota_na_troca(duas_lojas):
-    from tools.registrar_troca import gravar_troca
+    from segmentos.veiculos.registrar_troca import gravar_troca
     gravar_troca(LOJA_A, LEAD, "Gol", 2015, 120000, "conservado")
     gravar_troca(LOJA_B, LEAD, "Uno", 2010, 0, "")
     _foto(LOJA_A, leitor(CARRO, "Gol prata, risco na porta"))
@@ -131,8 +131,10 @@ def test_foto_de_carro_com_chamado_aberto_soma_o_motivo(duas_lojas):
 
 
 def test_prompt_proibe_valor_pela_foto():
-    from app.core.montagem import PASTA_PROMPTS
-    base = (PASTA_PROMPTS / "base.md").read_text(encoding="utf-8")
+    from app.core.montagem import PASTA_PROMPTS, base_do_ramo
+    from tests.prompt_de_referencia import _loja
+    # SG1: os trechos de carro do base.md vêm do pacote do ramo; o base de uma loja de carros:
+    base = base_do_ramo((PASTA_PROMPTS / "base.md").read_text(encoding="utf-8"), _loja({}))
     assert "NUNCA dê valor nem faixa de preço pela foto" in base
     assert "Print de anúncio: procure o carro com consultar_estoque" in base
     assert "Pessoa na foto: não comente" in base

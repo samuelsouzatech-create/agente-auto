@@ -33,6 +33,7 @@ from app.handoff import estado_do_handoff
 from app.lojas import carregar_loja
 from app.mensagens import ja_respondeu
 from app.recados import recados_ativos
+from app.segmentos import NomesDoMotorEDosRamos
 from app.sombra import FERRAMENTAS_QUE_GRAVAM, RESPOSTA_DA_FERRAMENTA as RESPOSTA_DA_FERRAMENTA_SOMBRA
 from app.relogio import dia_local
 from app.retomada import retomada_recente
@@ -54,9 +55,11 @@ llm = ChatGoogleGenerativeAI(
 # Compatibilidade com código antigo que importava esta lista.
 ferramentas = TODAS_AS_FERRAMENTAS
 
-TOOLS_COM_LEAD_ID = {"registrar_troca", "agendar_visita", "registrar_lead",
-                     "acionar_handoff", "registrar_interesse"}
-TOOLS_COM_LOJA_ID = {f.name for f in TODAS_AS_FERRAMENTAS + FERRAMENTAS_EQUIPE}
+# SG1: os nomes do motor + os que o pacote do ramo declara (só de ramo já carregado).
+TOOLS_COM_LEAD_ID = NomesDoMotorEDosRamos({"agendar_visita", "registrar_lead", "acionar_handoff",
+                                           "registrar_interesse"}, "FERRAMENTAS_COM_LEAD_ID")
+TOOLS_COM_LOJA_ID = NomesDoMotorEDosRamos({f.name for f in TODAS_AS_FERRAMENTAS + FERRAMENTAS_EQUIPE},
+                                          "TODAS")
 TOOLS_COM_CANAL = {"registrar_interesse"}
 TOOLS_COM_AUTOR = {"registrar_recado"}     # L3/L4: autor vem do cadastro, nunca do modelo
 
@@ -186,7 +189,7 @@ def no_ferramentas(estado: EstadoConversa):
 
             chamada_ajustada = dict(chamada)
             chamada_ajustada["args"] = dict(chamada.get("args") or {})
-            if nome in TOOLS_COM_LOJA_ID or "loja_id" in (getattr(tool, "args", None) or {}):
+            if "loja_id" in (getattr(tool, "args", None) or {}) or nome in TOOLS_COM_LOJA_ID:
                 chamada_ajustada["args"]["loja_id"] = loja_id   # sempre sobrescreve
             if nome in TOOLS_COM_LEAD_ID:
                 chamada_ajustada["args"]["lead_id"] = lead_id

@@ -36,6 +36,8 @@ NOTAS_GRUPO = {
 }
 
 ROTULO_OPCAO = {
+    "pedido_ou_vendedor": "Quando o cliente pedir ou o vendedor for chamado",   # IG3
+    "nunca": "Nunca",
     "conversar": "Continua conversando",
     "esperar": "Manda uma mensagem de espera e fica quieto",
     "meio_termo": "Meio-termo: segue em assuntos simples, recusa preço e crédito",
@@ -142,6 +144,20 @@ CAMPOS: tuple[Campo, ...] = (
     Campo("instagram.limite_private_replies_h", "Limite de respostas privadas por hora",
           "inteiro", "Instagram", "Limite de uso do plano.", dono="operador"),
     Campo("instagram.texto_private_reply", "Texto da resposta privada", "texto_longo", "Instagram"),
+    Campo("instagram.texto_comentario_item", "Resposta privada quando o post é de um carro disponível "
+          "({item} vira o carro)", "texto_longo", "Instagram"),
+    Campo("instagram.texto_comentario_vendido", "Resposta privada quando o carro do post já foi vendido",
+          "texto_longo", "Instagram"),
+    Campo("instagram.texto_resposta_publica", "Resposta pública no comentário (curta, sem preço)",
+          "texto", "Instagram"),
+    Campo("instagram.comentarios_prazo_dias", "Responder comentários de até quantos dias", "inteiro",
+          "Instagram"),
+    Campo("instagram.oferecer_whatsapp", "Oferecer o WhatsApp no Instagram", "opcao", "Instagram",
+          "O assistente manda o link do WhatsApp da loja quando o cliente pede ou quando chama o vendedor.",
+          ("pedido_ou_vendedor", "nunca")),
+    Campo("instagram.whatsapp_da_loja", "WhatsApp da loja (para o link)", "texto", "Instagram"),
+    Campo("instagram.prazo_mesmo_cliente_dias", "Juntar Instagram e WhatsApp do mesmo cliente por até "
+          "quantos dias", "inteiro", "Instagram"),
     Campo("custos.teto_diario_llm", "Teto diário de gasto com IA (alerta, R$)",
           "decimal_opcional", "Custos", "Vazio = sem teto. Definido depois de medir.",
           dono="operador"),

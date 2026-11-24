@@ -5,7 +5,7 @@ vira "não informado" e nunca apaga um km já conhecido; o vendedor vê
 """
 from banco import conectar
 from app.painel_leitura import cartao_do_lead
-from tools import registrar_troca
+from segmentos.veiculos.registrar_troca import registrar_troca
 
 LEAD = "5581988887777"
 

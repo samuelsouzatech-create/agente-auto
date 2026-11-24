@@ -322,12 +322,8 @@ def test_telas_novas_sem_texto_tecnico():
             assert proibido not in texto, (nome, proibido)
 
 
-def test_telas_antigas_continuam_abrindo(nome_operador):
+def test_telas_antigas_sairam(nome_operador):
+    # AR (Maratona 4): Estoque e Conhecimento do painel Streamlit do cliente saíram; o operador
+    # cuida dos dois (Configuração > Estoque / Conhecimento, testados acima).
     for arquivo in ("estoque.py", "conhecimento.py"):
-        for papel in ("cliente", "operador"):
-            at = AppTest.from_file(str(RAIZ / "paginas" / arquivo), default_timeout=30)
-            at.session_state["_papel"] = papel
-            at.session_state["_loja_cliente"] = 1
-            at.session_state["loja_id"] = 1
-            at.run()
-            assert not at.exception, (arquivo, papel, at.exception)
+        assert not (RAIZ / "paginas" / arquivo).exists()

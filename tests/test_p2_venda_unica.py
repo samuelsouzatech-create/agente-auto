@@ -72,7 +72,7 @@ def test_marcar_status_recusa_situacao_desconhecida():
 
 
 def test_reservado_e_indisponivel_saem_da_oferta_do_leo():
-    from tools import consultar_estoque
+    from segmentos.veiculos.consultar_estoque import consultar_estoque
     carro = _carro(1)
     for situacao in ("reservado", "indisponivel"):
         marcar_status(carro, situacao, 1)
@@ -164,8 +164,8 @@ def test_so_existe_um_botao_de_venda_no_streamlit():
     telas = _telas()
     com_venda = sorted(nome for nome, texto in telas.items() if "registrar_venda(" in texto)
     # S5: a tela "Ver como a loja" do operador ganhou o seu botao (loja Em teste).
-    # A antiga (conversas.py) sai no S10. Cada uma chama o caminho unico uma vez.
-    assert com_venda == ["paginas/conversas.py", "paginas/operador/ver_como.py"]
+    # AR (Maratona 4): a antiga (paginas/conversas.py, do painel do cliente) saiu.
+    assert com_venda == ["paginas/operador/ver_como.py"]
     for nome in com_venda:
         assert telas[nome].count("registrar_venda(") == 1
 

@@ -8,7 +8,7 @@ Nunca derruba a conversa.
 """
 from __future__ import annotations
 
-from app.segmentos import modulo_do_segmento
+from app.segmentos import modulo_do_segmento, ramo_da_loja
 
 GANCHO = "comprador"
 FUNCAO = "contexto_do_lead"
@@ -19,7 +19,7 @@ def compras_do_cliente(loja, lead_id, canal) -> list[dict]:
     if not lead_id:
         return []
     try:
-        segmento = getattr(loja, "segmento", None) or "veiculos"
+        segmento = ramo_da_loja(loja)
         modulo = modulo_do_segmento(segmento, GANCHO)
         funcao = getattr(modulo, FUNCAO, None) if modulo else None
         if funcao is None:

@@ -49,7 +49,11 @@ from app.guarda_politica import (  # noqa: E402
 )
 from app.recados import termos_da_condicao  # noqa: E402
 from app.core.turno import _agenda_do_turno, _fichas_do_turno, internos_do_turno, resposta_do_turno  # noqa: E402
-from app.guarda_politica import FRASES_PROIBIDAS, ELOGIO_DO_ESTADO  # noqa: E402
+from app.guarda_politica import FRASES_PROIBIDAS  # noqa: E402
+from segmentos.veiculos.guardas import ELOGIO_DO_ESTADO  # noqa: E402  (SG1: guarda do ramo)
+# SG1: a conferência da bancada guarda a SUA referência da guarda do estado (como antes, quando ela
+# vinha de outro módulo): um teste que desliga a guarda do turno não desliga a conferência.
+from segmentos.veiculos.guardas import cortar_estado_inventado as _cortar_estado_da_bancada  # noqa: E402
 from app.naturalidade import parece_robotica  # noqa: E402
 from app.utils import extrair_texto, mensagens_do_turno  # noqa: E402
 
@@ -1490,7 +1494,8 @@ def checar_texto_interno_e_repeticao(res: "ResultadoRoteiro") -> None:
 
 
 def checar_acao_e_estado(res: "ResultadoRoteiro") -> None:
-    from app.guarda_politica import AGENDOU_DITO, cortar_estado_inventado
+    from app.guarda_politica import AGENDOU_DITO
+    cortar_estado_inventado = _cortar_estado_da_bancada
     for turno in res.turnos:
         if turno.do_job or not turno.bolhas:
             continue

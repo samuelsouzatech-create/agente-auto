@@ -121,8 +121,11 @@ def interpretar(resposta_ia: str, uso: Uso | None = None) -> LeituraImagem:
         tipo = DOCUMENTO          # descrição com número de documento: trata como documento
     descricao = "" if tipo == DOCUMENTO else limpar_descricao(bruta)
     if tipo == CARRO:                     # N5b (item 10): estado sai; sem modelo, diz que não identificou
-        from app.guarda_politica import tirar_elogio_da_descricao
-        descricao = tirar_elogio_da_descricao(descricao)
+        # SG1: a guarda é do ramo. A leitura de foto ainda é só de carro (tipo CARRO; LEGADO na
+        # catraca de ramo), então vale o ramo padrão.
+        from app.segmentos import RAMO_PADRAO, gancho
+        sem_elogio = gancho(RAMO_PADRAO, "guardas", "tirar_elogio_da_descricao")
+        descricao = sem_elogio(descricao) if sem_elogio is not None else descricao
         if not _TEM_MODELO.search(_sem_acento_img(descricao)):
             descricao = f"modelo não identificado, {descricao}" if descricao else "modelo não identificado"
         descricao = descricao[:MAX_DESCRICAO].rstrip()          # o limite de 200 letras vale no fim

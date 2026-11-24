@@ -206,12 +206,7 @@ def test_tela_canais_testa_conexao(nome_operador, monkeypatch):
     assert any("Chave encontrada" in s.value for s in at.success)
 
 
-def test_telas_antigas_continuam_abrindo(nome_operador):
-    # S10b: a tela antiga "Lojas e canais" saiu.
-    for arquivo, papel in (("usuarios.py", "cliente"), ("usuarios.py", "operador")):
-        at = AppTest.from_file(str(RAIZ / "paginas" / arquivo), default_timeout=30)
-        at.session_state["_papel"] = papel
-        at.session_state["_loja_cliente"] = 1
-        at.session_state["loja_id"] = 1
-        at.run()
-        assert not at.exception, (arquivo, papel, at.exception)
+def test_telas_antigas_sairam(nome_operador):
+    # S10b: a tela antiga "Lojas e canais" saiu. AR (Maratona 4): Usuários (painel Streamlit do
+    # cliente) também; a equipe é cuidada no operador (Configuração > Equipe), testado acima.
+    assert not (RAIZ / "paginas" / "usuarios.py").exists()

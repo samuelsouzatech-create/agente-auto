@@ -165,11 +165,10 @@ def test_api_campos_de_horario():
     assert dias[6]["fechado"] and dias[6]["abre"] is None and dias[6]["fecha"] is None
 
 
-def test_fila_antiga_usa_a_conta_unica():
-    with open(os.path.join(RAIZ, "paginas", "handoff.py"), encoding="utf-8") as f:
-        texto = f.read()
-    assert "minutos_no_expediente" in texto
-    assert "datetime.now" not in texto
+def test_fila_antiga_saiu_no_ar():
+    # AR (Maratona 4): a fila antiga (painel Streamlit do cliente) saiu; a do painel novo usa a
+    # mesma conta (test_h14_horario.py confere app/api_painel/atender.py).
+    assert not os.path.exists(os.path.join(RAIZ, "paginas", "handoff.py"))
 
 
 def test_documento_de_politicas_nao_repete_horario():

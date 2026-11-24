@@ -235,11 +235,8 @@ def test_renomear_loja():
 
 
 # ====================================================== Páginas
-ARQUIVOS_DO_PAINEL = [
-    "painel.py", "paginas/comum.py", "paginas/handoff.py", "paginas/estoque.py",
-    "paginas/resultados.py", "paginas/configuracao.py", "paginas/conhecimento.py",
-    "paginas/usuarios.py",
-]
+# AR (Maratona 4): o painel Streamlit do cliente saiu; sobram as peças compartilhadas.
+ARQUIVOS_DO_PAINEL = ["paginas/comum.py", "paginas/form_config.py", "operador.py"]
 
 
 @pytest.mark.parametrize("arquivo", ARQUIVOS_DO_PAINEL)

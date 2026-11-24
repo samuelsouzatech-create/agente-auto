@@ -1,8 +1,7 @@
-from tools.consultar_estoque import consultar_estoque
-from tools.detalhes_veiculo import detalhes_veiculo
+# SG1: consultar_estoque, detalhes_veiculo e registrar_troca são do ramo de veículos
+# (pacote do ramo, segmentos/<ramo>/). O motor não conhece carro.
 from tools.enviar_fotos import enviar_fotos
 from tools.simular_financiamento import simular_financiamento
-from tools.registrar_troca import registrar_troca
 from tools.agendar_visita import agendar_visita
 from tools.registrar_lead import registrar_lead
 from tools.acionar_handoff import acionar_handoff
@@ -11,9 +10,9 @@ from tools.registrar_interesse import registrar_interesse
 from tools.utils import formatar_brl
 
 __all__ = [
-    "consultar_estoque", "detalhes_veiculo", "enviar_fotos",
+    "enviar_fotos",
     "simular_financiamento",
-    "registrar_troca", "agendar_visita", "registrar_lead",
+    "agendar_visita", "registrar_lead",
     "acionar_handoff", "buscar_conhecimento", "registrar_interesse",
     "formatar_brl",
 ]

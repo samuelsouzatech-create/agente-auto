@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 import banco
 from app import lojas
-from app.categorias import HATCH, PICAPE, SEDA, SUV, categoria_do_modelo, categoria_pedida
+from segmentos.veiculos.categorias import HATCH, PICAPE, SEDA, SUV, categoria_do_modelo, categoria_pedida
 from app.guarda_politica import promete_contato_da_equipe
 
 LOJA_A, LOJA_B = 1, 2
@@ -83,7 +83,7 @@ def test_categoria_pedida(texto, categoria):
 
 
 def test_suv_acha_o_renegade_e_nao_ve_a_outra_loja(duas_lojas):
-    from tools.consultar_estoque import consultar_estoque
+    from segmentos.veiculos.consultar_estoque import consultar_estoque
     a = consultar_estoque.invoke({"categoria": "SUV", "loja_id": LOJA_A})
     assert "Renegade" in a and "HB20" not in a and "Corolla" not in a
     assert "Compass" not in a
@@ -92,18 +92,18 @@ def test_suv_acha_o_renegade_e_nao_ve_a_outra_loja(duas_lojas):
 
 
 def test_suv_no_campo_modelo_tambem_vale(duas_lojas):
-    from tools.consultar_estoque import consultar_estoque
+    from segmentos.veiculos.consultar_estoque import consultar_estoque
     assert "Renegade" in consultar_estoque.invoke({"modelo": "SUV", "loja_id": LOJA_A})
 
 
 def test_categoria_desconhecida_avisa(duas_lojas):
-    from tools.consultar_estoque import consultar_estoque
+    from segmentos.veiculos.consultar_estoque import consultar_estoque
     texto = consultar_estoque.invoke({"categoria": "esportivo", "loja_id": LOJA_A})
     assert "Não sei filtrar" in texto
 
 
 def test_sem_carro_da_categoria_avisa_dos_que_nao_sabe_classificar():
-    from tools.consultar_estoque import consultar_estoque
+    from segmentos.veiculos.consultar_estoque import consultar_estoque
     _config(LOJA_A, {})
     _carro(LOJA_A, "Fiat", "Doblò", 52000)
     texto = consultar_estoque.invoke({"categoria": "picape", "loja_id": LOJA_A})
@@ -112,7 +112,7 @@ def test_sem_carro_da_categoria_avisa_dos_que_nao_sabe_classificar():
 
 
 def test_busca_sem_categoria_continua_igual(duas_lojas):
-    from tools.consultar_estoque import consultar_estoque
+    from segmentos.veiculos.consultar_estoque import consultar_estoque
     texto = consultar_estoque.invoke({"loja_id": LOJA_A})
     assert all(m in texto for m in ("Renegade", "HB20", "Corolla"))
 
