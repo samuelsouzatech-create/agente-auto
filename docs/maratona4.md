@@ -17,6 +17,7 @@ o computador acordado ligado no começo (24/11, 15:42) e desligado no fim.
 | SG2 catálogo e ramo de teste | segmentos-2 | feito (16:50) | 3.034 ok (802 + 1.242 + 990) |
 | IG0 documentação da Meta | instagram-0 | feito (17:00) | 3.037 ok (802 + 1.231 + 1.004) |
 | IG1 canal Instagram | instagram-1 | feito (17:15) | 3.064 ok (835 + 1.239 + 990) |
+| IG2 comentários viram conversa | instagram-2 | feito (17:30) | 3.085 ok (835 + 1.246 + 1.004) |
 
 ## Contradições com o roteiro, anotadas no começo (não graves: segui este pedido)
 - `docs/decisoes_e_roteiro.md`, seção 3: o pacote de ramo "não se faz agora; quando o segundo
@@ -441,3 +442,4 @@ ignorada; fora dos 7 dias; loja em teste; duas lojas (mesmo id de comentário, c
 diferentes); resposta pública desligada por padrão, uma só e nunca com preço; anúncio com origem
 "anuncio"; origem "comentario"; a pessoa responde e o Léo continua sabendo do carro; a porta agenda
 o comentário da loja certa; as palavras da loja filtram.
+- Suíte inteira, 3 partes: 835 + 1.246 + 1.004 = **3.085 passaram, 0 falhas** (3.064 + 21).
