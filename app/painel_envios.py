@@ -105,6 +105,14 @@ def inicio_do_mes(loja, agora: datetime) -> datetime:
     return datetime(hoje.year, hoje.month, 1, tzinfo=fuso(loja)).astimezone(timezone.utc)
 
 
+def uso_diario_reativacao(loja_id, agora: datetime) -> dict:
+    """E2-1: reativações enviadas hoje (dia da loja) e o limite do dia."""
+    from app.reativacao import usados_no_dia
+    loja = carregar_loja(exigir_loja(loja_id))
+    return {"usados": usados_no_dia(loja, agora, real=True),
+            "limite": loja.get("remarketing.limite_diario_reativacao")}
+
+
 def uso_do_limite(loja_id, agora: datetime) -> dict:
     loja_id = exigir_loja(loja_id)
     loja = carregar_loja(loja_id)

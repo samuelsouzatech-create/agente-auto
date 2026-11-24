@@ -62,6 +62,8 @@ with aba_agora:
     c1.metric("Podem receber a retomada agora", dados["podem_agora"])
     c2.metric("Contatos usados no mês (retomada + reativação)", uso)
     c3.metric("Modo da retomada", dados["modo"])
+    hoje = pe.uso_diario_reativacao(loja.id, agora)
+    st.caption(f'Reativação da base hoje: {hoje["usados"]} de {hoje["limite"]} (limite diário).')
     st.caption("Retomada: a mesma regra que o robô confere logo antes de enviar. "
                "Pós-venda e reativação: veja o que ficou gravado em “No mês”.")
     if not dados["itens"]:

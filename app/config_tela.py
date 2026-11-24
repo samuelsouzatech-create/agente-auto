@@ -120,6 +120,9 @@ CAMPOS: tuple[Campo, ...] = (
     Campo("remarketing.dias_envio", "Dias de envio", "dias", "Remarketing"),
     Campo("remarketing.limite_mensal", "Limite mensal de envios", "inteiro_opcional",
 "Remarketing", "Do contrato. Vazio enquanto não estiver definido.", dono="operador"),
+    Campo("remarketing.limite_diario_reativacao", "Limite diário da reativação da base",
+          "inteiro", "Remarketing", "Quantas mensagens de reativação podem sair por dia (dia da "
+          "loja). Suba aos poucos. 0 = não envia.", dono="operador"),
     Campo("remarketing.carencia_dias", "Dias sem retomada depois do atendimento", "inteiro",
           "Remarketing", "Conta do dia em que o vendedor atendeu ou a visita foi marcada. "
           "0 = sem pausa.", dono="operador"),
@@ -189,7 +192,8 @@ GRUPOS_DO_ASSUNTO = {
     PLANO_E_LIMITES: ("Módulos", "Custos"),
 }
 CAMPOS_AVULSOS_DO_ASSUNTO = {
-    PLANO_E_LIMITES: ("remarketing.limite_mensal", "instagram.limite_private_replies_h"),
+    PLANO_E_LIMITES: ("remarketing.limite_mensal", "remarketing.limite_diario_reativacao",
+                      "instagram.limite_private_replies_h"),
 }
 GRUPOS_FORA_DA_CONFIGURACAO = {
     "Envios": MENSAGENS_AUTOMATICAS,

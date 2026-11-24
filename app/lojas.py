@@ -57,6 +57,7 @@ CHAVES_DO_OPERADOR = frozenset({
     *(f"envio_real.{t}" for t in TIPOS_ENVIO),
     "custos.teto_diario_llm",
     "remarketing.limite_mensal", "remarketing.carencia_dias",
+    "remarketing.limite_diario_reativacao",
     "instagram.limite_private_replies_h",
     "modo_sombra",                                   # L9: só o operador liga/desliga
 })
@@ -92,6 +93,7 @@ PADROES: dict = {
         "horario_envio": "09:00-19:00",
         "dias_envio": [0, 1, 2, 3, 4, 5],
         "carencia_dias": 7, "limite_mensal": None,                # definido no contrato
+        "limite_diario_reativacao": 30,           # E2-1: valor inicial baixo (decisão A8 fecha o número)
     },
     "pos_venda": {
         "revisao_meses": 6, "revisao_km": 10000,
@@ -272,6 +274,7 @@ EDITAVEIS: dict[str, Callable] = {
     "remarketing.dias_envio": _dias,
     "remarketing.limite_mensal": _opcional(_int(0, 100_000)),
     "remarketing.carencia_dias": _int(0, 90),
+    "remarketing.limite_diario_reativacao": _int(0, 5_000),
     "pos_venda.revisao_meses": _int(1, 24),
     "pos_venda.revisao_km": _int(1000, 50_000),
     "pos_venda.troca_avista_meses": _int(3, 60),

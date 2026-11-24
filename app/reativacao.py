@@ -26,7 +26,7 @@ from app.bloqueios import leads_bloqueados
 from app.chaves import exigir_loja
 from app.lojas import carregar_loja, modulo_ativo
 from app.registro import registrar
-from app.relogio import agora_utc, dia_local, do_banco, para_banco
+from app.relogio import agora_utc, dia_local, do_banco, limites_do_dia_em_utc, para_banco
 from app.telefone import normalizar_telefone_br
 
 OPCOES_MESES = (3, 6, 12, 24)
@@ -333,3 +333,30 @@ def reativacao_recente(loja_id, lead_id: str, agora: datetime) -> dict | None:
     if not linha or not (linha["texto"] or "").strip():
         return None
     return {"toque": 1, "texto": linha["texto"].strip(), "enviado_em": do_banco(linha["enviado_em"])}
+
+
+# ------------------------------------------------------------ E2-1: limite diário
+
+def usados_no_dia(loja, agora: datetime, *, real: bool) -> int:
+    """Reativações do dia local da loja. No envio real contam as enviadas; na simulação,
+    as simuladas também (a simulação mostra exatamente o que o limite deixaria sair)."""
+    agora = agora.replace(tzinfo=timezone.utc) if agora.tzinfo is None else agora
+    de, ate = limites_do_dia_em_utc(loja.get("fuso"), dia_local(loja, agora))
+    conexao = conectar()
+    try:
+        linha = conexao.execute(
+            "SELECT COUNT(*) FROM reativacao WHERE loja_id = ? AND ("
+            "(estado = 'enviado' AND enviado_em >= ? AND enviado_em < ?) "
+            "OR (? = 0 AND estado = 'simulado' AND atualizado_em >= ? AND atualizado_em < ?))",
+            (exigir_loja(loja.id), de, ate, int(real), de, ate)).fetchone()
+    finally:
+        conexao.close()
+    return int(linha[0])
+
+
+def vagas_no_dia(loja, agora: datetime, *, real: bool) -> int:
+    """Quantas reativações ainda cabem hoje (dia da loja). Sem limite definido: nenhuma."""
+    limite = loja.get("remarketing.limite_diario_reativacao")
+    if limite is None:
+        return 0
+    return max(0, int(limite) - usados_no_dia(loja, agora, real=real))
