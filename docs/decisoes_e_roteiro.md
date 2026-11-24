@@ -285,3 +285,6 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
 - 24/11/2026, AR (Maratona 4): **Streamlit do cliente aposentado** (decisão do analista pela D11:
   no piloto o operador faz Configuração, Conhecimento e Equipe pelo lojista). Teste de carga na
   gaveta 14 do Redis (nunca na 0). Portas documentadas: operador 8502, simulador 8501, webhook 8000.
+- 24/11/2026, SG1: **muda a seção 3** ("isso não se faz agora"): por este pedido, o motor foi separado
+  do pacote de veículos já (contrato em `docs/pacote_de_ramo.md`, catraca de ramo). O comportamento das
+  lojas de carro não mudou (prompt igual letra por letra). Ainda de carro no motor: lista LEGADO.
