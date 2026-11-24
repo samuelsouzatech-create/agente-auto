@@ -269,3 +269,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
 - 24/11/2026, PG3: 10 lojas ao mesmo tempo sem perder nem cruzar mensagem (depois de 2 consertos
   no Redis). Nova pendência para decidir: o turno fica lento com muitas lojas (acesso ao banco
   síncrono). Pedido para o bloco Docker: Redis só em 127.0.0.1.
+- 24/11/2026, DK0 (Maratona Docker): mapa das peças em `docs/docker.md`. Nada mudou. Vistos: portas
+  desencontradas na documentação (operador 8501 × 8502) e o webhook sem comando escrito.
