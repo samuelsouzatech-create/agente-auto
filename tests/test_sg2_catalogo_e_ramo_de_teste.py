@@ -275,6 +275,7 @@ sys.path.insert(0, sys.argv[1])
 os.environ["GOOGLE_API_KEY"] = "chave-falsa"
 import banco
 banco.apontar_para(sys.argv[2])
+banco.declarar_sistema("teste: processo separado do SG2")   # SE3: como todo programa que liga sozinho
 from langchain_core.messages import AIMessage
 from app import segmentos
 segmentos.RAMOS_OCULTOS_LIGADOS = True

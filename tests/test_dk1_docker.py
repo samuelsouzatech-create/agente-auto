@@ -103,7 +103,9 @@ def test_compose_nao_tem_senha_escrita(compose):
         if re.search(r"(SENHA|PASSWORD|TOKEN|SECRET|KEY)\s*[:=]", linha, re.I):
             assert "${" in linha, linha
     ambiente = compose["services"]["api-painel"]["environment"]
-    assert "${POSTGRES_SENHA" in ambiente["BANCO_URL"] and "@postgres:5432/" in ambiente["BANCO_URL"]
+    # SE3: o app usa o usuário leo_app (senha BANCO_APP_SENHA); o dono (POSTGRES_SENHA) só no migrar
+    assert "${BANCO_APP_SENHA" in ambiente["BANCO_URL"] and "@postgres:5432/" in ambiente["BANCO_URL"]
+    assert "${POSTGRES_SENHA" in compose["services"]["migrar"]["environment"]["BANCO_URL"]
     assert "${REDIS_SENHA" in ambiente["REDIS_URL"] and "@redis:6379/" in ambiente["REDIS_URL"]
 
 

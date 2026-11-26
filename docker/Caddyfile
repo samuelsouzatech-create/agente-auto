@@ -20,6 +20,8 @@
 		X-Content-Type-Options nosniff
 		Referrer-Policy same-origin
 		X-Frame-Options SAMEORIGIN
+		# SE4: a tela não usa câmera, microfone, localização nem pagamento pelo navegador.
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
 		-Server
 	}
 }
@@ -30,6 +32,10 @@
 	encode zstd gzip
 
 	handle /api/* {
+		# SE4: corpo de pedido com limite (a maior coisa que entra é uma foto de até 15 MB).
+		request_body {
+			max_size 20MB
+		}
 		reverse_proxy api-painel:8001 {
 			import repassar
 		}
@@ -38,6 +44,10 @@
 	# IG1: /webhook/instagram também vai para o mesmo servidor do webhook.
 	@webhook path /webhook /webhook/instagram /dados/excluir /dados/excluir/*
 	handle @webhook {
+		# SE4: a Meta manda pedidos pequenos (texto JSON); 1 MB sobra. Corpo gigante = recusado aqui.
+		request_body {
+			max_size 1MB
+		}
 		reverse_proxy webhook:8000 {
 			import repassar
 		}

@@ -102,7 +102,9 @@ PADROES: dict = {
     "financiamento": {"taxa_mensal": 0.019},
     "instagram": {
         "responder_comentarios": False,
-        "palavras_comentario": ["quero", "valor", "preço", "info"],
+        # SE0: lista maior (sem acento e sem maiúscula na comparação; máximo de 30 palavras).
+        "palavras_comentario": ["quero", "valor", "preço", "quanto", "info", "tem", "ainda tem", "disponível",
+                                "interesse", "financia", "parcela", "troca", "zap", "whatsapp"],
         "posts_comentario": "todos",
         "resposta_publica": False,
         "limite_private_replies_h": 20,

@@ -75,6 +75,8 @@ def test_estado_vazio_nao_apaga():
 
 
 def test_outra_loja_nao_mistura():
+    from tests.conftest import garantir_lojas  # SE3: a loja 42 precisa existir (chaves da loja)
+    garantir_lojas(42)
     _reg("Gol", 2015, 90000, loja_id=1)
     _reg("Gol", 2015, 0, loja_id=42)
     assert [t["km"] for t in _trocas(1)] == [90000]

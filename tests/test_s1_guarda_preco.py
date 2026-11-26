@@ -167,6 +167,8 @@ def test_remarketing_aceita_preco_da_conversa_e_nao_o_km():
 
 
 def test_preco_do_estoque_so_da_propria_loja():
+    from tests.conftest import garantir_lojas  # SE3: a loja 42 precisa existir (chaves da loja)
+    garantir_lojas(42)
     conexao = conectar()
     try:
         sql = ("INSERT INTO estoque (loja_id, marca, modelo, ano, km, cor, cambio, preco) "

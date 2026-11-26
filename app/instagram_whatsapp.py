@@ -11,6 +11,10 @@ Do Instagram para o WhatsApp e o "mesmo cliente" (IG3, Maratona 4).
    chega no WhatsApp DA MESMA LOJA uma mensagem desse telefone, dentro do prazo
    (instagram.prazo_mesmo_cliente_dias, padrão 7), as duas conversas viram UM cliente
    (clientes_vinculados, migração 21). Nunca entre lojas diferentes.
+   SE0 (Maratona Segurança): só junta se o contato do WhatsApp é NOVO nesta loja, ou seja, não
+   tem nenhuma mensagem aqui de antes da hora em que o telefone foi dado no Instagram. Se já
+   havia conversa (pode ser outra pessoa com esse número, ou um número digitado errado), NÃO
+   junta e anota no Registro da loja (uma vez), para a equipe conferir.
 """
 from __future__ import annotations
 
@@ -25,6 +29,7 @@ from banco import conectar
 OFERECER_PADRAO = "pedido_ou_vendedor"
 OPCOES_OFERECER = ("pedido_ou_vendedor", "nunca")
 PRAZO_PADRAO_DIAS = 7
+EVENTO_NAO_JUNTOU = "mesmo_cliente_nao_juntou"
 
 _PEDIU_WHATSAPP = re.compile(r"\b(whats\w*|zap|zapzap|wpp|uats\w*|watsap\w*)\b")
 _SEQUENCIA_DE_NUMERO = re.compile(r"(?:\+?\d[\d\s().-]{8,}\d)")
@@ -119,9 +124,19 @@ def vincular_mesmo_cliente(loja_id, canal: str, lead_id: str, agora=None) -> str
         if ja:
             return ja["lead_principal"]
         linha = conexao.execute(
-            "SELECT lead_id FROM leads WHERE loja_id = ? AND telefone = ? AND lead_id LIKE 'ig:%' "
+            "SELECT lead_id, telefone_em FROM leads WHERE loja_id = ? AND telefone = ? AND lead_id LIKE 'ig:%' "
             "AND telefone_em >= ? ORDER BY telefone_em DESC LIMIT 1", (loja_id, fone, desde)).fetchone()
         if not linha:
+            return None
+        antiga = conexao.execute(
+            "SELECT 1 FROM mensagens WHERE loja_id = ? AND lead_id = ? AND criado_em < ? LIMIT 1",
+            (loja_id, str(lead_id), linha["telefone_em"])).fetchone()
+        if antiga:
+            ja_anotado = conexao.execute(
+                "SELECT 1 FROM registro_acoes WHERE loja_id = ? AND acao = ? AND alvo = ? LIMIT 1",
+                (loja_id, EVENTO_NAO_JUNTOU, f"whatsapp:{lead_id}")).fetchone()
+            if not ja_anotado:
+                _anotar_que_nao_juntou(loja_id, str(lead_id), linha["lead_id"])
             return None
         conexao.execute(
             "INSERT INTO clientes_vinculados (loja_id, lead_principal, lead_vinculado, canal_vinculado) "
@@ -131,6 +146,20 @@ def vincular_mesmo_cliente(loja_id, canal: str, lead_id: str, agora=None) -> str
     finally:
         conexao.close()
     return linha["lead_id"]
+
+
+def _anotar_que_nao_juntou(loja_id: int, lead_whatsapp: str, lead_instagram: str) -> None:
+    """SE0: o telefone dado no Instagram já tinha conversa no WhatsApp desta loja. Vai para o
+    Registro (evento de sistema). Nunca derruba o webhook."""
+    try:
+        from app.ator import como_sistema
+        from app.registro import registrar
+        with como_sistema("Sistema", "webhook"):
+            registrar(EVENTO_NAO_JUNTOU, loja_id, None,
+                      {"motivo": "o WhatsApp já tinha conversa antes do telefone ser dado no Instagram",
+                       "conversa_do_instagram": lead_instagram}, alvo=f"whatsapp:{lead_whatsapp}")
+    except Exception as erro:
+        print(f"[Instagram][loja {loja_id}] Não consegui anotar no Registro: {erro!r}")
 
 
 def vinculos(loja_id) -> dict[str, str]:

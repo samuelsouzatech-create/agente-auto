@@ -203,9 +203,16 @@ def test_token_e_senha_nunca_em_log_nem_no_banco(caplog, capsys, enviados):
     assert token not in guardado and NOVA not in guardado
 
 
-def test_envio_padrao_so_escreve_no_terminal(capsys, monkeypatch):
+def test_envio_padrao_vai_por_email_e_nao_pelo_terminal(capsys, monkeypatch, tmp_path):
+    """SE2 (Maratona Segurança): antes o padrão escrevia o link no terminal (e no log do Docker).
+    Agora o padrão é a camada de e-mail (provedor falso: um .eml na pasta), e o terminal não vê nada."""
     monkeypatch.setenv("PAINEL_URL", "https://painel.exemplo.com/")
+    monkeypatch.setenv("LEO_EMAIL_PROVEDOR", "arquivo")
+    monkeypatch.setenv("LEO_EMAIL_PASTA", str(tmp_path / "emails"))
     _pessoa()
     links_senha.pedir_link(EMAIL)
-    erro = capsys.readouterr().err
-    assert EMAIL in erro and "https://painel.exemplo.com/criar-senha#token=" in erro
+    saida = capsys.readouterr()
+    assert "#token=" not in saida.out + saida.err
+    [eml] = list((tmp_path / "emails").glob("*.eml"))
+    texto = eml.read_bytes().decode("utf-8", "replace")
+    assert EMAIL in texto and "https://painel.exemplo.com/criar-senha#token=" in texto

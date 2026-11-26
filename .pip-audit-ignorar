@@ -1,0 +1,7 @@
+# SE1 (Maratona Segurança): falhas conhecidas que o pip-audit mostra e que NÃO valem para o Léo.
+# Uma por linha: o código e o porquê. O fluxo do GitHub (.github/workflows/testes.yml) lê os códigos.
+# Toda linha aqui é revista no SE4 e a cada atualização de pacote.
+PYSEC-2026-311   chromadb: execução de código no SERVIDOR do Chroma via repositório de modelo. O Léo usa o Chroma embutido (PersistentClient), sem servidor e sem trust_remote_code. Sem versão com conserto.
+PYSEC-2026-3814  chromadb: idem (servidor do Chroma, usuário autenticado). Não usamos servidor.
+PYSEC-2026-3815  chromadb: permissão por inquilino no SimpleRBACAuthorizationProvider do servidor. Não usamos servidor nem RBAC.
+PYSEC-2026-3813  chromadb: falta de checagem de inquilino no servidor. Não usamos servidor.

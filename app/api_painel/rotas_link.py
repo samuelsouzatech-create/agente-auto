@@ -16,6 +16,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
+import banco
 from app import links_vendedor, sessoes
 from app.api_painel.erros import ErroApi
 from app.api_painel.rotas_auth import _gravar_cookie
@@ -26,13 +27,15 @@ router = APIRouter(tags=["Link"])
 @router.get("/v/{token}", status_code=302)
 def abrir_link(token: str, request: Request):
     origem = request.client.host if request.client else "desconhecida"
-    if links_vendedor.link_errado_demais(origem):
-        raise ErroApi("muitas_tentativas")
-    try:
-        feito = links_vendedor.usar_link(token)
-    except links_vendedor.LinkRecusado as erro:
-        links_vendedor.anotar_link_errado(origem)
-        return RedirectResponse(links_vendedor.url_link_invalido(erro.motivo), status_code=302)
+    # SE3: antes de usar o link não há sessão nem loja; achar o link pelo token é modo sistema.
+    with banco.como_sistema("painel: link do vendedor (achar o link pelo token)"):
+        if links_vendedor.link_errado_demais(origem):
+            raise ErroApi("muitas_tentativas")
+        try:
+            feito = links_vendedor.usar_link(token)
+        except links_vendedor.LinkRecusado as erro:
+            links_vendedor.anotar_link_errado(origem)
+            return RedirectResponse(links_vendedor.url_link_invalido(erro.motivo), status_code=302)
     resposta = RedirectResponse(links_vendedor.url_da_conversa(feito["lead_id"]), status_code=302)
     _gravar_cookie(resposta, feito["sessao"], sessoes.LINK)
     return resposta

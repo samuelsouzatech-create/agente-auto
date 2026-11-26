@@ -23,7 +23,9 @@ x-leo: &leo
     - path: ${LEO_ENV_ARQUIVO:-.env}
       required: true
   environment: &leo-ambiente
-    BANCO_URL: postgresql://leo:${POSTGRES_SENHA:?coloque POSTGRES_SENHA no .env}@postgres:5432/leo
+    # SE3 (Maratona Segurança): o app conecta com o usuário leo_app, que NÃO é dono das tabelas e
+    # passa pela tranca por loja do banco (Row Level Security). Só o "migrar" usa o dono (leo).
+    BANCO_URL: postgresql://${BANCO_APP_USUARIO:-leo_app}:${BANCO_APP_SENHA:?coloque BANCO_APP_SENHA no .env}@postgres:5432/leo
     REDIS_URL: redis://:${REDIS_SENHA:?coloque REDIS_SENHA no .env}@redis:6379/0
     FOTOS_PASTA: /app/fotos_deposito
     PAINEL_ORIGEM: https://${LEO_DOMINIO:-localhost}
@@ -87,6 +89,11 @@ services:
     <<: *leo
     restart: "no"
     command: ["python", "-c", "import banco; banco.criar_tabelas()"]
+    environment:
+      <<: *leo-ambiente
+      # SE3: as migrações rodam com o DONO das tabelas, que também cria/atualiza o usuário leo_app
+      # (BANCO_APP_USUARIO e BANCO_APP_SENHA do .env) e dá a ele só ler e gravar.
+      BANCO_URL: postgresql://leo:${POSTGRES_SENHA:?coloque POSTGRES_SENHA no .env}@postgres:5432/leo
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,6 +130,23 @@ services:
       timeout: 6s
       retries: 3
       start_period: 90s
+
+  # SE1 (Maratona Segurança): o vigia confere a saúde de tudo a cada minuto e avisa o operador
+  # (Telegram de avisos) quando algo quebra. Não depende do banco nem do Redis para ligar (são
+  # justamente o que ele vigia) e NÃO recebe o docker.sock: confere as peças pela rede interna.
+  vigia:
+    <<: *leo
+    command: ["python", "-m", "app.vigia"]
+    depends_on: {}
+    healthcheck:
+      test: ["CMD", "python", "docker/saude.py", "vigia"]
+      interval: 60s
+      timeout: 6s
+      retries: 3
+      start_period: 120s
+    environment:
+      <<: *leo-ambiente
+      VIGIA_PECAS: ${VIGIA_PECAS:-webhook=http://webhook:8000/,api-painel=http://api-painel:8001/api/v1/saude,operador=http://operador:8502/_stcore/health,porteiro=http://porteiro:80/}
 
   operador:
     <<: *leo

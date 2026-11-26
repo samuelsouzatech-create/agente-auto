@@ -16,7 +16,12 @@ Links de criar e de redefinir senha (C2f do Plano Mestre; tabela da migração 1
   usado, encerra TODAS as sessões da pessoa, anota em acessos e grava no
   Registro (só "trocada", nunca a senha). A pessoa entra depois pelo login.
 - Senha fraca não gasta o link: a pessoa tenta de novo com o mesmo link.
-- Envio: ENVIADOR. Até haver provedor de e-mail, só escreve no terminal.
+- Envio: ENVIADOR. SE2 (Maratona Segurança): manda por e-mail (app/email_envio.py; provedor do
+  .env, padrão: o FALSO, que grava um .eml em logs/emails/). Antes o link ia para o terminal e,
+  no Docker, para o log: quem lia o log podia trocar a senha de qualquer pessoa. Agora o link e o
+  token nunca vão para log nem terminal.
+- SE2: limite também por ENDEREÇO (IP): MAX_PEDIDOS_POR_ORIGEM pedidos na janela, exista ou não
+  o e-mail (barra quem tenta muitos e-mails do mesmo lugar).
 - O link aponta para o front: PAINEL_URL + /criar-senha#token=... O que vem
   depois do # o navegador nunca manda ao servidor (não cai em log).
 """
@@ -40,6 +45,7 @@ VALIDADE_PEDIDO = timedelta(hours=1)
 VALIDADE_OPERADOR = timedelta(hours=24)
 PAPEIS_COM_LINK = ("dono", "gestor", "vendedor")
 MAX_PEDIDOS = 3
+MAX_PEDIDOS_POR_ORIGEM = 10                 # SE2: por endereço (IP), na mesma janela
 MAX_LINK_ERRADO = 10
 JANELA_MIN = autenticacao.JANELA_TENTATIVAS_MIN
 MIN_TOKEN = 22
@@ -103,14 +109,25 @@ def montar_link(token: str) -> str:
     return f"{base or PAINEL_URL_PADRAO}{CAMINHO_NO_FRONT}{token}"
 
 
-def _enviar_pelo_terminal(email, link, tipo) -> None:
+def _horas(validade: timedelta) -> str:
+    horas = int(validade.total_seconds() // 3600)
+    return "1 hora" if horas == 1 else f"{horas} horas"
+
+
+def enviar_por_email(email, link, tipo) -> None:
+    """SE2: o link vai por e-mail (provedor do .env). Nunca levanta erro, nunca escreve o link."""
+    from app.email_envio import Email, enviar_email
     acao = "criar" if tipo == CRIAR else "redefinir"
-    print(f"[e-mail ainda sem provedor; nada foi enviado] Para: {email} | "
-          f"link para {acao} a senha: {link}", file=sys.stderr, flush=True)
+    validade = VALIDADE_PEDIDO if tipo == REDEFINIR else VALIDADE_OPERADOR
+    texto = (f"Olá!\n\nRecebemos um pedido para {acao} a senha do painel do Léo.\n\n"
+             f"Para {acao} a senha, abra este link (vale por {_horas(validade)} e só uma vez):\n{link}\n\n"
+             "Se não foi você, ignore este e-mail: a sua senha continua a mesma.\n")
+    enviar_email(Email(para=email, assunto=f"Link para {acao} a sua senha", texto=texto,
+                       tipo=f"{acao}_senha"))
 
 
-# Quem "envia" o link. Troque por um provedor de e-mail quando houver.
-ENVIADOR = _enviar_pelo_terminal
+# Quem envia o link (SE2: o e-mail; os testes trocam por um envio falso).
+ENVIADOR = enviar_por_email
 
 
 def _novo_link(conexao, pessoa, tipo, momento, validade) -> tuple[str, str]:
@@ -135,9 +152,14 @@ def _contar(conexao, chave, resultado, momento) -> int:
 
 # ------------------------------------------------------------ esqueci a senha (público)
 
-def pedir_link(email, agora=None) -> None:
+def _chave_pedido_origem(origem) -> str:
+    return "pedido:" + str(origem or "desconhecida")[:200]
+
+
+def pedir_link(email, agora=None, *, origem=None) -> None:
     """Não diz se o e-mail existe. MuitasTentativas se o mesmo e-mail pediu
-    MAX_PEDIDOS vezes na janela (exista ou não)."""
+    MAX_PEDIDOS vezes na janela (exista ou não), ou (SE2) se o mesmo endereço pediu
+    MAX_PEDIDOS_POR_ORIGEM vezes."""
     email_limpo = str(email or "").strip().lower()[:autenticacao.MAX_EMAIL]
     momento = agora or agora_utc()
     envio = None
@@ -145,6 +167,10 @@ def pedir_link(email, agora=None) -> None:
     try:
         if _contar(conexao, email_limpo, PEDIU_LINK, momento) >= MAX_PEDIDOS:
             raise autenticacao.MuitasTentativas("Muitas tentativas seguidas. Espere alguns minutos.")
+        if origem is not None:
+            if _contar(conexao, _chave_pedido_origem(origem), PEDIU_LINK, momento) >= MAX_PEDIDOS_POR_ORIGEM:
+                raise autenticacao.MuitasTentativas("Muitas tentativas seguidas. Espere alguns minutos.")
+            conexao.execute(_SQL_ACESSO, (None, _chave_pedido_origem(origem), para_banco(momento), PEDIU_LINK))
         u = conexao.execute(_SQL_POR_EMAIL, (email_limpo,)).fetchone() if email_limpo else None
         if _pode_ter_link(u):
             token, _ = _novo_link(conexao, u, REDEFINIR, momento, VALIDADE_PEDIDO)

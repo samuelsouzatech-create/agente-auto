@@ -404,7 +404,7 @@ def test_remarketing_no_instagram_so_dentro_da_janela(lojas_ig, monkeypatch):
 
 # ------------------------------------------------------------------ migração 21
 def test_migracao_21_aplicada_e_registrada():
-    assert banco.versao_schema() == banco.VERSAO_SCHEMA == 21
+    assert banco.versao_schema() == banco.VERSAO_SCHEMA >= 21      # SE2: depois da 21 vieram outras
     assert {"instagram_comentarios", "instagram_legendas", "clientes_vinculados", "pedidos_exclusao"} <= set(banco.tabelas())
     colunas = {(l["table_name"], l["column_name"]) for l in _ler(
         "SELECT table_name, column_name FROM information_schema.columns WHERE table_name IN ('mensagens', 'leads')")}
@@ -416,7 +416,7 @@ def test_migracao_21_sobe_da_20_sem_apagar_dado(tmp_path, monkeypatch):
     """Banco novo só com a 20, dados dentro, depois a 21: tudo continua lá."""
     import psycopg
     from psycopg import sql
-    url = banco.url_do_banco()
+    url_app, url = banco.url_do_banco(), banco.url_do_dono()     # SE3: criar banco é coisa do dono
     nome = banco.nome_do_banco(url) + "_m21"
     admin = banco.trocar_nome_do_banco(url, "postgres")
     with psycopg.connect(admin, autocommit=True) as c:
@@ -438,12 +438,12 @@ def test_migracao_21_sobe_da_20_sem_apagar_dado(tmp_path, monkeypatch):
         c.commit()
         c.close()
         monkeypatch.setattr(banco, "PASTA_MIGRACOES", original)
-        assert banco.migrar() == [21]
+        assert banco.migrar() == [n for n, _, _ in banco.migracoes_disponiveis() if n > 20]   # 21 e as seguintes
         assert _ler("SELECT conteudo, id_externo FROM mensagens WHERE lead_id = 'x'") == [{"conteudo": "antes", "id_externo": None}]
         assert _ler("SELECT nome, origem FROM leads WHERE lead_id = 'x'") == [{"nome": "Ana", "origem": None}]
         assert banco.migrar() == []
     finally:
         banco.fechar_pools()
-        banco.apontar_para(url)
+        banco.apontar_para(url_app, dono=url)
         with psycopg.connect(admin, autocommit=True) as c:
             c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome)))

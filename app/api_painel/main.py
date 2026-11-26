@@ -20,8 +20,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api_painel import rotas_acompanhamento, rotas_demo, rotas_estoque, rotas_fotos, rotas_leads, rotas_link
 from app.api_painel import erros, logs, rotas_atender, rotas_auth, rotas_conversas
 from app.api_painel.dependencias import CABECALHO_CSRF
+import banco
 
 PREFIXO = "/api/v1"
+
+
+class MarcaDoPedido:
+    """SE3 (Maratona Segurança): todo pedido da API do painel começa SEM marca de loja (o banco
+    não mostra nada das tabelas com loja_id) até a sessão ser lida (dependencias.usuario_logado).
+    Mesmo que o processo tenha declarado o modo sistema, o pedido do painel não herda."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+        with banco.pedido_do_painel():
+            return await self.app(scope, receive, send)
 
 
 def origens_do_painel() -> list:
@@ -38,6 +54,7 @@ def criar_app() -> FastAPI:
                            allow_methods=["GET", "POST", "PUT", "DELETE"],
                            allow_headers=["Content-Type", CABECALHO_CSRF])
     erros.instalar(app)
+    app.add_middleware(MarcaDoPedido)              # SE3: por último = o mais de fora
     app.include_router(rotas_auth.router, prefix=PREFIXO)
     app.include_router(rotas_atender.router, prefix=PREFIXO)   # C2b
     app.include_router(rotas_conversas.router, prefix=PREFIXO)   # C2c

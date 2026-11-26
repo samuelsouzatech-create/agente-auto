@@ -139,6 +139,8 @@ def test_sombra_tira_palavra_de_tempo_e_nada_e_gravado():
 
 
 def test_sombra_e_turno_normal_saem_iguais():
+    from tests.conftest import garantir_lojas  # SE3: a loja 2 precisa existir (chaves da loja)
+    garantir_lojas(2)
     from app.core.turno import executar_turno
     texto_ia = "Como o pessoal da equipe já está acompanhando, eles vão confirmar a informação sobre o IPVA."
     normal = asyncio.run(executar_turno(2, "simulador", "n-1", "e o IPVA?", grafo=Grafo(texto_ia)))

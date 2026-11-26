@@ -298,3 +298,17 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   preço; chaves de comentário e de resposta pública nascem desligadas. Sem emoji (o plano tinha 🙂: L10 vale).
 - 24/11/2026, IG3: contrato da API **1.3.0** (canais e "como chegou"); o mesmo cliente do Instagram e do
   WhatsApp vira um cartão só, nunca entre lojas. `/dados/excluir` pronto; textos da Meta em rascunho.
+- 25/11/2026, SE0 (Maratona Segurança): "mesmo cliente" só junta com contato NOVO no WhatsApp (já
+  tinha conversa: não junta e vai para o Registro). Exclusão a pedido da Meta anonimiza venda, resultado
+  e custo (a linha fica) e apaga o resto. **Para decidir:** números do Resultado que vêm das mensagens
+  diminuem na exclusão; a conversa do WhatsApp vinculada fica. Diário: `docs/seguranca.md`.
+- 25/11/2026, SE1: testes no GitHub Actions a cada push (suíte em 4 partes, pip-audit, gitleaks, UTF-8) nos
+  dois repositórios; pillow 13 e streamlit 1.67 (falhas conhecidas). Vigia novo no Docker avisa o operador.
+  **Para decidir:** o repositório agente-auto está PÚBLICO no GitHub.
+- 25/11/2026, SE2: **migração 22 usada** (cofre dos tokens, AES-256-GCM, chave só no .env; token_ref vira reserva;
+  próxima livre: 23). Backup cifrado com restauração conferida. Link de senha por e-mail (provedor falso até o servidor).
+- 26/11/2026, SE3: **migrações 23 (tranca por loja, RLS) e 24 (chaves da loja) usadas; próxima livre: 25**. O app
+  conecta com o usuário `leo_app` (não é dono das tabelas); o painel só vê a loja da sessão até no banco. Nova
+  variável obrigatória no `.env`: `BANCO_APP_SENHA`.
+- 26/11/2026, SE4: revisão como invasor (OWASP): nenhum GRAVE; consertados foto-bomba, brecha do link de foto e
+  corpo sem limite no porteiro. Lista "o que falta antes do primeiro cliente real" no fim do `docs/seguranca.md`.

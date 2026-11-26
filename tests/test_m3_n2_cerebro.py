@@ -197,6 +197,8 @@ def test_audio_grande_nao_vai_para_a_ia():
 
 
 def test_resposta_fixa_registra_na_conversa():
+    from tests.conftest import garantir_lojas  # SE3: a loja 2 precisa existir (chaves da loja)
+    garantir_lojas(2)
     from app.core.turno import turno_midia_grande
     from app.limites_midia import MENSAGEM_AUDIO_LONGO, MENSAGEM_FOTO_GRANDE
     assert turno_midia_grande(1, "simulador", "c1", "audio").texto == MENSAGEM_AUDIO_LONGO

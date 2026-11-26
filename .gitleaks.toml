@@ -1,0 +1,18 @@
+# SE1 (Maratona Segurança): configuração do gitleaks (procura de segredo no histórico do Git).
+# Usa as regras padrão do gitleaks e só libera o que foi conferido à mão como FALSO
+# (docs/seguranca.md, SE1). Liberar algo aqui exige o porquê no comentário.
+title = "Léo (agente-auto)"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dados falsos conferidos à mão"
+paths = [
+    # Dados falsos do contrato da API (token de exemplo do pedido de criar senha).
+    '''^docs/api/mocks/.*\.json$''',
+]
+regexes = [
+    # Chave de widget do Streamlit (key="s10_agendar_base"), não é segredo.
+    '''^s\d+[a-z]?_[a-z0-9_]+$''',
+]
