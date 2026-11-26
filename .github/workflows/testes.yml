@@ -1,0 +1,94 @@
+# SE1 (Maratona Segurança): os testes rodam sozinhos no GitHub a cada push e pull request.
+#
+# - suíte inteira (sem -m api e sem -m carga, como no pytest.ini), em 4 partes paralelas, com
+#   PostgreSQL 17 e Redis 7 como serviços do próprio Actions;
+# - chave de IA FALSA e nenhum segredo de verdade (as senhas abaixo só valem dentro da máquina
+#   descartável do GitHub, que some no fim);
+# - segurança: pip-audit (pacotes com falha conhecida), gitleaks (segredo no histórico inteiro)
+#   e o teste de UTF-8.
+# Diário: docs/seguranca.md (SE1).
+name: testes
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    name: suíte (parte ${{ matrix.parte }} de 4)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [1, 2, 3, 4]
+    services:
+      postgres:
+        image: postgres:17.12
+        env:
+          POSTGRES_USER: leo
+          POSTGRES_PASSWORD: senha-so-do-actions
+          POSTGRES_DB: leo
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U leo -d leo" --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7.4.7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      BANCO_URL: postgresql://leo:senha-so-do-actions@127.0.0.1:5432/leo
+      REDIS_URL: redis://127.0.0.1:6379/0
+      GOOGLE_API_KEY: chave-falsa-so-para-testes
+      TZ: America/Recife
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Instalar
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Testes (parte ${{ matrix.parte }})
+        run: |
+          ls tests/test_*.py | sort | awk -v p=${{ matrix.parte }} '(NR - 1) % 4 == p - 1' > parte.txt
+          echo "$(wc -l < parte.txt) arquivos de teste nesta parte"
+          python -m pytest -q -p no:cacheprovider $(cat parte.txt)
+
+  seguranca:
+    name: segurança (pacotes, segredos, UTF-8)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0              # o histórico inteiro, para a procura de segredos
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Teste de UTF-8
+        run: |
+          pip install pytest==9.1.1
+          python -m pytest -q -p no:cacheprovider --noconftest tests/test_se0_utf8.py
+      - name: pip-audit (pacotes Python com falha conhecida)
+        run: |
+          pip install pip-audit==2.10.1
+          pip-audit -r requirements.txt --progress-spinner off $(sed -n 's/^\([A-Z][A-Z0-9-]*\).*/--ignore-vuln \1/p' .pip-audit-ignorar)
+      - name: gitleaks (segredo no histórico)
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 \
+            detect --source /repo --config /repo/.gitleaks.toml --redact --no-banner -v

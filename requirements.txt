@@ -7,7 +7,8 @@ langchain-chroma==1.1.0
 langchain-text-splitters==1.1.3
 chromadb==1.5.9
 python-dotenv==1.2.4
-streamlit==1.65.0
+# SE1: 1.67 (a 1.65 prendia o pillow abaixo da 13, que tem falhas conhecidas)
+streamlit==1.67.0
 
 redis==8.1.0
 fastapi==0.143.3
@@ -17,10 +18,17 @@ python-multipart==0.0.32
 python-telegram-bot==22.8
 argon2-cffi==25.1.0
 # N1: fotos ilustrativas da loja demo (app/demo.py) e imagens da bancada
-pillow==12.3.0
+# SE1: 13.0.0 conserta várias falhas conhecidas (pip-audit) na leitura de imagens
+pillow==13.0.0
 pillow-heif==1.8.1
 # Maratona Postgres (PG1): banco PostgreSQL 17, uma camada de conexão com pool (banco.py)
 psycopg[binary]==3.3.9
 psycopg-pool==3.3.3
 # PG2: memória das conversas do LangGraph no PostgreSQL
 langgraph-checkpoint-postgres==3.2.1
+# SE1 (Maratona Segurança): pacotes que vêm junto com outros, presos numa versão SEM falha
+# conhecida (pip-audit). Quando o pacote de cima subir de versão, confira se ainda precisa.
+oauthlib==4.0.1
+opentelemetry-api==1.45.2
+opentelemetry-sdk==1.45.2
+pyasn1==0.6.5
