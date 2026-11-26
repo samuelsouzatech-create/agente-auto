@@ -132,3 +132,104 @@ uma função que grava de verdade e é desfeita sem commit, uma CTE com escrita 
 - Comportamento do Léo para o cliente: não mudou (prompt e guardas intocados; nenhum teste de
   comportamento mudou o que espera).
 - Branch `seguranca-0`, tag `se0`.
+
+---
+
+## SE1 — Testes sozinhos no GitHub e alertas (branch `seguranca-1`)
+
+### 1 e 2. GitHub Actions (agente-auto)
+Arquivo `.github/workflows/testes.yml`. A cada push e pull request:
+- **suíte inteira** (o `pytest.ini` já tira `-m api` e `-m carga`) em **4 partes paralelas**
+  (os arquivos de teste são divididos em 4, em ordem alfabética, um sim outro não), cada uma com
+  **PostgreSQL 17.12 e Redis 7.4.7** como serviços do próprio Actions (as mesmas versões do
+  docker-compose). Chave de IA **falsa** (`chave-falsa-so-para-testes`); a senha do banco só existe
+  dentro da máquina descartável do GitHub. Nenhum segredo do repositório é usado.
+- **segurança**, em paralelo: o teste de UTF-8 (sem banco), o **pip-audit** nos pacotes do
+  `requirements.txt` e o **gitleaks** (procura de segredo no histórico INTEIRO do Git).
+
+**pip-audit (o que ele achou e o que eu fiz):** na `.venv-teste` havia falha conhecida em pillow 12.3.0
+(várias, na leitura de imagens: importa, porque o Léo abre foto do cliente e do estoque),
+oauthlib, opentelemetry-api, pyasn1 e chromadb.
+- pillow **13.0.0** (e o streamlit **1.67.0**, porque o 1.65 não aceitava o pillow 13; o pillow-heif
+  1.8.1 funciona com ele, conferido). O teste antigo que fixava "pillow==12.3.0" agora espera 13.0.0.
+- oauthlib 4.0.1, opentelemetry-api/sdk 1.45.2 e pyasn1 0.6.5 presos no `requirements.txt` (vêm junto
+  com outros pacotes; o comentário explica).
+- chromadb: **sem versão com conserto**. As 4 falhas são do SERVIDOR do Chroma (execução de código
+  por repositório de modelo com `trust_remote_code`, permissão entre inquilinos). O Léo usa o Chroma
+  embutido (sem servidor). Ignoradas uma a uma em `.pip-audit-ignorar`, cada uma com o porquê.
+- Resultado local do mesmo comando do Actions: "No known vulnerabilities found, 5 ignored".
+- Depois do merge, a imagem do Docker precisa ser montada de novo (`docker compose up -d --build`)
+  para levar os pacotes novos.
+
+**gitleaks:** 2 achados no histórico, os dois conferidos à mão como **falsos**: o token de exemplo do
+dado falso `docs/api/mocks/pedido_auth_criar_senha.json` e a chave de um campo do Streamlit
+(`key="s10_agendar_base"`). Liberados em `.gitleaks.toml`, com o porquê. Depois disso: "no leaks
+found" (192 commits).
+
+**Repositório público:** o `agente-auto` está **público** no GitHub (conferido com o `gh`). O
+gitleaks não achou segredo no histórico, mas tudo o que está no Git é visível para qualquer pessoa.
+**Decisão para o Samuel/analista:** deixar privado (o Actions continua funcionando; no plano gratuito
+o repositório privado tem 2.000 minutos por mês, e esta suíte gasta ~4 x 2,5 minutos por push).
+
+### 2. leo-painel-web (branch `painel-seguranca`)
+`.github/workflows/testes.yml`: `npm ci`, `npm test`, `npm run build` e `npm audit --audit-level=high`
+(só alta e crítica reprovam). O `npm audit` achou 12 (2 críticas, 5 altas): consertei com
+`npm audit fix`, vitest **4.1.12** (a 3.x tinha falha crítica; os 91 testes passam igual) e um
+`overrides` para `serialize-javascript` ^7.1.4 (vinha velho pelo plugin do PWA). Sobraram **2
+moderadas** (react-router 6: o conserto é a versão 7, que muda a tela; fica para o bloco do painel).
+O push do painel pelo endereço HTTPS foi recusado (o login do `gh` não tem permissão de mexer em
+fluxo do Actions, `workflow`); enviei pelo endereço SSH do mesmo repositório, sem mudar nada da
+configuração.
+
+### 3. O fluxo passou de verdade?
+**Sim, conferido pelo `gh`** (`gh run list` e `gh run view`):
+- agente-auto: a 1ª rodada **falhou** (e foi bom): o `!reset` do compose quebrava a leitura do
+  compose nos testes do DK1, o teste antigo fixava o pillow 12.3.0 e o `psutil` (lido pelo teste de
+  carga) não estava no `requirements-dev.txt`. Consertado; a 2ª rodada (run 45741340304) ficou
+  **verde**: 711 + 828 + 775 + 874 = 3188 testes nas 4 partes (cerca de 2 min cada) e o job de
+  segurança (UTF-8, pip-audit, gitleaks) verde. O último push do bloco também roda (ver o fim).
+- leo-painel-web: run 45741174856 **verde** (91 testes, build e npm audit).
+
+### 4. Vigia (`app/vigia.py`, serviço `vigia` no docker-compose)
+Uma peça própria do Docker (não o relógio: se o relógio parar, é o vigia quem avisa). A cada minuto
+confere e avisa o **operador** pelo bot de avisos que já existe (Telegram, `TELEGRAM_AVISOS_OPERADOR_CHAT_ID`):
+- **banco** não responde; **Redis** não responde;
+- **relógio** parado (o mesmo vermelho da Visão geral: parado ou sem girar há 2 min);
+- **webhook**: canal de loja No ar sem mensagem de cliente há muito mais que o normal DELA (a regra
+  do "canal parado" da Visão geral: 5 vezes o intervalo médio, no mínimo 18 h, com 10+ mensagens em 14 dias);
+- **IA** errou 3 vezes ou mais na última hora (o vermelho da Visão geral);
+- **peça do Docker** sem saúde: o vigia chama o endereço de saúde de cada peça pela rede interna
+  (`VIGIA_PECAS`). **Não** usa o `docker.sock` (quem tem o socket manda na máquina inteira).
+Avisos: no máximo **um por problema a cada 30 min** (lembrete "Continua" a cada 30 min), e um
+**"Voltou ao normal"**. Problema que pisca (cai, volta, cai) não vira rajada. Sem emoji. O estado fica
+na memória do vigia (o banco e o Redis podem ser o que caiu). Ele não depende do banco nem do Redis
+para ligar, e tem saúde própria (um arquivo de sinal, `docker/saude.py vigia`).
+Testes: `tests/test_se1_vigia.py` (20, com envio falso, Redis falso e sonda falsa).
+**Não testado de ponta a ponta no Docker** (subir a peça nova é passo depois do merge).
+
+**Monitor de fora (para o bloco do servidor):** o vigia cai junto se o SERVIDOR inteiro cair. Para isso:
+- **Healthchecks.io** (recomendado, no estilo "batimento"): o vigia chama um endereço deles a cada
+  minuto; se parar de chamar, eles avisam (e-mail, Telegram). Plano gratuito com 20 verificações;
+  pago a partir de ~US$ 5/mês (preço visto em páginas de terceiros; a página oficial não abriu: **não confirmado**).
+- **UptimeRobot**: chama o `https://<domínio>/` de fora a cada 5 min. Tem plano gratuito (50 monitores,
+  uso pessoal/não comercial, **não confirmado** para uso comercial); o pago "Solo" está entre US$ 7 e
+  13/mês conforme a fonte (os preços mudaram em 2026: **não confirmado**).
+- **Better Stack**: gratuito com 10 monitores e batimentos; extra pago a partir de US$ 25/mês
+  (página oficial deles).
+Sugestão: Healthchecks.io (batimento do vigia) + UptimeRobot gratuito (o site de fora). Conferir os
+preços na hora de contratar.
+
+### Incidente durante o SE1 (o Samuel precisa saber)
+Para conferir o docker-compose eu rodei `docker compose config` **sem** `--quiet`. Esse comando
+mostra o compose já com os valores do `.env`, e eles apareceram na MINHA tela de trabalho (tokens do
+WhatsApp e do Telegram, senhas do banco e do Redis). Nada foi para o Git, para o GitHub, para o
+diário ou para outro serviço, e eu não repito os valores. Mas eles passaram pela conversa.
+**Recomendação:** trocar esses tokens e senhas quando for possível (no mínimo antes do primeiro
+cliente real). Daqui em diante só rodo `docker compose config --quiet` ou leio campos específicos.
+
+### Fim do SE1
+- Suíte local (3 partes seguidas): 911 + 1219 + 1059 = **3189 passaram**, 0 falhas.
+- GitHub Actions: verde nos dois repositórios (acima).
+- Comportamento do Léo para o cliente: não mudou (nenhum teste de comportamento mudou o que espera;
+  o único teste antigo alterado é o que fixa a versão do pillow).
+- Branch `seguranca-1`, tag `se1`. Painel: branch `painel-seguranca` (sem tag; o pedido não pede).

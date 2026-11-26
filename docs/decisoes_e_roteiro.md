@@ -302,3 +302,6 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   tinha conversa: não junta e vai para o Registro). Exclusão a pedido da Meta anonimiza venda, resultado
   e custo (a linha fica) e apaga o resto. **Para decidir:** números do Resultado que vêm das mensagens
   diminuem na exclusão; a conversa do WhatsApp vinculada fica. Diário: `docs/seguranca.md`.
+- 25/11/2026, SE1: testes no GitHub Actions a cada push (suíte em 4 partes, pip-audit, gitleaks, UTF-8) nos
+  dois repositórios; pillow 13 e streamlit 1.67 (falhas conhecidas). Vigia novo no Docker avisa o operador.
+  **Para decidir:** o repositório agente-auto está PÚBLICO no GitHub.

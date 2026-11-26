@@ -188,3 +188,18 @@ def test_compose_tem_o_vigia_sem_docker_sock():
     texto = (Path(__file__).resolve().parent.parent / "docker-compose.yml").read_text(encoding="utf-8")
     assert "vigia:" in texto and "app.vigia" in texto
     assert "/var/run/docker.sock" not in texto           # nenhuma peça recebe o socket do Docker
+
+
+def test_sinal_de_vida_do_vigia_para_a_saude_do_docker(tmp_path):
+    import os
+    import sys
+    import time
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "docker"))
+    import saude
+    caminho = str(tmp_path / "vigia_ok")
+    assert saude.vigia(caminho) is False                       # nunca conferiu: doente
+    vigia.marcar_sinal(caminho)
+    assert saude.vigia(caminho) is True
+    velho = time.time() - 600
+    os.utime(caminho, (velho, velho))
+    assert saude.vigia(caminho) is False                       # parou há 10 min: doente
