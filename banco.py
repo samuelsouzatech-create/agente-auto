@@ -780,18 +780,6 @@ def banco_existe(url: str) -> bool:
         return c.execute("SELECT 1 FROM pg_database WHERE datname = %s", (nome_do_banco(url),)).fetchone() is not None
 
 
-def criar_banco_vazio(url: str) -> None:
-    from psycopg import sql
-    with _admin(url) as c:
-        c.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(nome_do_banco(url))))
-
-
-def apagar_banco_inteiro(url: str) -> None:
-    """Para o backup (conferência) e os testes. Quem chama garante que não é o banco de uso."""
-    from psycopg import sql
-    with _admin(url) as c:
-        c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome_do_banco(url))))
-
 
 def contagens_das_tabelas(url: str) -> dict[str, int]:
     """Linhas de cada tabela (esquema public) de QUALQUER banco do servidor (backup restaurado)."""

@@ -174,7 +174,7 @@ def restaurar(arquivo: str, url_destino: str, *, criar_banco: bool = True, por_c
         import banco
         if banco.banco_existe(url_destino):
             raise ErroBackup(f"O banco {nome} já existe. Use outro nome (a restauração não mistura dados).")
-        banco.criar_banco_vazio(url_destino)
+        banco.criar_banco_vazio(url_destino, nome)      # já conferido acima: não existia
     _rodar("pg_restore", url_destino, ["--no-owner", "--no-privileges", "--exit-on-error"], entrada=dados)
 
 
@@ -184,7 +184,7 @@ def apagar_banco(url: str) -> None:
     if uso and _mesmo_banco(uso, url):
         raise ErroBackup("Recusado: não apago o banco de uso.")
     import banco
-    banco.apagar_banco_inteiro(url)
+    banco.apagar_banco(url)
 
 
 def contagens(url: str) -> dict[str, int]:

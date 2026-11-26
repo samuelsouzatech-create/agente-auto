@@ -118,3 +118,21 @@ def test_erro_nunca_mostra_a_senha(ambiente, monkeypatch):
 def test_backups_fora_do_git():
     raiz = Path(__file__).resolve().parent.parent
     assert "backups/" in (raiz / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
+def test_nenhuma_funcao_definida_duas_vezes_no_mesmo_arquivo():
+    """SE2: uma função nova com o nome de uma que já existia apagou a antiga sem ninguém ver
+    (banco.criar_banco_vazio). Esta catraca reprova nome repetido no mesmo arquivo."""
+    import ast
+    raiz = Path(__file__).resolve().parent.parent
+    arquivos = [raiz / "banco.py", *(raiz / "app").rglob("*.py"), *(raiz / "tools").rglob("*.py"),
+                *(raiz / "scripts").rglob("*.py"), *(raiz / "segmentos").rglob("*.py")]
+    repetidas = []
+    for arquivo in arquivos:
+        vistos = set()
+        for no in ast.parse(arquivo.read_text(encoding="utf-8")).body:
+            if isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if no.name in vistos:
+                    repetidas.append(f"{arquivo.relative_to(raiz).as_posix()}: {no.name}")
+                vistos.add(no.name)
+    assert not repetidas, "\n".join(repetidas)

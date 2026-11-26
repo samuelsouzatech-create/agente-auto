@@ -233,3 +233,76 @@ cliente real). Daqui em diante só rodo `docker compose config --quiet` ou leio 
 - Comportamento do Léo para o cliente: não mudou (nenhum teste de comportamento mudou o que espera;
   o único teste antigo alterado é o que fixa a versão do pillow).
 - Branch `seguranca-1`, tag `se1`. Painel: branch `painel-seguranca` (sem tag; o pedido não pede).
+
+---
+
+## SE2 — Cofre (branch `seguranca-2`)
+
+### 1. Tokens cifrados (migração 22, `app/cofre.py`, `scripts/cofre.py`)
+- **Migração 22** (`migracoes/022_cofre.sql`, o próximo número livre): tabela `cofre_credenciais`
+  (loja, canal, conta, token cifrado, resumo da chave). Só acrescenta; teste de subida da 21 para a 22
+  sem perder dado.
+- Cifra: **AES-256-GCM** (biblioteca `cryptography`, agora no `requirements.txt`). A chave mestra
+  `LEO_CHAVE_MESTRA` fica só no `.env` (o `.env.example` tem o nome, sem valor). Cada token é cifrado
+  "amarrado" a loja + canal + conta: copiar o texto cifrado de uma loja para outra linha não abre (teste).
+- O envio (`app/credenciais.py`) procura **primeiro o cofre**; sem token no cofre para aquela conta,
+  usa o **`token_ref` antigo como reserva** e escreve um aviso no log (uma vez por conta):
+  "usando o token do .env (reserva). Guarde no cofre". Token guardado que **não abre** (chave errada)
+  **não** cai para a reserva: o envio falha fechado (SemCredencial), para ninguém achar que está tudo bem.
+- O token nunca aparece: `repr` das credenciais com `***`, o script não mostra o token (lê sem eco),
+  a "situação" só diz "guardado / abre com a chave do .env", e nenhuma rota da API do painel toca no
+  cofre (teste que varre `app/api_painel/`).
+- Script: `nova-chave`, `cadastrar` (também troca), `apagar`, `situacao`, `trocar-chave` (recifra
+  TUDO numa transação só, com `LEO_CHAVE_MESTRA_NOVA`; se a chave atual estiver errada, nada muda).
+- Testes (`tests/test_se2_cofre.py`): o banco só guarda o cifrado (e a chave mestra não está em
+  nenhuma coluna de nenhuma tabela); chave errada não abre; duas lojas; trocar token; trocar a chave
+  mestra; o envio usa o cofre antes da reserva; o script roda e não mostra token nem chave.
+- **Aviso:** enquanto as lojas não tiverem o token no cofre, tudo continua como antes (reserva).
+  Passar os tokens para o cofre é passo depois do merge (comando no resumo final).
+- Cuidado achado no caminho: um teste que roda o script como OUTRO programa usaria a `BANCO_URL`
+  do `.env`, que é o banco **de uso**. Aconteceu uma vez (o script tentou gravar e falhou, porque a
+  tabela 22 ainda não existe lá: nada foi gravado). Os testes agora rodam o script por dentro, no
+  banco de teste.
+
+### 2. Backup cifrado (`app/backup.py`, `scripts/backup.py`)
+- `fazer`: `pg_dump -Fc` (sem dono e sem permissões) -> cifrado com **Fernet** (AES + assinatura)
+  com a chave `LEO_CHAVE_BACKUP` (separada da chave do cofre: trocar uma não estraga a outra) ->
+  pasta `backups/` (fora do Git). O arquivo sem cifra nunca toca o disco.
+- `restaurar` (num banco NOVO e separado; recusa o banco de uso e banco que já existe) e `conferir`
+  (restaura num banco temporário, compara as contagens de cada tabela com o banco de uso e apaga).
+- Onde roda o `pg_dump`: o do computador se for 17+; senão, o de **dentro do contêiner do banco**
+  (`docker exec`), que é o caso deste computador (não há `pg_dump` no Windows). A senha vai por
+  `PGPASSWORD` (nunca na linha de comando) e é apagada de qualquer mensagem de erro (teste).
+- Destino: `LEO_BACKUP_DESTINO=pasta`. O **R2** (Cloudflare) fica para o bloco do servidor: hoje
+  responde "ainda não existe" (teste).
+- **Teste de verdade** (`tests/test_se2_backup.py`): grava dados em duas lojas, faz o backup,
+  confere que o arquivo não tem nada legível, restaura num banco separado e as **contagens de TODAS
+  as tabelas** batem (mais de 30 tabelas). Chave errada e arquivo alterado não abrem.
+  No GitHub Actions o fluxo instala o `pg_dump` 17 (pacote oficial do PostgreSQL) para este teste.
+- **Guarde a `LEO_CHAVE_BACKUP` fora do servidor** (gerenciador de senhas): sem ela, backup nenhum abre.
+
+### 3. E-mail do link de senha (`app/email_envio.py`)
+- Camada de e-mail com provedor escolhido no `.env` (`LEO_EMAIL_PROVEDOR`): `arquivo` (padrão, o
+  **falso**: cada e-mail vira um `.eml` em `logs/emails/`, fora do Git) ou `nenhum`. O provedor real
+  entra no bloco do servidor como mais uma classe.
+- "Esqueci minha senha" (API `POST /api/v1/auth/esqueci-senha` e a tela, que já existia e já mostra a
+  mensagem da API) agora manda o link **por e-mail**. O link continua de **uso único** e vence em
+  **1 hora** (testes). A resposta é sempre a mesma, exista ou não o e-mail ("Se este e-mail estiver
+  cadastrado, enviaremos um link..."), e só quem existe recebe.
+- Limite: 3 pedidos por e-mail (já existia) e, novo, **10 pedidos por endereço (IP)** em 15 min
+  (barra quem tenta muitos e-mails diferentes do mesmo lugar). Passou do limite: 429.
+- **Achado e consertado (era MÉDIA):** antes, o link (com o token) ia para o **terminal**, e no Docker
+  o terminal vira log (`docker compose logs api-painel`): quem lesse o log podia trocar a senha de
+  qualquer pessoa. Agora o link nunca vai para log nem terminal (teste). O teste antigo que esperava o
+  link no terminal (`test_c2f_senha.py`) passou a esperar o e-mail no provedor falso (não é teste de
+  comportamento do Léo com o cliente).
+- O contrato da API não mudou (a rota já existia; nenhum campo novo).
+
+**Provedores de e-mail possíveis (para o bloco do servidor; preços vistos hoje, conferir na hora):**
+| Provedor | Grátis | Pago | Observação |
+|---|---|---|---|
+| **Amazon SES** | não (só crédito de conta nova) | US$ 0,10 por 1.000 e-mails (avulso); desde jul/2026 há planos com outro preço (**não confirmado** na página da AWS) | o mais barato em volume; exige configurar domínio (SPF/DKIM) |
+| **Resend** | 3.000/mês, no máximo 100/dia | a partir de US$ 20/mês (50.000) | o mais simples de ligar (API pequena) |
+| **Brevo** | 300/dia | a partir de ~US$ 9/mês | tem servidor no Brasil? **não confirmado**; marca Brevo no rodapé no grátis |
+Para o volume do Léo (link de senha), o grátis de qualquer um basta no começo. Sugestão: Resend
+(simples) ou SES (barato, se o servidor já for AWS).
