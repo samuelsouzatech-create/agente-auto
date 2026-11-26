@@ -430,3 +430,102 @@ suíte inteira roda com ela ligada. Duas falhas da 1ª rodada não eram da tranc
 - Depois do merge, ANTES de subir o Docker: pôr `BANCO_APP_SENHA=<senha forte>` no `.env` (ver o
   resumo final). Sem ela, o `docker compose` não sobe e diz o nome da variável.
 - Branch `seguranca-3`, tag `se3`.
+
+---
+
+## SE4 — Revisão como um invasor (branch `seguranca-4`)
+
+Guia: OWASP Top 10 (2021) e OWASP API Security Top 10 (2023). Cada ataque virou um teste offline em
+`tests/test_se4_invasor.py` (IA falsa, duas lojas), além dos testes que já existiam para cada porta.
+**Nenhum achado GRAVE.** Os MÉDIOS pequenos foram consertados com teste; o resto vai para o bloco do servidor.
+
+### O que foi tentado, porta por porta (e o resultado)
+| Porta | Ataque tentado | Resultado |
+|---|---|---|
+| Login | e-mail que existe x que não existe (descobrir quem tem conta); força bruta | mesma resposta e mesmo código (401) nos dois; limite por e-mail e por origem (já existia) |
+| Sessão / cookie | roubar cookie por script, mandar de outro site, fixar sessão | cookie `HttpOnly`, `Secure`, `SameSite=Lax`; token novo a cada login; logout mata a sessão |
+| CSRF | escrita só com o cookie, sem o cabeçalho | recusada (403 `csrf_invalido`) |
+| Link do vendedor | token adivinhado, usado de novo, vencido | só o hash fica no banco, uso único, 12 h, só aquela conversa, limite de erros por origem (C3; conferido nos testes do C3) |
+| Esqueci a senha | descobrir e-mail, inundar de pedidos, ler o link no log | resposta igual; limite por e-mail e (SE2) por endereço; o link não vai mais para o log (SE2) |
+| Rotas do painel (BOLA/IDOR) | loja A abrindo, assumindo, respondendo e devolvendo a conversa da B pelo número; editando carro, apagando foto e colando link de foto no carro da B pelo id; desfazendo bloqueio da B pelo id; abrindo foto da B pelo nome | tudo 403/404, nada da B muda (a loja vem da sessão e, desde o SE3, o banco também tranca) |
+| Envio de fotos | arquivo falso (.exe, SVG com script) com nome .jpg; arquivo enorme; nome com caminho (`../`); link para 127.0.0.1, localhost, 10.x, 169.254.169.254 (metadados da nuvem), `[::1]`, IPv6 mapeado, http, porta estranha, usuário:senha no link, `file://`, número decimal (2130706433), 0.0.0.0 | tudo recusado; bomba de descompressão e brecha conferir/baixar: achados abaixo (consertados) |
+| Webhook WhatsApp e Instagram | sem assinatura, assinatura errada, mal formada, sem segredo configurado, repetição da mesma mensagem, corpo gigante | 403 nos quatro primeiros; repetição descartada pelo id da mensagem (24 h no Redis); corpo gigante: achado abaixo (consertado) |
+| /dados/excluir | pedido sem assinatura, código inventado, caminho com `../` | 400 / 404 |
+| Cabeçalhos do Caddy | conferidos | HSTS, nosniff, Referrer-Policy, X-Frame-Options, sem `Server`; faltava Permissions-Policy (consertado); falta CSP (BAIXA) |
+| Portas do docker-compose | conferidas por teste | só o porteiro abre porta para fora (`PORTEIRO_IP`); banco, Redis, operador e simulador só em 127.0.0.1 |
+| O que sai nos logs | amostragem: webhook, turno, avisos, painel | número do cliente mascarado e texto oculto em canal real (D3/N3); token nunca em log; o link de senha saiu do log no SE2 |
+| Mensagens de erro | erro inesperado numa rota com "senha" e SQL no texto | 500 com mensagem genérica, sem detalhe nem rastro |
+| Conversa (tirar dado de outro cliente ou loja) | IA "obediente" chamando registrar_lead e acionar_handoff com `lead_id` e `loja_id` de outra pessoa e de outra loja | o código sobrescreve loja e cliente (a IA nem vê esses campos no esquema das ferramentas); nada vai para o outro cliente nem para a outra loja |
+
+### Achados
+**GRAVE: nenhum.**
+
+**MÉDIA**
+1. **Bomba de descompressão na foto (consertado).** Reproduzir: enviar um PNG de 20.000 x 20.000
+   pixels (poucos MB). Antes: o pillow levantava `DecompressionBombError`, que o código não pegava:
+   erro 500 na rota e memória alta até o limite do pillow. Conserto: foto com mais de 50 milhões de
+   pixels é recusada ANTES de abrir os pixels, com a mensagem de "foto grande" (`app/fotos.py`,
+   `MAX_PIXELS`). Teste: `test_bomba_de_descompressao_e_recusada`.
+2. **Brecha entre conferir e baixar o link colado (anotada no F1; consertado em parte).** Reproduzir:
+   um nome que responde um endereço público na conferência e um interno na hora de baixar (DNS que
+   muda). Antes: o download seguia. Conserto: depois de conectar, o Léo confere o endereço de QUEM
+   RESPONDEU e recusa se for interno, antes de ler a resposta (`_par_proibido`). O pedido GET ainda
+   chega a sair (só a resposta não é lida): para fechar 100%, fixar o endereço resolvido na conexão
+   (bloco do servidor). Teste: `test_brecha_entre_conferir_e_baixar_fechada` (a regra do endereço;
+   o caminho de rede com um DNS que muda de verdade: **não confirmado**).
+3. **Corpo de pedido sem limite (consertado).** Reproduzir: mandar 500 MB para `/webhook` ou
+   `/api/...`. Antes: o servidor lia tudo na memória antes de conferir a assinatura. Conserto: o
+   porteiro recusa acima de 1 MB no webhook e na exclusão de dados, e acima de 20 MB na API (foto de
+   até 15 MB). Conferido com `caddy validate` (mesma versão 2.10.2 da imagem). Teste:
+   `test_porteiro_limita_o_tamanho_do_corpo`. Não testado com o Docker ligado (passo depois do merge).
+4. **Link de senha no log (consertado no SE2).** Ver o SE2, item 3.
+5. **Repositório público (decisão do Samuel).** O `agente-auto` está público no GitHub: o código, os
+   diários e o desenho de segurança ficam à vista. Não há segredo no histórico (gitleaks), mas privado
+   é mais seguro. Como mudar: GitHub > Settings > Danger Zone > Change visibility.
+6. **Segredos que passaram pela conversa (incidente do SE1).** Trocar os tokens do WhatsApp e do
+   Telegram e as senhas do banco e do Redis antes do primeiro cliente real.
+
+**BAIXA**
+1. **Faltava `Permissions-Policy`** no porteiro (consertado: câmera, microfone, localização,
+   pagamento e USB desligados para a tela).
+2. **Sem Content-Security-Policy** na tela. Não liguei porque pode quebrar a tela e eu não consigo
+   conferir num navegador aqui. Bloco do servidor: ligar em modo "só relatar" e depois valendo.
+3. **Repetição de webhook depois de 24 h**: o id da mensagem fica 24 h no Redis. Uma cópia assinada
+   guardada por alguém poderia ser reenviada depois disso (a Meta não põe hora na assinatura). Precisa
+   da cópia assinada. Bloco do servidor: guardar o id no banco.
+4. **Erro de ferramenta vai para a IA com o texto do erro** ("Erro ao executar a ferramenta: ..."). A
+   IA poderia repetir um pedaço técnico ao cliente. Não mudei: é texto que a IA lê (regra de ouro:
+   comportamento igual); fica para um bloco com rodada de IA real.
+5. **`/dados/excluir` sem limite por origem.** Só aceita pedido assinado pela Meta; o limite fica para
+   o porteiro, no servidor.
+6. **Usuário `leo_app_teste` dos testes** (senha fixa, só com acesso ao banco `_teste`) é criado no
+   PostgreSQL onde a suíte roda. No servidor, nunca rodar a suíte contra o PostgreSQL de uso (já era a
+   regra; agora tem mais um motivo).
+7. **Sessão antiga continua valendo depois de um login novo** (cada aparelho tem a sua). É o normal;
+   falta só um botão "sair de todos os aparelhos" (a função `revogar_todas_da_pessoa` já existe).
+
+### O que ainda falta antes do primeiro cliente real
+**Depende do servidor (bloco do servidor):**
+- domínio de verdade no `LEO_DOMINIO` e `PORTEIRO_IP=0.0.0.0`; certificado do Let's Encrypt;
+- firewall: só 80/443 abertos; banco, Redis, operador e simulador nunca na internet (operador por túnel SSH);
+- backup cifrado indo para o R2 todo dia, com teste de restauração por mês; `LEO_CHAVE_BACKUP` guardada fora;
+- monitor de fora (Healthchecks.io e/ou UptimeRobot) e o vigia ligado com o Telegram de avisos;
+- provedor de e-mail de verdade (SES, Resend ou Brevo) e SPF/DKIM do domínio;
+- CSP na tela; fixar o endereço resolvido no download de foto por link; id de webhook guardado no banco;
+- passar os tokens dos canais para o cofre (`scripts/cofre.py`) e apagar os do `.env`.
+
+**Depende da Meta:**
+- app aprovado (revisão de permissões do Instagram e do WhatsApp), `INSTAGRAM_APP_SECRET`,
+  `INSTAGRAM_VERIFY_TOKEN` e a URL de exclusão de dados (`/dados/excluir`) cadastrada;
+- modelo de mensagem aprovado para a retomada no WhatsApp; webhook apontando para o domínio real.
+
+**Depende do advogado:**
+- política de privacidade e termos (LGPD): o que o Léo guarda, por quanto tempo, quem é o controlador
+  (a loja) e quem é o operador (o Léo), e o pedido de exclusão;
+- contrato com cada loja (tratamento de dados) e o que fazer quando a loja sai;
+- confirmar a decisão do SE0 sobre a exclusão (a conversa do WhatsApp vinculada fica; os números que
+  vêm das mensagens diminuem).
+
+**Depende do Samuel e do analista:**
+- deixar o repositório `agente-auto` privado; trocar os tokens e as senhas que passaram pela conversa;
+- `BANCO_APP_SENHA` forte no `.env` (SE3), e `LEO_CHAVE_MESTRA` e `LEO_CHAVE_BACKUP` (SE2).

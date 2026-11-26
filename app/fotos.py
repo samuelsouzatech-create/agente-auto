@@ -30,6 +30,10 @@ from app import deposito as _deposito
 from app.chaves import exigir_loja
 
 MAX_BYTES = 15 * 1024 * 1024
+# SE4 (Maratona Segurança): "bomba de descompressão" (arquivo pequeno que vira uma imagem gigante na
+# memória). Acima disto a foto é recusada antes de abrir os pixels. 50 milhões de pixels = uma
+# foto de celular de 50 MP; o Léo guarda no máximo 1600 px no lado maior.
+MAX_PIXELS = 50_000_000
 LADO_MAXIMO = 1600
 ALVO_BYTES = 1_000_000
 MAX_FOTOS_POR_CARRO = 20
@@ -98,6 +102,7 @@ def refs_do_carro(loja_id: int, texto) -> list[str]:
 # ------------------------------------------------------------ preparo
 
 def _abrir(dados: bytes):
+    import warnings
     from PIL import Image, UnidentifiedImageError
     try:
         import pillow_heif
@@ -105,9 +110,18 @@ def _abrir(dados: bytes):
     except ImportError:                       # sem o pacote, HEIC é recusado como "não é foto"
         pass
     try:
-        imagem = Image.open(io.BytesIO(dados))
-        formato = (imagem.format or "").upper()
-        imagem.load()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            imagem = Image.open(io.BytesIO(dados))
+            largura, altura = imagem.size
+            if largura * altura > MAX_PIXELS:         # SE4: antes de abrir os pixels
+                raise FotoRecusada(MSG_GRANDE)
+            formato = (imagem.format or "").upper()
+            imagem.load()
+    except FotoRecusada:
+        raise
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as erro:
+        raise FotoRecusada(MSG_GRANDE) from erro
     except (UnidentifiedImageError, OSError, ValueError, SyntaxError) as erro:
         raise FotoRecusada(MSG_NAO_E_IMAGEM) from erro
     if formato not in FORMATOS:
@@ -198,6 +212,19 @@ def endereco_publico(loja_id: int, ref: str) -> str | None:
 
 # ------------------------------------------------------------ link colado
 
+def _ip_proibido(texto: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(str(texto).split("%")[0])
+    except ValueError:
+        return True
+    if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast
+            or ip.is_unspecified or getattr(ip, "is_site_local", False)):
+        return True
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped and not ip.ipv4_mapped.is_global:
+        return True
+    return False
+
+
 def _endereco_proibido(host: str) -> bool:
     """True se o nome aponta para a rede interna, o próprio computador ou endereço reservado."""
     try:
@@ -206,14 +233,25 @@ def _endereco_proibido(host: str) -> bool:
         return True
     if not enderecos:
         return True
-    for texto in enderecos:
-        ip = ipaddress.ip_address(texto.split("%")[0])
-        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast
-                or ip.is_unspecified or getattr(ip, "is_site_local", False)):
-            return True
-        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped and not ip.ipv4_mapped.is_global:
-            return True
-    return False
+    return any(_ip_proibido(texto) for texto in enderecos)
+
+
+def _par_proibido(ip) -> bool:
+    """SE4: o endereço de QUEM RESPONDEU (depois de conectar). Fecha a brecha anotada no F1: o nome
+    era conferido e só depois baixado; no meio, o DNS podia passar a apontar para a rede interna.
+    None = sem essa informação (transporte falso dos testes): vale a conferência pelo nome."""
+    if ip is None:
+        return False
+    return _ip_proibido(ip)
+
+
+def _ip_de_quem_respondeu(resposta):
+    try:
+        fluxo = resposta.extensions.get("network_stream")
+        par = fluxo.get_extra_info("server_addr") if fluxo is not None else None
+        return par[0] if par else None
+    except Exception:
+        return None
 
 
 def _conferir_link(url: str) -> None:
@@ -237,6 +275,8 @@ def _baixar_link(url: str, transporte=None) -> bytes:
             _conferir_link(atual)
             try:
                 with cliente.stream("GET", atual) as r:
+                    if _par_proibido(_ip_de_quem_respondeu(r)):     # SE4: o DNS mudou no meio?
+                        raise FotoRecusada(MSG_LINK)
                     if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
                         atual = urljoin(atual, r.headers["location"])
                         continue
