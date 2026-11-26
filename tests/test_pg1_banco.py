@@ -92,7 +92,8 @@ def test_base_tem_as_mesmas_tabelas_e_colunas_do_sqlite_v20():
     # IG1 (Maratona 4): a migração 21 (Instagram) só ACRESCENTA tabelas e colunas, no fim.
     mig21 = {"instagram_comentarios", "instagram_legendas", "clientes_vinculados", "pedidos_exclusao"}
     novas_21 = {"mensagens": ("id_externo",), "leads": ("origem", "origem_detalhe", "telefone", "telefone_em")}
-    assert set(banco.tabelas()) == set(ESQUEMA_V20) | memoria | mig21     # PG2: + memória das conversas
+    mig22 = {"cofre_credenciais"}      # SE2 (Maratona Segurança): só acrescenta a tabela do cofre
+    assert set(banco.tabelas()) == set(ESQUEMA_V20) | memoria | mig21 | mig22     # PG2: + memória das conversas
     for tabela, colunas in ESQUEMA_V20.items():
         assert tuple(banco.colunas(tabela)) == colunas + novas_21.get(tabela, ()), tabela
 
@@ -110,11 +111,11 @@ def test_base_tem_os_mesmos_indices_e_o_do_email():
 
 def test_registro_de_migracoes_e_rodar_de_novo_nao_refaz_nada():
     # IG1 (Maratona 4): + a migração 21 (Instagram).
-    assert banco.versao_schema() == banco.VERSAO_SCHEMA == 21
+    assert banco.versao_schema() == banco.VERSAO_SCHEMA >= 22      # SE2: a 22 (cofre)
     assert _um("SELECT nome FROM migracoes_aplicadas WHERE versao = 20") == "base_postgres"
     assert _um("SELECT nome FROM migracoes_aplicadas WHERE versao = 21") == "instagram"
     assert banco.migrar() == []
-    assert _um("SELECT COUNT(*) FROM migracoes_aplicadas") == 2
+    assert _um("SELECT COUNT(*) FROM migracoes_aplicadas") == len(banco.migracoes_disponiveis())   # SE2: + a 22
     assert _um("SELECT COUNT(*) FROM lojas") == 1      # a semente não duplica
 
 
@@ -141,14 +142,14 @@ def test_numeracao_das_migracoes(tmp_path, monkeypatch):
 def test_migracao_com_erro_no_meio_nao_deixa_nada_pela_metade(tmp_path, monkeypatch):
     for arquivo in banco.PASTA_MIGRACOES.glob("*.sql"):
         (tmp_path / arquivo.name).write_text(arquivo.read_text(encoding="utf-8"), encoding="utf-8")
-    (tmp_path / "022_quebrada.sql").write_text(
+    (tmp_path / "999_quebrada.sql").write_text(                  # SE2: número que nunca existirá
         "CREATE TABLE tabela_nova (id BIGINT);\nSELECT * FROM tabela_que_nao_existe;\n",
         encoding="utf-8")
     monkeypatch.setattr(banco, "PASTA_MIGRACOES", tmp_path)
     with pytest.raises(Exception):
         banco.migrar()
     assert "tabela_nova" not in banco.tabelas()
-    assert banco.versao_schema() == 21      # IG1: a 21 (Instagram) já estava aplicada
+    assert banco.versao_schema() == banco.VERSAO_SCHEMA      # as de verdade já estavam aplicadas
 
 
 # ------------------------------------------------------------ tradução do SQL

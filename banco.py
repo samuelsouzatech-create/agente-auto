@@ -38,7 +38,7 @@ except ImportError:                     # pragma: no cover
     pass
 
 PASTA_MIGRACOES = Path(__file__).resolve().parent / "migracoes"
-VERSAO_SCHEMA = 21                       # 20 = base do PostgreSQL (v20 do SQLite); 21 = Instagram (IG1)
+VERSAO_SCHEMA = 22                       # 20 = base do PostgreSQL; 21 = Instagram (IG1); 22 = cofre (SE2)
 POOL_MIN = int(os.getenv("BANCO_POOL_MIN", "1"))
 POOL_MAX = int(os.getenv("BANCO_POOL_MAX", "10"))
 ESPERA_POOL_S = float(os.getenv("BANCO_POOL_ESPERA_S", "30"))
@@ -767,3 +767,38 @@ def popular_estoque_exemplo():
 if __name__ == "__main__":
     criar_tabelas()
     popular_estoque_exemplo()
+
+
+# ---------------------------------------------------------------- SE2: backup (só aqui se abre conexão)
+
+def _admin(url: str):
+    return psycopg.connect(trocar_nome_do_banco(url, "postgres"), autocommit=True)
+
+
+def banco_existe(url: str) -> bool:
+    with _admin(url) as c:
+        return c.execute("SELECT 1 FROM pg_database WHERE datname = %s", (nome_do_banco(url),)).fetchone() is not None
+
+
+def criar_banco_vazio(url: str) -> None:
+    from psycopg import sql
+    with _admin(url) as c:
+        c.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(nome_do_banco(url))))
+
+
+def apagar_banco_inteiro(url: str) -> None:
+    """Para o backup (conferência) e os testes. Quem chama garante que não é o banco de uso."""
+    from psycopg import sql
+    with _admin(url) as c:
+        c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome_do_banco(url))))
+
+
+def contagens_das_tabelas(url: str) -> dict[str, int]:
+    """Linhas de cada tabela (esquema public) de QUALQUER banco do servidor (backup restaurado)."""
+    from psycopg import sql
+    with psycopg.connect(url) as c:
+        nomes = [l[0] for l in c.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' "
+            "AND table_type = 'BASE TABLE' ORDER BY table_name").fetchall()]
+        return {t: c.execute(sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(t))).fetchone()[0]
+                for t in nomes}

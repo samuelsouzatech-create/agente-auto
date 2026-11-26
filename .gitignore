@@ -42,3 +42,6 @@ bancada/audios/*
 
 # Maratona Fotos (F1): depósito local das fotos do estoque (fora do Git)
 fotos_deposito/
+
+# SE2 (Maratona Segurança): backups do banco (cifrados, mas nunca no Git)
+backups/

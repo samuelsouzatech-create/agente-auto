@@ -128,10 +128,10 @@ def _origem(request: Request) -> str:
 
 
 @router.post("/esqueci-senha", status_code=202)
-def esqueci_senha(entrada: EsqueciSenhaEntrada):
-    # Sempre a mesma resposta, exista ou não o e-mail.
+def esqueci_senha(entrada: EsqueciSenhaEntrada, request: Request):
+    # Sempre a mesma resposta, exista ou não o e-mail. SE2: limite também por endereço.
     try:
-        links_senha.pedir_link(entrada.email)
+        links_senha.pedir_link(entrada.email, origem=_origem(request))
     except autenticacao.MuitasTentativas:
         raise ErroApi("muitas_tentativas") from None
     return {"mensagem": links_senha.MENSAGEM_PEDIDO}

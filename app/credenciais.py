@@ -16,6 +16,11 @@ Telegram: mesma ideia, conferindo que o token é mesmo do bot da loja.
 Desde o P1 não existe atalho "loja 1 sem canal usa o .env": toda loja,
 inclusive a 1, precisa do canal cadastrado.
 
+SE2 (Maratona Segurança): o token vem PRIMEIRO do cofre (app/cofre.py, tabela cofre_credenciais,
+cifrado com a LEO_CHAVE_MESTRA do .env). Só se o cofre não tem o token daquela conta é que vale o
+token_ref antigo (RESERVA, com aviso no log). Token guardado que não abre (chave errada) é
+SemCredencial: não cai para a reserva sem ninguém saber.
+
 S4b: situacao_da_chave(canal) diz se a chave de UM canal foi encontrada,
 com as MESMAS regras do envio (as funções internas são as mesmas). Nunca
 devolve o token. Usada pelo "Testar conexão" da tela Canais.
@@ -56,8 +61,35 @@ def _do_env(nome: str) -> str:
     return (os.getenv(nome) or "").strip()
 
 
+_RESERVA_AVISADA: set = set()
+
+
+def _do_cofre(canal: dict) -> str | None:
+    """SE2: o token guardado no cofre para esta conta desta loja, ou None (o cofre não tem)."""
+    from app import cofre
+    try:
+        return cofre.ler_token(canal["loja_id"], canal["tipo"], canal["id_externo"])
+    except cofre.ErroCofre as erro:
+        raise SemCredencial(f"o token guardado no cofre não abre: {erro}") from None
+
+
+def _avisar_reserva(canal: dict) -> None:
+    chave = (canal.get("loja_id"), canal.get("tipo"), canal.get("id_externo"))
+    if chave in _RESERVA_AVISADA:
+        return
+    _RESERVA_AVISADA.add(chave)
+    from app.log import logger
+    logger("credenciais").warning(
+        f"[Credenciais] Loja {canal.get('loja_id')}, {canal.get('tipo')}: usando o token do .env (reserva). "
+        "Guarde no cofre: python scripts/cofre.py cadastrar ...")
+
+
 def _token_whatsapp_do_canal(canal: dict) -> str:
     numero = canal["id_externo"]
+    guardado = _do_cofre(canal)
+    if guardado:
+        return guardado
+    _avisar_reserva(canal)
     ref = (canal.get("token_ref") or "").strip()
     if ref:
         token = _do_env(ref)
@@ -72,6 +104,12 @@ def _token_whatsapp_do_canal(canal: dict) -> str:
 
 def _token_telegram_do_canal(canal: dict) -> str:
     id_bot = canal["id_externo"]
+    guardado = _do_cofre(canal)
+    if guardado:
+        if id_bot_telegram(guardado) != id_bot:
+            raise ChaveDeOutroRobo(f"o token guardado no cofre é de outro bot, não do {id_bot}")
+        return guardado
+    _avisar_reserva(canal)
     ref = (canal.get("token_ref") or "").strip()
     if ref:
         token = _do_env(ref)
@@ -97,7 +135,12 @@ class CredencialInstagram:
 
 
 def _token_instagram_do_canal(canal: dict) -> str:
-    """IG1: o token do Instagram vem SEMPRE do token_ref (nome da variável do .env). Sem atalho."""
+    """IG1: o token do Instagram vem do token_ref (nome da variável do .env). Sem atalho.
+    SE2: antes, o cofre."""
+    guardado = _do_cofre(canal)
+    if guardado:
+        return guardado
+    _avisar_reserva(canal)
     ref = (canal.get("token_ref") or "").strip()
     if not ref:
         raise SemCredencial(f"a conta {canal['id_externo']} não tem token_ref "
@@ -142,6 +185,8 @@ def situacao_da_chave(canal: dict) -> str:
             _token_whatsapp_do_canal(canal)
         elif tipo == "telegram":
             _token_telegram_do_canal(canal)
+        elif tipo == "instagram":
+            _token_instagram_do_canal(canal)
         else:
             return SEM_CONFERENCIA
     except ChaveDeOutroRobo:
