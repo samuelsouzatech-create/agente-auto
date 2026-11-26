@@ -412,13 +412,45 @@ def _ids_por_tabela(url: str, conexao: psycopg.Connection) -> frozenset:
 # transação vê a mesma coisa que veria dentro. Conexão somente leitura continua como antes.
 _LEITURA_SIMPLES = re.compile(r"^\s*(SELECT|WITH|EXPLAIN|SHOW)\b", re.I)
 _PRECISA_DE_TRANSACAO = re.compile(
-    r"\bFOR\s+(UPDATE|SHARE|NO\s+KEY|KEY)\b|\b(INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b"
-    r"|advisory_xact|nextval|setval|\bINTO\b", re.I)
+    r"\bFOR\s+(UPDATE|SHARE|NO\s+KEY|KEY)\b|\b(INSERT|UPDATE|DELETE|MERGE|TRUNCATE|ANALYZE)\b"
+    r"|advisory_xact|nextval|setval|set_config|\bINTO\b", re.I)
+
+# SE0 (Maratona Segurança): SELECT que chama uma FUNÇÃO pode gravar (ex.: uma função do banco que
+# faz INSERT). Na dúvida, abre a transação: só as funções desta lista (que só leem) e as palavras
+# do SQL seguidas de "(" deixam a leitura sem transação. Função nova numa leitura = abre
+# transação (fica certo, só um pouco mais lento); se ela só lê, entra aqui.
+FUNCOES_SO_LEITURA = frozenset("""
+    count sum avg min max coalesce nullif greatest least lower upper trim ltrim rtrim btrim substr
+    substring length char_length octet_length strpos position replace concat concat_ws split_part
+    left right lpad rpad regexp_replace regexp_match regexp_matches translate format to_char
+    to_date to_timestamp to_number cast date_trunc date_part extract now current_date age abs
+    round floor ceil ceiling mod power sqrt string_agg array_agg json_agg jsonb_agg
+    json_build_object jsonb_build_object json_object_agg jsonb_object_agg json_array_elements
+    jsonb_array_elements jsonb_array_elements_text json_array_elements_text
+    json_extract_path_text jsonb_extract_path_text to_json to_jsonb jsonb_typeof row_number rank
+    dense_rank lag lead first_value last_value bool_or bool_and every unnest generate_series
+    array_length array_position cardinality md5 encode decode current_schema current_setting
+    pg_typeof version to_regclass pg_get_serial_sequence agora_texto sem_acento fone_br
+    exists any all in values over filter row array interval distinct on using lateral and or not
+    as is like ilike between some where from select with when then else case by join union
+    intersect except having group order limit offset returning
+""".split())
+_CHAMADA = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+_TEXTO_ENTRE_ASPAS = re.compile(r"'(?:[^']|'')*'")
+
+
+def _chama_funcao_desconhecida(comando: str) -> bool:
+    codigo = _TEXTO_ENTRE_ASPAS.sub("''", comando)
+    return any(nome.lower() not in FUNCOES_SO_LEITURA for nome in _CHAMADA.findall(codigo))
 
 
 def leitura_simples(comando: str) -> bool:
-    """True se o comando só lê e não precisa de transação (DK3)."""
-    return bool(_LEITURA_SIMPLES.match(comando)) and not _PRECISA_DE_TRANSACAO.search(comando)
+    """True se o comando só lê e não precisa de transação (DK3). Só conta o que COMEÇA com SELECT,
+    WITH, EXPLAIN ou SHOW (comentário antes, COPY, LOCK, SET, VALUES, CALL, DO: abre); escrita em
+    qualquer lugar (inclusive dentro do WITH), EXPLAIN ANALYZE, set_config ou função fora da
+    lista: abre."""
+    return (bool(_LEITURA_SIMPLES.match(comando)) and not _PRECISA_DE_TRANSACAO.search(comando)
+            and not _chama_funcao_desconhecida(comando))
 
 
 class Cursor:

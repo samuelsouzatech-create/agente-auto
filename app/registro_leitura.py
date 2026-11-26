@@ -59,6 +59,7 @@ ROTULOS = {
     "mensagem_canal_sem_cadastro": "Mensagem de canal sem cadastro",
     "mensagem_recusada_loja_em_teste": "Mensagem recusada (loja em teste)",
     "leitura_foto_falhou": "Não consegui ler a foto de um cliente",
+    "mesmo_cliente_nao_juntou": "Não juntei Instagram e WhatsApp (o WhatsApp já tinha conversa)",
 }
 
 

@@ -183,7 +183,9 @@ def _palavra_combina(loja, texto: str) -> bool:
     if not palavras:
         return True
     normal = _sem_acento(texto)
-    return any(_sem_acento(p) in normal for p in palavras)
+    # SE0: a palavra vale no COMEÇO de uma palavra do comentário ("info" pega "informação",
+    # "financia" pega "financiamento"), mas "tem" não pega "sistema" nem "item".
+    return any(re.search(r"(?<![a-z0-9])" + re.escape(_sem_acento(p).strip()), normal) for p in palavras)
 
 
 def _dentro_do_prazo(loja, c: Comentario, agora: datetime) -> bool:

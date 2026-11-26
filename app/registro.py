@@ -70,6 +70,7 @@ HISTORICO_PROPRIO = {
 EVENTOS_DE_SISTEMA = {
     "mensagem_canal_sem_cadastro": "app.logs.registrar_canal_desconhecido", "mensagem_recusada_loja_em_teste": "app.core.turno.porta_fechada",
     "leitura_foto_falhou": "app.core.turno.executar_turno_imagem",       # L5c
+    "mesmo_cliente_nao_juntou": "app.instagram_whatsapp.vincular_mesmo_cliente",   # SE0
 }
 
 

@@ -9,6 +9,15 @@ cliente do Instagram (ig:<id>) nas tabelas das lojas onde ele existe, e responde
 O id que a Meta manda no Instagram é por conta (cada conta de loja vê outro id para a mesma pessoa),
 então o pedido só alcança a loja daquela conta. Outra loja nunca é tocada (teste confere).
 Nada de dado pessoal no registro: guarda só um resumo (hash) de quem pediu e quantas linhas saíram.
+
+SE0 (Maratona Segurança): os NÚMEROS da loja não podem mudar. Então, nas tabelas que contam
+venda, resultado e custo (ANONIMIZAR, abaixo) a linha fica, mas o cliente vira um nome anônimo
+("excluido:<código>", o mesmo para todas as linhas dele) e os textos livres somem. O resto é
+apagado: mensagens, memória da conversa, ficha (nome, telefone dado no Instagram, interesse),
+vínculo com o WhatsApp, chamados e os avisos deles. Por fim, qualquer texto da loja que ainda
+cite "ig:<id>" (ex.: o Registro) tem a citação trocada pelo nome anônimo.
+A conversa do WhatsApp que estava VINCULADA não é apagada (é outro canal, com outra base legal):
+só o vínculo sai. Decisão anotada no docs/seguranca.md para o analista.
 """
 from __future__ import annotations
 
@@ -81,19 +90,57 @@ def lojas_do_cliente(lead_id: str) -> list[int]:
     return sorted(i for i in ids if i is not None)
 
 
+# SE0: tabela -> colunas de texto livre que somem. A linha fica (os números da loja não mudam).
+ANONIMIZAR = {"vendas": (), "resultados": ("motivo",), "uso_custos": ()}
+
+
+def _colunas_de_texto(conexao) -> list[tuple[str, str]]:
+    linhas = conexao.execute(
+        "SELECT c.table_name, c.column_name FROM information_schema.columns c "
+        "JOIN information_schema.columns l ON l.table_name = c.table_name AND l.table_schema = c.table_schema "
+        "AND l.column_name = 'loja_id' WHERE c.table_schema = current_schema() "
+        "AND c.data_type IN ('text', 'character varying') ORDER BY c.table_name, c.column_name").fetchall()
+    return [(l["table_name"], l["column_name"]) for l in linhas]
+
+
 def apagar_cliente(loja_id: int, lead_id: str) -> int:
-    """Apaga o cliente desta loja em todas as tabelas (e a memória das conversas dele). Devolve
-    quantas linhas saíram. Outra loja não é tocada."""
+    """Apaga o cliente desta loja (SE0: anonimiza venda, resultado e custo). Devolve quantas linhas
+    saíram ou foram anonimizadas. Outra loja não é tocada. Tudo numa transação só."""
     from app.chaves import exigir_loja, thread_id
     loja_id = exigir_loja(loja_id)
+    anonimo = "excluido:" + secrets.token_hex(6)
     total = 0
     conexao = conectar()
     try:
         canais = {l["canal"] for l in conexao.execute(
             "SELECT DISTINCT canal FROM mensagens WHERE loja_id = ? AND lead_id = ?", (loja_id, lead_id)).fetchall()}
-        for tabela, coluna in _tabelas_do_cliente(conexao):
-            cursor = conexao.execute(f"DELETE FROM {tabela} WHERE loja_id = ? AND {coluna} = ?", (loja_id, lead_id))
+        telefone = conexao.execute("SELECT telefone FROM leads WHERE loja_id = ? AND lead_id = ?",
+                                   (loja_id, lead_id)).fetchone()
+        telefone = (telefone["telefone"] or "") if telefone else ""
+        chamados = [f"handoff:{l['id']}" for l in conexao.execute(
+            "SELECT id FROM handoffs WHERE loja_id = ? AND lead_id = ?", (loja_id, lead_id)).fetchall()]
+        for referencia in chamados:              # o aviso ao vendedor tem o resumo e o nome do cliente
+            cursor = conexao.execute("DELETE FROM avisos WHERE loja_id = ? AND referencia = ?", (loja_id, referencia))
             total += max(cursor.rowcount or 0, 0)
+        for tabela, coluna in _tabelas_do_cliente(conexao):
+            if tabela in ANONIMIZAR:
+                limpar = "".join(f", {c} = NULL" for c in ANONIMIZAR[tabela])
+                cursor = conexao.execute(f"UPDATE {tabela} SET {coluna} = ?{limpar} WHERE loja_id = ? AND {coluna} = ?",
+                                         (anonimo, loja_id, lead_id))
+            else:
+                cursor = conexao.execute(f"DELETE FROM {tabela} WHERE loja_id = ? AND {coluna} = ?", (loja_id, lead_id))
+            total += max(cursor.rowcount or 0, 0)
+        por_tabela: dict[str, list[str]] = {}
+        for tabela, coluna in _colunas_de_texto(conexao):
+            por_tabela.setdefault(tabela, []).append(coluna)
+        for tabela, colunas in por_tabela.items():      # o que ainda cita o cliente (ex.: o Registro)
+            cita = " OR ".join(f"strpos({c}, ?) > 0" for c in colunas)
+            for velho, novo in ((telefone, "telefone apagado"), (lead_id, anonimo)):
+                if not velho:
+                    continue
+                trocas = ", ".join(f"{c} = replace({c}, ?, ?)" for c in colunas)
+                conexao.execute(f"UPDATE {tabela} SET {trocas} WHERE loja_id = ? AND ({cita})",
+                                (*[x for _ in colunas for x in (velho, novo)], loja_id, *[lead_id] * len(colunas)))
         conexao.commit()
     finally:
         conexao.close()

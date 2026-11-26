@@ -298,3 +298,7 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   preço; chaves de comentário e de resposta pública nascem desligadas. Sem emoji (o plano tinha 🙂: L10 vale).
 - 24/11/2026, IG3: contrato da API **1.3.0** (canais e "como chegou"); o mesmo cliente do Instagram e do
   WhatsApp vira um cartão só, nunca entre lojas. `/dados/excluir` pronto; textos da Meta em rascunho.
+- 25/11/2026, SE0 (Maratona Segurança): "mesmo cliente" só junta com contato NOVO no WhatsApp (já
+  tinha conversa: não junta e vai para o Registro). Exclusão a pedido da Meta anonimiza venda, resultado
+  e custo (a linha fica) e apaga o resto. **Para decidir:** números do Resultado que vêm das mensagens
+  diminuem na exclusão; a conversa do WhatsApp vinculada fica. Diário: `docs/seguranca.md`.
