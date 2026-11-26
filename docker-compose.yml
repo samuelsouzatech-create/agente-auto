@@ -130,7 +130,13 @@ services:
   vigia:
     <<: *leo
     command: ["python", "-m", "app.vigia"]
-    depends_on: !reset []
+    depends_on: {}
+    healthcheck:
+      test: ["CMD", "python", "docker/saude.py", "vigia"]
+      interval: 60s
+      timeout: 6s
+      retries: 3
+      start_period: 120s
     environment:
       <<: *leo-ambiente
       VIGIA_PECAS: ${VIGIA_PECAS:-webhook=http://webhook:8000/,api-painel=http://api-painel:8001/api/v1/saude,operador=http://operador:8502/_stcore/health,porteiro=http://porteiro:80/}

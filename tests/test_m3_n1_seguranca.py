@@ -159,4 +159,4 @@ def test_codigo_sem_token_padrao():
 
 def test_requirements_fixa_pillow_e_google_genai():
     linhas = (RAIZ / "requirements.txt").read_text(encoding="utf-8").splitlines()
-    assert "pillow==12.3.0" in linhas and "google-genai==2.33.0" in linhas
+    assert "pillow==13.0.0" in linhas and "google-genai==2.33.0" in linhas      # SE1: pillow 13 (falhas conhecidas na 12)

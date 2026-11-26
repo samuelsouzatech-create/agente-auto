@@ -4,3 +4,5 @@ fakeredis[lua]==2.40.0
 pyyaml
 jsonschema
 openapi-spec-validator
+# SE1: o teste de carga (tests/test_pg3_carga.py) importa o psutil ao ser lido
+psutil==7.2.2

@@ -33,6 +33,7 @@ from datetime import datetime, timezone
 from typing import Callable
 
 REPETIR_S = 30 * 60
+SINAL = os.environ.get("VIGIA_SINAL", "/tmp/leo_vigia_ok")    # a saúde do Docker olha este arquivo
 INTERVALO_S = 60
 PECAS_PADRAO = ("webhook=http://webhook:8000/,api-painel=http://api-painel:8001/api/v1/saude,"
                 "operador=http://operador:8502/_stcore/health,porteiro=http://porteiro:80/")
@@ -186,6 +187,15 @@ class Vigia:
         return f"{nome} de volta."
 
 
+def marcar_sinal(caminho: str | None = None) -> None:
+    """Sinal de vida do PRÓPRIO vigia (para a saúde do Docker). Nunca derruba nada."""
+    try:
+        with open(caminho or SINAL, "w", encoding="utf-8") as arquivo:
+            arquivo.write(datetime.now(timezone.utc).isoformat())
+    except OSError:
+        pass
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Vigia: avisa o operador quando algo do Léo quebra.")
     parser.add_argument("--uma-vez", action="store_true", help="confere uma vez e sai")
@@ -199,6 +209,7 @@ def main(argv=None) -> int:
                 vigia.rodada(conferir())
             except Exception as erro:
                 print(f"[Vigia] Erro na conferência: {type(erro).__name__}")
+            marcar_sinal()
             if args.uma_vez:
                 break
             time.sleep(max(15, args.intervalo))
