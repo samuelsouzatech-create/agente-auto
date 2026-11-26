@@ -529,3 +529,10 @@ Guia: OWASP Top 10 (2021) e OWASP API Security Top 10 (2023). Cada ataque virou 
 **Depende do Samuel e do analista:**
 - deixar o repositório `agente-auto` privado; trocar os tokens e as senhas que passaram pela conversa;
 - `BANCO_APP_SENHA` forte no `.env` (SE3), e `LEO_CHAVE_MESTRA` e `LEO_CHAVE_BACKUP` (SE2).
+
+### Fim do SE4
+- Suíte local (3 partes seguidas): 925 + 1248 + 1109 = **3282 passaram**, 0 falhas.
+- GitHub Actions: **verde** (run 45753521197).
+- Comportamento do Léo para o cliente: não mudou (prompt e guardas intocados; a única mudança de
+  código do bloco é na foto do estoque, no porteiro e nos testes).
+- Branch `seguranca-4`, tag `se4`. Fim da Maratona Segurança: 26/11/2026, ~01:30 (Recife).

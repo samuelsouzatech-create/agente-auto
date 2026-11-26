@@ -310,3 +310,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
 - 26/11/2026, SE3: **migrações 23 (tranca por loja, RLS) e 24 (chaves da loja) usadas; próxima livre: 25**. O app
   conecta com o usuário `leo_app` (não é dono das tabelas); o painel só vê a loja da sessão até no banco. Nova
   variável obrigatória no `.env`: `BANCO_APP_SENHA`.
+- 26/11/2026, SE4: revisão como invasor (OWASP): nenhum GRAVE; consertados foto-bomba, brecha do link de foto e
+  corpo sem limite no porteiro. Lista "o que falta antes do primeiro cliente real" no fim do `docs/seguranca.md`.
