@@ -306,3 +306,18 @@ cliente real). Daqui em diante só rodo `docker compose config --quiet` ou leio 
 | **Brevo** | 300/dia | a partir de ~US$ 9/mês | tem servidor no Brasil? **não confirmado**; marca Brevo no rodapé no grátis |
 Para o volume do Léo (link de senha), o grátis de qualquer um basta no começo. Sugestão: Resend
 (simples) ou SES (barato, se o servidor já for AWS).
+
+### Erro meu no SE2 (achado pela suíte, consertado)
+Acrescentei ao `banco.py` uma função `criar_banco_vazio` com o MESMO nome de uma que já existia (a da
+bancada): a nova apagou a antiga e 77 testes da bancada e dos blocos L falharam na 1ª rodada (no
+computador e no GitHub). Tirei a duplicata (o backup usa a função que já existia) e criei uma catraca:
+`test_nenhuma_funcao_definida_duas_vezes_no_mesmo_arquivo` reprova nome de função ou classe repetido
+no mesmo arquivo.
+
+### Fim do SE2
+- Suíte local (3 partes seguidas): 925 + 1248 + 1052 = **3225 passaram**, 0 falhas.
+- GitHub Actions: **verde** (run 45744558794), já com o `pg_dump` 17 para o teste do backup.
+- Comportamento do Léo para o cliente: não mudou. Testes antigos alterados: o do link no terminal
+  (`test_c2f_senha.py`, agora e-mail) e os que fixavam a versão do esquema em 21 (agora "21 ou mais"
+  e a contagem de migrações).
+- Branch `seguranca-2`, tag `se2`. Migração 22 usada (próxima livre: 23).

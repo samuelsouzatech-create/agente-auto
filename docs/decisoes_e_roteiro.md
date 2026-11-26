@@ -305,3 +305,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
 - 25/11/2026, SE1: testes no GitHub Actions a cada push (suíte em 4 partes, pip-audit, gitleaks, UTF-8) nos
   dois repositórios; pillow 13 e streamlit 1.67 (falhas conhecidas). Vigia novo no Docker avisa o operador.
   **Para decidir:** o repositório agente-auto está PÚBLICO no GitHub.
+- 25/11/2026, SE2: **migração 22 usada** (cofre dos tokens, AES-256-GCM, chave só no .env; token_ref vira reserva;
+  próxima livre: 23). Backup cifrado com restauração conferida. Link de senha por e-mail (provedor falso até o servidor).
