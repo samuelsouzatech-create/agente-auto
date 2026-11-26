@@ -293,3 +293,109 @@ def test_compose_app_usa_o_usuario_do_app_e_o_migrar_usa_o_dono():
     assert "postgresql://${BANCO_APP_USUARIO:-leo_app}:${BANCO_APP_SENHA" in texto
     migrar = texto.split("\n  migrar:\n")[1].split("\n  webhook:")[0]
     assert "BANCO_URL: postgresql://leo:${POSTGRES_SENHA" in migrar
+
+
+# ------------------------------------------------------------------ chaves da loja (migração 24)
+def test_toda_tabela_com_loja_id_aponta_para_lojas():
+    c = conectar()
+    try:
+        com_loja = {l["table_name"] for l in c.execute(
+            "SELECT c.table_name FROM information_schema.columns c JOIN information_schema.tables t "
+            "ON t.table_name = c.table_name AND t.table_schema = c.table_schema "
+            "WHERE c.table_schema = current_schema() AND c.column_name = 'loja_id' AND t.table_type = 'BASE TABLE'")}
+        com_chave = {l["tabela"] for l in c.execute(
+            "SELECT conrelid::regclass::text AS tabela FROM pg_constraint WHERE contype = 'f' "
+            "AND confrelid = 'lojas'::regclass")}
+    finally:
+        c.close()
+    assert com_loja - com_chave == set()
+
+
+def test_linha_de_loja_que_nao_existe_e_recusada_no_commit():
+    c = conectar()
+    try:
+        c.execute("INSERT INTO mensagens (lead_id, loja_id, canal, direcao) VALUES ('x', 999, 'whatsapp', 'cliente')")
+        with pytest.raises(banco.Erro):
+            c.commit()                                    # a conferência é no fim da transação
+    finally:
+        c.close()
+    assert _ler("SELECT COUNT(*) AS n FROM mensagens WHERE loja_id = 999") == [{"n": 0}]
+
+
+def test_apagar_loja_com_dados_e_recusado(duas_lojas):
+    _, b = duas_lojas
+    with pytest.raises(banco.Erro):
+        _exec("DELETE FROM lojas WHERE id = ?", (b,))
+    assert _ler("SELECT COUNT(*) AS n FROM lojas WHERE id = ?", (b,)) == [{"n": 1}]
+
+
+def test_reiniciar_a_demo_continua_funcionando():
+    from app.demo import criar_loja_demo, reiniciar_demo
+    from app.ator import como
+    loja = criar_loja_demo(indexar=False)
+    with como("Teste", "operador", "painel", None):
+        assert reiniciar_demo(loja, indexar=False) == loja
+    assert _ler("SELECT COUNT(*) AS n FROM estoque WHERE loja_id = ?", (loja,))[0]["n"] > 0
+
+
+def test_migracoes_23_e_24_sobem_da_22_sem_apagar_dado(tmp_path, monkeypatch):
+    import psycopg
+    from psycopg import sql
+    url_app, url = banco.url_do_banco(), banco.url_do_dono()
+    nome = banco.nome_do_banco(url) + "_m24"
+    admin = banco.trocar_nome_do_banco(url, "postgres")
+    with psycopg.connect(admin, autocommit=True) as c:
+        c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome)))
+        c.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(nome)))
+    ate_22 = tmp_path / "ate22"
+    ate_22.mkdir()
+    for arquivo in banco.PASTA_MIGRACOES.glob("*.sql"):
+        if int(arquivo.name[:3]) <= 22:
+            (ate_22 / arquivo.name).write_text(arquivo.read_text(encoding="utf-8"), encoding="utf-8")
+    original = banco.PASTA_MIGRACOES
+    try:
+        banco.apontar_para(banco.trocar_nome_do_banco(url, nome))
+        monkeypatch.setattr(banco, "PASTA_MIGRACOES", ate_22)
+        assert banco.migrar() == [20, 21, 22]
+        _exec("INSERT INTO mensagens (lead_id, loja_id, canal, direcao, conteudo) VALUES ('m24', 1, 'whatsapp', 'cliente', 'antes')")
+        monkeypatch.setattr(banco, "PASTA_MIGRACOES", original)
+        assert banco.migrar() == [23, 24]
+        assert _ler("SELECT conteudo FROM mensagens WHERE lead_id = 'm24'") == [{"conteudo": "antes"}]
+        assert banco.migrar() == []
+    finally:
+        banco.fechar_pools()
+        banco.apontar_para(url_app, dono=url)
+        with psycopg.connect(admin, autocommit=True) as c:
+            c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome)))
+
+
+def test_migracao_24_para_se_houver_linha_de_loja_que_nao_existe(tmp_path, monkeypatch):
+    import psycopg
+    from psycopg import sql
+    url_app, url = banco.url_do_banco(), banco.url_do_dono()
+    nome = banco.nome_do_banco(url) + "_m24b"
+    admin = banco.trocar_nome_do_banco(url, "postgres")
+    with psycopg.connect(admin, autocommit=True) as c:
+        c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome)))
+        c.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(nome)))
+    ate_23 = tmp_path / "ate23"
+    ate_23.mkdir()
+    for arquivo in banco.PASTA_MIGRACOES.glob("*.sql"):
+        if int(arquivo.name[:3]) <= 23:
+            (ate_23 / arquivo.name).write_text(arquivo.read_text(encoding="utf-8"), encoding="utf-8")
+    original = banco.PASTA_MIGRACOES
+    try:
+        banco.apontar_para(banco.trocar_nome_do_banco(url, nome))
+        monkeypatch.setattr(banco, "PASTA_MIGRACOES", ate_23)
+        banco.migrar()
+        _exec("INSERT INTO mensagens (lead_id, loja_id, canal, direcao, conteudo) VALUES ('orfa', 77, 'whatsapp', 'cliente', 'fica')")
+        monkeypatch.setattr(banco, "PASTA_MIGRACOES", original)
+        with pytest.raises(Exception, match="loja que não existe"):
+            banco.migrar()
+        assert banco.versao_schema() == 23                                     # nada pela metade
+        assert _ler("SELECT conteudo FROM mensagens WHERE lead_id = 'orfa'") == [{"conteudo": "fica"}]
+    finally:
+        banco.fechar_pools()
+        banco.apontar_para(url_app, dono=url)
+        with psycopg.connect(admin, autocommit=True) as c:
+            c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome)))

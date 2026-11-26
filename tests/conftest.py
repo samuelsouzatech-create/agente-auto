@@ -145,6 +145,21 @@ def banco_de_teste():
     banco.apontar_para(None)
 
 
+def garantir_lojas(*ids) -> None:
+    """SE3 (migração 24, chaves da loja): o banco recusa linha de loja que não existe. Testes
+    antigos que usam uma "loja 2" sem criar chamam isto antes (só cria a linha em lojas, como
+    as lojas antigas: sem mudar o que o teste confere)."""
+    c = banco.conectar()
+    try:
+        for i in ids:
+            c.execute("INSERT INTO lojas (id, nome, segmento, config) VALUES (?, ?, 'veiculos', '{}') "
+                      "ON CONFLICT (id) DO NOTHING", (int(i), f"Loja {i} (teste)"))
+        c.execute("SELECT setval(pg_get_serial_sequence('lojas', 'id'), (SELECT MAX(id) FROM lojas))")
+        c.commit()
+    finally:
+        c.close()
+
+
 USUARIO_APP_DE_TESTE = "leo_app_teste"
 SENHA_APP_DE_TESTE = "senha-so-dos-testes-se3"
 _DONO_DE_TESTE: dict = {}

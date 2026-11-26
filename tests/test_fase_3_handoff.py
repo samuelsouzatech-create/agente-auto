@@ -222,6 +222,8 @@ def test_fila_mostra_o_mais_antigo_primeiro_e_so_abertos(banco_temporario):
 
 def test_handoffs_de_lojas_diferentes_nao_se_misturam(banco_temporario):
     """Multi-loja: o handoff da loja 2 não aparece nem silencia a loja 1."""
+    from tests.conftest import garantir_lojas  # SE3: a loja 2 precisa existir (chaves da loja)
+    garantir_lojas(2)
     from app.handoff import estado_do_handoff, listar_handoffs
     con = conectar()
     con.execute("INSERT INTO handoffs (lead_id, loja_id, motivo, resumo, estado) "
@@ -389,6 +391,8 @@ def test_guarda_grava_a_mensagem_segura_e_nao_o_preco_inventado(whatsapp):
 
 
 def test_historico_vem_em_ordem_e_separado_por_lead_e_loja(banco_temporario):
+    from tests.conftest import garantir_lojas  # SE3: a loja 2 precisa existir (chaves da loja)
+    garantir_lojas(2)
     from app.mensagens import salvar_mensagem, historico_do_lead
     salvar_mensagem("A", "cliente", "um", canal="whatsapp", loja_id=1)
     salvar_mensagem("A", "leo", "dois", canal="whatsapp", loja_id=1)
@@ -445,6 +449,8 @@ def test_remarcar_mantem_historico_e_vale_o_mais_recente(banco_temporario):
 
 
 def test_resultados_nao_se_misturam_entre_lojas(banco_temporario):
+    from tests.conftest import garantir_lojas  # SE3: a loja 2 precisa existir (chaves da loja)
+    garantir_lojas(2)
     from app.resultados import registrar_resultado, resultado_do_lead, listar_resultados
     registrar_resultado("5581", "comprou", loja_id=2)
     assert resultado_do_lead("5581", loja_id=1) is None
@@ -515,6 +521,8 @@ def test_listar_estoque_pode_esconder_vendidos(banco_temporario):
 
 
 def test_estoque_de_uma_loja_nao_vaza_para_outra(banco_temporario):
+    from tests.conftest import garantir_lojas  # SE3: a loja 2 precisa existir (chaves da loja)
+    garantir_lojas(2)
     from app.estoque import adicionar_carro, buscar_carro, listar_estoque, marcar_status
     novo = adicionar_carro("Fiat", "Argo", 2021, 30000, "Prata", "Manual", 62000.0, loja_id=2)
     assert buscar_carro(novo, loja_id=1) is None

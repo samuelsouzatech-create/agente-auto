@@ -115,8 +115,8 @@ def test_so_whatsapp_junta():
 
 
 # ------------------------------------------------------------------ painel: um cartão, dois canais
-def _cliente_nos_dois_canais(loja=1):
-    agora = datetime.now(timezone.utc)
+def _cliente_nos_dois_canais(loja=1, agora=None):
+    agora = agora or datetime.now(timezone.utc)
     _msg(loja, "ig:111", "instagram", "cliente", "vi o civic no insta", agora - timedelta(hours=2))
     _msg(loja, "ig:111", "instagram", "leo", "Oi! O Civic está aqui.", agora - timedelta(hours=2, minutes=-1))
     from app.instagram import anotar_origem
@@ -147,8 +147,11 @@ def test_conversa_tem_o_historico_dos_dois_canais_em_ordem():
 
 def test_atender_mostra_canal_e_como_chegou_sem_cartao_repetido():
     from app.api_painel.atender import montar_atender
-    _cliente_nos_dois_canais()
-    hoje = montar_atender(1)["conversas_de_hoje"]
+    # SE3: relógio fixo (15h em Recife). Com a hora de verdade, logo depois da meia-noite as
+    # mensagens de "2 horas atrás" caíam em ontem e o teste falhava (achado na suíte do SE3).
+    meio_da_tarde = (datetime.now(timezone.utc) - timedelta(days=1)).replace(hour=18, minute=0, second=0, microsecond=0)
+    _cliente_nos_dois_canais(agora=meio_da_tarde)
+    hoje = montar_atender(1, agora=meio_da_tarde + timedelta(minutes=5))["conversas_de_hoje"]
     meus = [c for c in hoje if c["lead"] in ("ig:111", FONE)]
     assert len(meus) == 1 and meus[0]["como_chegou"] == "Anúncio"
     assert set(meus[0]["canais"]) == {"Instagram", "WhatsApp"}

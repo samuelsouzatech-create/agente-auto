@@ -38,7 +38,7 @@ except ImportError:                     # pragma: no cover
     pass
 
 PASTA_MIGRACOES = Path(__file__).resolve().parent / "migracoes"
-VERSAO_SCHEMA = 23                       # 20 = base; 21 = Instagram; 22 = cofre (SE2); 23 = tranca por loja (SE3)
+VERSAO_SCHEMA = 24                       # 20 base; 21 Instagram; 22 cofre (SE2); 23 tranca por loja e 24 chaves da loja (SE3)
 POOL_MIN = int(os.getenv("BANCO_POOL_MIN", "1"))
 POOL_MAX = int(os.getenv("BANCO_POOL_MAX", "10"))
 ESPERA_POOL_S = float(os.getenv("BANCO_POOL_ESPERA_S", "30"))
@@ -378,16 +378,18 @@ def voltar_ao_estado_inicial(semente: dict) -> None:
         comandos = [f"DELETE FROM {t}" for t in semente]
         comandos += [f"SELECT setval(pg_get_serial_sequence('{t}', 'id'), 1, false)"
                      for t in semente if t in com_id]
-        bruta.execute("; ".join(comandos))
-        for tabela, (nomes, linhas) in semente.items():
-            if not linhas:
-                continue
-            marcas = ", ".join(["%s"] * len(nomes))
-            with bruta.cursor() as cur:
-                cur.executemany(f"INSERT INTO {tabela} ({', '.join(nomes)}) VALUES ({marcas})", linhas)
-            if "id" in nomes:                    # o próximo id automático vem depois da semente
-                bruta.execute(f"SELECT setval(pg_get_serial_sequence('{tabela}', 'id'), "
-                              f"(SELECT MAX(id) FROM {tabela}))")
+        # SE3: numa transação só (as chaves da loja, migração 24, são conferidas no fim dela).
+        with bruta.transaction():
+            bruta.execute("; ".join(comandos))
+            for tabela, (nomes, linhas) in semente.items():
+                if not linhas:
+                    continue
+                marcas = ", ".join(["%s"] * len(nomes))
+                with bruta.cursor() as cur:
+                    cur.executemany(f"INSERT INTO {tabela} ({', '.join(nomes)}) VALUES ({marcas})", linhas)
+                if "id" in nomes:                    # o próximo id automático vem depois da semente
+                    bruta.execute(f"SELECT setval(pg_get_serial_sequence('{tabela}', 'id'), "
+                                  f"(SELECT MAX(id) FROM {tabela}))")
         conexao.commit()
     finally:
         conexao.close()

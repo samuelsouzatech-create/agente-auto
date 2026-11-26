@@ -55,6 +55,8 @@ def test_conexao_vem_do_pool_do_postgres():
 
 
 def test_duas_escritas_ao_mesmo_tempo_nao_dao_database_is_locked():
+    from tests.conftest import garantir_lojas  # SE3: a loja 2 precisa existir (chaves da loja)
+    garantir_lojas(2)
     erros, pronto = [], threading.Event()
 
     def segura_a_escrita():
