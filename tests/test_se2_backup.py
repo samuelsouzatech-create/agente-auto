@@ -20,7 +20,7 @@ def ambiente(monkeypatch, tmp_path):
     monkeypatch.setenv("LEO_CHAVE_BACKUP", backup.nova_chave())
     monkeypatch.setenv("LEO_BACKUP_PASTA", str(tmp_path / "backups"))
     monkeypatch.setenv("LEO_BACKUP_DESTINO", "pasta")
-    url = banco.url_do_banco()
+    url = banco.url_do_dono()            # SE3: o backup é feito pelo dono das tabelas
     destino = banco.trocar_nome_do_banco(url, banco.nome_do_banco(url) + "_restaurado")
     backup.apagar_banco(destino)
     yield url, destino

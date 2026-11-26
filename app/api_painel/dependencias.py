@@ -6,11 +6,15 @@ Dependências comuns da API do painel (C2a).
 - exigir_papel(...): só os papéis listados passam (403 para os outros).
 - loja_da_sessao: a ÚNICA fonte da loja. Nenhuma rota lê loja_id do pedido.
 - exigir_csrf: toda rota que escreve exige X-CSRF-Token igual ao csrf da sessão.
+- SE3 (Maratona Segurança): ler a sessão MARCA a loja dela em toda conexão do resto do pedido
+  (tranca por loja no banco). Só a busca da sessão pelo token roda no modo sistema (ainda não se
+  sabe a loja).
 """
 from __future__ import annotations
 
 from fastapi import Depends, Request
 
+import banco
 from app import sessoes
 from app.api_painel.erros import ErroApi
 
@@ -24,12 +28,23 @@ def token_do_pedido(request: Request):
 
 def usuario_logado(request: Request) -> dict:
     token = token_do_pedido(request)
-    sessao = sessoes.ler_sessao(token)
+    with banco.como_sistema("painel: achar a sessão pelo token"):
+        sessao = sessoes.ler_sessao(token)
+        sem_acesso = sessao is None and sessoes.sessao_sem_acesso(token)
     if sessao is None:
-        if sessoes.sessao_sem_acesso(token):
+        if sem_acesso:
             raise ErroApi("sem_permissao")
         raise ErroApi("nao_autenticado")
+    marcar_loja(sessao["loja_id"])
     return sessao
+
+
+def marcar_loja(loja_id) -> None:
+    """SE3: daqui em diante, neste pedido, o banco só mostra a loja da sessão."""
+    try:
+        banco.marcar_loja_do_pedido(loja_id)
+    except RuntimeError:                 # chamado fora de um pedido (alguns testes antigos)
+        pass
 
 
 def exigir_papel(*papeis: str):

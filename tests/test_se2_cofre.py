@@ -45,7 +45,7 @@ def loja_b():
 
 def test_migracao_22_cria_o_cofre():
     import banco
-    assert banco.VERSAO_SCHEMA == 22
+    assert banco.VERSAO_SCHEMA >= 22
     colunas = {l["column_name"] for l in _ler(
         "SELECT column_name FROM information_schema.columns WHERE table_name = 'cofre_credenciais'")}
     assert {"loja_id", "tipo_canal", "conta", "token_cifrado", "chave_id"} <= colunas
@@ -229,7 +229,7 @@ def test_migracao_22_sobe_da_21_sem_apagar_dado(tmp_path, monkeypatch):
     import psycopg
     from psycopg import sql
     import banco
-    url = banco.url_do_banco()
+    url_app, url = banco.url_do_banco(), banco.url_do_dono()     # SE3: criar banco é coisa do dono
     nome = banco.nome_do_banco(url) + "_m22"
     admin = banco.trocar_nome_do_banco(url, "postgres")
     with psycopg.connect(admin, autocommit=True) as c:
@@ -256,6 +256,6 @@ def test_migracao_22_sobe_da_21_sem_apagar_dado(tmp_path, monkeypatch):
         assert banco.migrar() == []
     finally:
         banco.fechar_pools()
-        banco.apontar_para(url)
+        banco.apontar_para(url_app, dono=url)
         with psycopg.connect(admin, autocommit=True) as c:
             c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome)))

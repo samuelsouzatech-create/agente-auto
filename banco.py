@@ -38,7 +38,7 @@ except ImportError:                     # pragma: no cover
     pass
 
 PASTA_MIGRACOES = Path(__file__).resolve().parent / "migracoes"
-VERSAO_SCHEMA = 22                       # 20 = base do PostgreSQL; 21 = Instagram (IG1); 22 = cofre (SE2)
+VERSAO_SCHEMA = 23                       # 20 = base; 21 = Instagram; 22 = cofre (SE2); 23 = tranca por loja (SE3)
 POOL_MIN = int(os.getenv("BANCO_POOL_MIN", "1"))
 POOL_MAX = int(os.getenv("BANCO_POOL_MAX", "10"))
 ESPERA_POOL_S = float(os.getenv("BANCO_POOL_ESPERA_S", "30"))
@@ -56,9 +56,11 @@ class BancoNaoConfigurado(RuntimeError):
 # ---------------------------------------------------------------- qual banco
 
 _url_em_uso: str | None = None           # trocado pelos testes e pela bancada (apontar_para)
+_url_do_dono_em_uso: str | None = None   # SE3: o dono das tabelas (migrações), quando é outro usuário
 
 
 def url_do_banco() -> str:
+    """O endereço que o APP usa (SE3: no Docker, o usuário leo_app, que passa pela tranca por loja)."""
     url = _url_em_uso or os.getenv("BANCO_URL")
     if not url:
         raise BancoNaoConfigurado(
@@ -66,10 +68,20 @@ def url_do_banco() -> str:
     return url
 
 
-def apontar_para(url: str | None) -> None:
-    """Usa outro banco (testes e bancada). None volta para a BANCO_URL."""
-    global _url_em_uso
+def url_do_dono() -> str:
+    """SE3: o endereço do DONO das tabelas (migrações, backup, criar e apagar banco). Sem
+    BANCO_URL_DONO, é a própria BANCO_URL (o jeito de antes: um usuário só)."""
+    if _url_em_uso:
+        return _url_do_dono_em_uso or _url_em_uso
+    return os.getenv("BANCO_URL_DONO") or url_do_banco()
+
+
+def apontar_para(url: str | None, *, dono: str | None = None) -> None:
+    """Usa outro banco (testes e bancada). None volta para a BANCO_URL. SE3: 'dono' é o endereço
+    do dono das tabelas daquele banco (sem ele, o próprio url)."""
+    global _url_em_uso, _url_do_dono_em_uso
     _url_em_uso = url
+    _url_do_dono_em_uso = dono if url else None
 
 
 def nome_do_banco(url: str) -> str:
@@ -271,7 +283,7 @@ def _pool(url: str) -> ConnectionPool:
                 pool = ConnectionPool(
                     url, min_size=POOL_MIN, max_size=POOL_MAX, timeout=ESPERA_POOL_S,
                     kwargs={"cursor_factory": ClientCursor, "autocommit": False},
-                    configure=_configurar, open=True, name="leo")
+                    configure=_configurar, reset=_apagar_marca, open=True, name="leo")
                 _pools[url] = pool
     return pool
 
@@ -520,6 +532,11 @@ class Conexao:
         self._bruta = self._pool.getconn()
         self._fechada = False
         self._rastro = None
+        try:                                       # SE3: a loja (ou o modo sistema) desta conexão
+            _gravar_marca(self._bruta, *marca_atual().valores())
+        except Exception:
+            self._pool.putconn(self._bruta)
+            raise
         # DK3: sem transação até precisar (ver leitura_simples). Somente leitura: como antes.
         self._sob_demanda = not somente_leitura
         if somente_leitura:
@@ -655,7 +672,7 @@ def migrar() -> list[int]:
     """Aplica, em ordem, as migrações que ainda não rodaram. Cada uma é tudo ou nada.
     Devolve os números aplicados agora."""
     aplicadas_agora = []
-    with psycopg.connect(url_do_banco(), autocommit=True) as bruta:
+    with psycopg.connect(url_do_dono(), autocommit=True) as bruta:
         bruta.execute("SELECT pg_advisory_lock(%s)", (_TRAVA_MIGRACAO,))
         try:
             bruta.execute(_TABELA_MIGRACOES)
@@ -669,6 +686,7 @@ def migrar() -> list[int]:
                                   (numero, nome))
                 aplicadas_agora.append(numero)
             _preparar_tabelas_da_memoria(bruta)
+            _preparar_usuario_do_app_pelo_ambiente(bruta)
         finally:
             bruta.execute("SELECT pg_advisory_unlock(%s)", (_TRAVA_MIGRACAO,))
     _tabelas_com_id.clear()
@@ -790,3 +808,207 @@ def contagens_das_tabelas(url: str) -> dict[str, int]:
             "AND table_type = 'BASE TABLE' ORDER BY table_name").fetchall()]
         return {t: c.execute(sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(t))).fetchone()[0]
                 for t in nomes}
+
+
+# ---------------------------------------------------------------- SE3: a loja da conexão (RLS)
+#
+# Row Level Security (migração 23): nas tabelas com loja_id, a linha só aparece (e só pode ser
+# gravada) se loja_id = a loja MARCADA na conexão, ou se a conexão estiver no modo "sistema".
+# Conexão sem marca não vê nada dessas tabelas.
+#
+# Quem marca é este arquivo, no conectar(), a partir da "marca atual":
+# - API do painel: cada pedido começa SEM marca (pedido_do_painel) e, assim que a sessão é lida,
+#   recebe a loja da sessão (marcar_loja_do_pedido). Nunca o modo sistema, com UMA exceção
+#   explícita e curta: achar a sessão pelo token e a pessoa pelo e-mail ANTES do login (ainda não
+#   se sabe a loja). Esses pontos usam como_sistema("motivo") e estão listados no docs/seguranca.md.
+# - webhook, relógio, operador, simulador, vigia, bot e scripts: declaram o modo sistema ao ligar
+#   (declarar_sistema("quem")). Cada lugar está listado no docs/seguranca.md.
+# A marca é da SESSÃO do PostgreSQL (set_config(..., false)), então vale para todas as consultas
+# da conexão, dentro ou fora de transação (o DK3 abre transação só quando precisa; um SET LOCAL
+# sumiria no fim de cada transação). Ao voltar para o pool a marca é APAGADA (reset do pool) e, ao
+# sair do pool, é gravada de novo: nunca vaza de um dono para o outro (teste dedicado).
+# A tranca só vale para quem conecta com o usuário do app (BANCO_URL com o leo_app). O dono das
+# tabelas (o das migrações) passa por cima de tudo, de propósito.
+import contextvars as _contextvars
+from contextlib import contextmanager as _contextmanager
+from dataclasses import dataclass as _dataclass
+
+SISTEMA = "sistema"
+LOJA = "loja"
+
+
+@_dataclass
+class Marca:
+    modo: str | None = None          # None (sem marca), "loja" ou "sistema"
+    loja: int | None = None
+    quem: str = ""
+
+    def valores(self) -> tuple[str, str]:
+        if self.modo == SISTEMA:
+            return SISTEMA, ""
+        if self.modo == LOJA and self.loja is not None:
+            return LOJA, str(int(self.loja))
+        return "", ""
+
+
+_marca_do_pedido: _contextvars.ContextVar = _contextvars.ContextVar("leo_marca", default=None)
+_marca_do_processo = Marca()
+
+
+def declarar_sistema(quem: str) -> None:
+    """O PROCESSO inteiro (webhook, relógio, operador, scripts...) usa o modo sistema."""
+    global _marca_do_processo
+    if not str(quem or "").strip():
+        raise ValueError("Diga quem está declarando o modo sistema.")
+    _marca_do_processo = Marca(SISTEMA, None, str(quem))
+
+
+def esquecer_declaracao() -> None:
+    """Volta o processo para sem marca (testes)."""
+    global _marca_do_processo
+    _marca_do_processo = Marca()
+
+
+def marca_atual() -> Marca:
+    return _marca_do_pedido.get() or _marca_do_processo
+
+
+@_contextmanager
+def pedido_do_painel():
+    """Um pedido da API do painel: começa SEM marca, mesmo que o processo seja 'sistema'."""
+    token = _marca_do_pedido.set(Marca(None, None, "painel"))
+    try:
+        yield
+    finally:
+        _marca_do_pedido.reset(token)
+
+
+def marcar_loja_do_pedido(loja_id) -> None:
+    """A loja da SESSÃO vale para o resto do pedido (a mesma marca chega às linhas do threadpool)."""
+    marca = _marca_do_pedido.get()
+    if marca is None:
+        raise RuntimeError("marcar_loja_do_pedido fora de um pedido do painel.")
+    marca.modo, marca.loja = LOJA, int(loja_id)
+
+
+@_contextmanager
+def como_loja(loja_id):
+    """Só esta loja, enquanto durar o bloco (testes e conferências)."""
+    token = _marca_do_pedido.set(Marca(LOJA, int(loja_id), "bloco"))
+    try:
+        yield
+    finally:
+        _marca_do_pedido.reset(token)
+
+
+@_contextmanager
+def como_sistema(quem: str):
+    """Modo sistema enquanto durar o bloco. Na API do painel, só onde ainda não há loja (achar a
+    sessão pelo token, a pessoa pelo e-mail no login e no link de senha). Depois volta ao que era."""
+    marca = _marca_do_pedido.get()
+    if marca is None:
+        token = _marca_do_pedido.set(Marca(SISTEMA, None, quem))
+        try:
+            yield
+        finally:
+            _marca_do_pedido.reset(token)
+        return
+    antes = (marca.modo, marca.loja, marca.quem)
+    marca.modo, marca.loja, marca.quem = SISTEMA, None, quem
+    try:
+        yield
+    finally:
+        marca.modo, marca.loja, marca.quem = antes
+
+
+_SQL_MARCAR = "SELECT set_config('leo.modo', %s, false), set_config('leo.loja', %s, false)"
+
+
+def _gravar_marca(bruta: psycopg.Connection, modo: str, loja: str) -> None:
+    """Grava a marca na sessão do PostgreSQL, fora de transação (vale até ser trocada). Se a
+    conexão já está com esta marca (ex.: sem marca, logo depois do reset do pool), não manda nada."""
+    if getattr(bruta, "_leo_marca", ("", "")) == (modo, loja):
+        return
+    estava = bruta.autocommit
+    if not estava:
+        bruta.autocommit = True
+    try:
+        bruta.execute(_SQL_MARCAR, (modo, loja))
+    finally:
+        if not estava:
+            bruta.autocommit = False
+    bruta._leo_marca = (modo, loja)
+
+
+def _apagar_marca(bruta: psycopg.Connection) -> None:
+    """Reset do pool: a conexão devolvida volta SEM marca."""
+    _gravar_marca(bruta, "", "")
+
+
+def marca_da_conexao(conexao) -> tuple[str, str]:
+    """(modo, loja) gravados na conexão agora (testes)."""
+    bruta = getattr(conexao, "_bruta", conexao)
+    linha = bruta.execute("SELECT current_setting('leo.modo', true), current_setting('leo.loja', true)").fetchone()
+    return (linha[0] or "", linha[1] or "")
+
+
+# ---------------------------------------------------------------- SE3: o usuário do app
+
+USUARIO_DO_APP_PADRAO = "leo_app"
+_NOME_DE_USUARIO = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+
+
+def preparar_usuario_do_app(bruta: psycopg.Connection, usuario: str, senha: str | None) -> None:
+    """Cria (ou atualiza) o usuário do APP: entra no banco, lê e grava as tabelas, mas NÃO é dono
+    delas e NÃO passa por cima da tranca (NOBYPASSRLS). Roda com o dono (migrar)."""
+    from psycopg import sql
+    if not _NOME_DE_USUARIO.match(usuario or ""):
+        raise ValueError("Nome do usuário do app inválido (use letras minúsculas, números e _).")
+    nome = sql.Identifier(usuario)
+    existe = bruta.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (usuario,)).fetchone()
+    if not existe:
+        if not senha:
+            return
+        bruta.execute(sql.SQL("CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS "
+                              "PASSWORD {}").format(nome, sql.Literal(senha)))
+    else:
+        bruta.execute(sql.SQL("ALTER ROLE {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS").format(nome))
+        if senha:
+            bruta.execute(sql.SQL("ALTER ROLE {} PASSWORD {}").format(nome, sql.Literal(senha)))
+    banco = sql.Identifier(bruta.info.dbname)
+    for comando in (
+            "GRANT CONNECT ON DATABASE {banco} TO {u}",
+            "GRANT USAGE ON SCHEMA public TO {u}",
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {u}",
+            "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {u}",
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {u}",
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {u}"):
+        bruta.execute(sql.SQL(comando).format(banco=banco, u=nome))
+
+
+def _preparar_usuario_do_app_pelo_ambiente(bruta: psycopg.Connection) -> None:
+    """No migrar: BANCO_APP_USUARIO (padrão leo_app) e BANCO_APP_SENHA do .env. Sem senha e sem o
+    usuário criado, não faz nada (o jeito de antes: o app usa o dono)."""
+    usuario = os.getenv("BANCO_APP_USUARIO") or USUARIO_DO_APP_PADRAO
+    preparar_usuario_do_app(bruta, usuario, os.getenv("BANCO_APP_SENHA") or None)
+
+
+def url_do_usuario(url: str, usuario: str, senha: str) -> str:
+    """O mesmo banco, com outro usuário e senha."""
+    from urllib.parse import quote
+    partes = urlsplit(url)
+    host = partes.hostname or "127.0.0.1"
+    netloc = f"{quote(usuario)}:{quote(senha)}@{host}" + (f":{partes.port}" if partes.port else "")
+    return urlunsplit(partes._replace(netloc=netloc))
+
+
+def tranca_ligada(conexao=None) -> bool:
+    """SE3: este app passa pela tranca (o usuário NÃO é dono nem superusuário)."""
+    propria = conexao is None
+    conexao = conexao or conectar()
+    try:
+        linha = conexao.execute("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user").fetchone()
+        return not (linha[0] or linha[1])
+    finally:
+        if propria:
+            conexao.close()

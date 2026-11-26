@@ -12,10 +12,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
+import banco
 from banco import conectar
 from app import autenticacao, links_senha, sessoes
 from app.ator import como
-from app.api_painel.dependencias import COOKIE, exigir_csrf, exigir_papel, token_do_pedido
+from app.api_painel.dependencias import COOKIE, exigir_csrf, exigir_papel, marcar_loja, token_do_pedido
 from app.api_painel.erros import ErroApi
 from app.api_painel.eu import montar_eu
 
@@ -55,25 +56,28 @@ def _pessoa(usuario_id):
 def login(entrada: LoginEntrada, resposta: Response, request: Request):
     email = entrada.email.strip().lower()[:MAX_EMAIL]
     origem = _origem(request)
-    if autenticacao.origem_bloqueada(origem):        # revisão geral #5: limite por origem
-        raise ErroApi("muitas_tentativas")
-    achado = autenticacao.autenticar(email, entrada.senha, origem=origem)
-    if achado is None:
-        autenticacao.anotar_login_errado_da_origem(origem)
-        if autenticacao.bloqueado_por_tentativas(email, origem=origem):
+    # SE3: antes do login não há loja; achar a pessoa pelo e-mail e abrir a sessão é modo sistema.
+    with banco.como_sistema("painel: login (achar a pessoa pelo e-mail)"):
+        if autenticacao.origem_bloqueada(origem):        # revisão geral #5: limite por origem
             raise ErroApi("muitas_tentativas")
-        raise ErroApi("credenciais_invalidas")
-    pessoa = _pessoa(achado["id"])
-    if pessoa is None or pessoa["papel"] not in sessoes.PAPEIS_COM_LOGIN or not pessoa["loja_id"]:
-        raise ErroApi("credenciais_invalidas")
-    try:
-        token = sessoes.criar_sessao(pessoa["id"], pessoa["loja_id"], pessoa["papel"])
-    except ValueError:
-        raise ErroApi("credenciais_invalidas") from None
-    sessao = sessoes.ler_sessao(token)
-    if sessao is None:                      # loja desligada, por exemplo
-        sessoes.revogar(token)
-        raise ErroApi("credenciais_invalidas")
+        achado = autenticacao.autenticar(email, entrada.senha, origem=origem)
+        if achado is None:
+            autenticacao.anotar_login_errado_da_origem(origem)
+            if autenticacao.bloqueado_por_tentativas(email, origem=origem):
+                raise ErroApi("muitas_tentativas")
+            raise ErroApi("credenciais_invalidas")
+        pessoa = _pessoa(achado["id"])
+        if pessoa is None or pessoa["papel"] not in sessoes.PAPEIS_COM_LOGIN or not pessoa["loja_id"]:
+            raise ErroApi("credenciais_invalidas")
+        try:
+            token = sessoes.criar_sessao(pessoa["id"], pessoa["loja_id"], pessoa["papel"])
+        except ValueError:
+            raise ErroApi("credenciais_invalidas") from None
+        sessao = sessoes.ler_sessao(token)
+        if sessao is None:                      # loja desligada, por exemplo
+            sessoes.revogar(token)
+            raise ErroApi("credenciais_invalidas")
+    marcar_loja(sessao["loja_id"])
     _gravar_cookie(resposta, token)
     return montar_eu(sessao, token)
 
@@ -131,7 +135,8 @@ def _origem(request: Request) -> str:
 def esqueci_senha(entrada: EsqueciSenhaEntrada, request: Request):
     # Sempre a mesma resposta, exista ou não o e-mail. SE2: limite também por endereço.
     try:
-        links_senha.pedir_link(entrada.email, origem=_origem(request))
+        with banco.como_sistema("painel: esqueci a senha (achar a pessoa pelo e-mail)"):
+            links_senha.pedir_link(entrada.email, origem=_origem(request))
     except autenticacao.MuitasTentativas:
         raise ErroApi("muitas_tentativas") from None
     return {"mensagem": links_senha.MENSAGEM_PEDIDO}
@@ -141,18 +146,21 @@ def esqueci_senha(entrada: EsqueciSenhaEntrada, request: Request):
 def criar_senha(entrada: CriarSenhaEntrada, request: Request):
     # O ator é a dona do link, definido antes de chamar app/ (P6).
     origem = _origem(request)
-    if links_senha.link_errado_demais(origem):
-        raise ErroApi("muitas_tentativas")
-    pessoa = links_senha.pessoa_do_link(entrada.token)
-    if pessoa is None:
-        links_senha.anotar_link_errado(origem)
-        raise ErroApi("link_invalido")
+    with banco.como_sistema("painel: criar senha (achar a pessoa pelo link)"):
+        if links_senha.link_errado_demais(origem):
+            raise ErroApi("muitas_tentativas")
+        pessoa = links_senha.pessoa_do_link(entrada.token)
+        if pessoa is None:
+            links_senha.anotar_link_errado(origem)
+            raise ErroApi("link_invalido")
+    marcar_loja(pessoa["loja_id"])                       # SE3: o resto só na loja da pessoa
     with como(pessoa["nome"], "cliente", "api", pessoa["loja_id"]):
         try:
             links_senha.criar_senha(entrada.token, entrada.senha_nova)
         except autenticacao.SenhaFraca as erro:
             raise ErroApi("senha_fraca", {"senha_nova": str(erro)}) from None
         except links_senha.LinkInvalido:
-            links_senha.anotar_link_errado(origem)
+            with banco.como_sistema("painel: criar senha (anotar link errado)"):
+                links_senha.anotar_link_errado(origem)
             raise ErroApi("link_invalido") from None
     return Response(status_code=204)

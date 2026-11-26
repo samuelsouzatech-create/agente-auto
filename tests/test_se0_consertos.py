@@ -325,8 +325,13 @@ def test_leitura_de_verdade_nao_abre(comando):
 def test_funcao_que_grava_chamada_por_select_e_desfeita_sem_commit():
     """O furo que o SE0 fechou: SELECT f() com f gravando rodava FORA da transação (gravava na
     hora, sem volta). Agora abre a transação, e fechar sem commit desfaz."""
-    _exec("CREATE OR REPLACE FUNCTION se0_grava(t text) RETURNS int LANGUAGE sql AS "
-          "$$ INSERT INTO mensagens (lead_id, loja_id, canal, direcao, conteudo) VALUES (t, 1, 'simulador', 'cliente', 'x') RETURNING 1 $$")
+    import psycopg
+
+    def _como_dono(sql):                 # SE3: o app não cria função (não é dono do esquema)
+        with psycopg.connect(banco.url_do_dono(), autocommit=True) as d:
+            d.execute(sql)
+    _como_dono("CREATE OR REPLACE FUNCTION se0_grava(t text) RETURNS int LANGUAGE sql AS "
+               "$$ INSERT INTO mensagens (lead_id, loja_id, canal, direcao, conteudo) VALUES (t, 1, 'simulador', 'cliente', 'x') RETURNING 1 $$")
     try:
         c = conectar()
         try:
@@ -336,7 +341,7 @@ def test_funcao_que_grava_chamada_por_select_e_desfeita_sem_commit():
             c.close()                               # sem commit
         assert _ler("SELECT COUNT(*) AS n FROM mensagens WHERE lead_id = 'se0-func'") == [{"n": 0}]
     finally:
-        _exec("DROP FUNCTION IF EXISTS se0_grava(text)")
+        _como_dono("DROP FUNCTION IF EXISTS se0_grava(text)")
 
 
 def test_cte_com_escrita_de_verdade_e_desfeita_sem_commit():

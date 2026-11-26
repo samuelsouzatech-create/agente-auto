@@ -80,4 +80,6 @@ def main(argumentos) -> int:
 
 
 if __name__ == "__main__":
+    import banco as _banco                  # SE3: este programa vê todas as lojas (modo sistema)
+    _banco.declarar_sistema("scripts/estado_loja.py")
     sys.exit(main(sys.argv[1:]))

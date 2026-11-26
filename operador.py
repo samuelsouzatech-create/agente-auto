@@ -27,6 +27,9 @@ from paginas.menu import montar_operador  # noqa: E402
 from paginas.operador.estilo import aplicar_estilo  # noqa: E402
 from paginas.operador.nova_loja import abrir_nova_loja  # noqa: E402
 from paginas.operador_sessao import escolher_loja  # noqa: E402
+import banco  # noqa: E402
+
+banco.declarar_sistema("operador.py (painel do operador, todas as lojas)")   # SE3: modo sistema
 
 iniciar_sessao_operador()
 aplicar_estilo()              # S10b: visual do operador, uma vez só

@@ -33,6 +33,8 @@ if not os.environ.get("GOOGLE_API_KEY"):
 import banco
 from app import ator, lojas, logs, permissoes
 
+banco.declarar_sistema("testes (conftest)")      # SE3: antes de qualquer fixture ler o banco
+
 
 REDIS_BANCO_DE_TESTE = 15      # o Redis tem 16 "gavetas" (0 a 15); o Léo usa a 0
 
@@ -130,10 +132,22 @@ def banco_de_teste():
         c.execute(sql.SQL("ALTER DATABASE {} SET synchronous_commit = off").format(sql.Identifier(nome)))
     banco.apontar_para(url)
     banco.migrar()
+    # SE3 (Maratona Segurança): o app dos testes conecta com um usuário que NÃO é dono das tabelas
+    # (a tranca por loja vale de verdade). Usuário só dos testes: nunca mexe no leo_app de uso.
+    with psycopg.connect(url, autocommit=True) as c:
+        banco.preparar_usuario_do_app(c, USUARIO_APP_DE_TESTE, SENHA_APP_DE_TESTE)
+    url_app = banco.url_do_usuario(url, USUARIO_APP_DE_TESTE, SENHA_APP_DE_TESTE)
+    _DONO_DE_TESTE["url"] = url
+    banco.apontar_para(url_app, dono=url)
     _SEMENTE.update(banco.estado_inicial())
-    yield url
+    yield url_app
     banco.fechar_pools()
     banco.apontar_para(None)
+
+
+USUARIO_APP_DE_TESTE = "leo_app_teste"
+SENHA_APP_DE_TESTE = "senha-so-dos-testes-se3"
+_DONO_DE_TESTE: dict = {}
 
 
 _SEMENTE: dict = {}
@@ -148,12 +162,12 @@ def limpar_banco() -> None:
 def banco_limpo(banco_de_teste, monkeypatch, tmp_path):
     """Cada teste roda contra o banco de teste limpo, com todas as tabelas. Separado do
     banco_temporario porque alguns arquivos antigos redefinem aquele; este vale sempre."""
-    banco.apontar_para(banco_de_teste)
+    banco.apontar_para(banco_de_teste, dono=_DONO_DE_TESTE["url"])
     monkeypatch.setattr(logs, "PASTA_LOGS", str(tmp_path / "logs"))
     lojas.limpar_cache()
     limpar_banco()
     yield banco_de_teste
-    banco.apontar_para(banco_de_teste)
+    banco.apontar_para(banco_de_teste, dono=_DONO_DE_TESTE["url"])
     lojas.limpar_cache()
 
 
@@ -183,6 +197,16 @@ def deposito_de_fotos_temporario(monkeypatch, tmp_path_factory):
 
     monkeypatch.setattr(_fotos, "baixar_link", _baixar_falso)
     yield
+
+
+@pytest.fixture(autouse=True)
+def modo_sistema_dos_testes():
+    """SE3: como o webhook e o relógio, o processo dos testes declara o modo sistema (vê todas as
+    lojas). A API do painel marca a loja da sessão em cada pedido, por cima disso. Os testes da
+    tranca (tests/test_se3_tranca.py) tiram a declaração de propósito."""
+    banco.declarar_sistema("testes (conftest)")
+    yield
+    banco.declarar_sistema("testes (conftest)")
 
 
 @pytest.fixture(autouse=True)

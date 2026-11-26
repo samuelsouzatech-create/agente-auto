@@ -23,7 +23,9 @@ x-leo: &leo
     - path: ${LEO_ENV_ARQUIVO:-.env}
       required: true
   environment: &leo-ambiente
-    BANCO_URL: postgresql://leo:${POSTGRES_SENHA:?coloque POSTGRES_SENHA no .env}@postgres:5432/leo
+    # SE3 (Maratona Segurança): o app conecta com o usuário leo_app, que NÃO é dono das tabelas e
+    # passa pela tranca por loja do banco (Row Level Security). Só o "migrar" usa o dono (leo).
+    BANCO_URL: postgresql://${BANCO_APP_USUARIO:-leo_app}:${BANCO_APP_SENHA:?coloque BANCO_APP_SENHA no .env}@postgres:5432/leo
     REDIS_URL: redis://:${REDIS_SENHA:?coloque REDIS_SENHA no .env}@redis:6379/0
     FOTOS_PASTA: /app/fotos_deposito
     PAINEL_ORIGEM: https://${LEO_DOMINIO:-localhost}
@@ -87,6 +89,11 @@ services:
     <<: *leo
     restart: "no"
     command: ["python", "-c", "import banco; banco.criar_tabelas()"]
+    environment:
+      <<: *leo-ambiente
+      # SE3: as migrações rodam com o DONO das tabelas, que também cria/atualiza o usuário leo_app
+      # (BANCO_APP_USUARIO e BANCO_APP_SENHA do .env) e dá a ele só ler e gravar.
+      BANCO_URL: postgresql://leo:${POSTGRES_SENHA:?coloque POSTGRES_SENHA no .env}@postgres:5432/leo
     depends_on:
       postgres:
         condition: service_healthy

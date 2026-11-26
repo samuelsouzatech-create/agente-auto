@@ -84,4 +84,6 @@ def main(argv=None, entrada=None) -> int:
 
 
 if __name__ == "__main__":
+    import banco as _banco                  # SE3: este programa vê todas as lojas (modo sistema)
+    _banco.declarar_sistema("scripts/cofre.py")
     raise SystemExit(main())

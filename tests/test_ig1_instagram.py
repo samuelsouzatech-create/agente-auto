@@ -416,7 +416,7 @@ def test_migracao_21_sobe_da_20_sem_apagar_dado(tmp_path, monkeypatch):
     """Banco novo só com a 20, dados dentro, depois a 21: tudo continua lá."""
     import psycopg
     from psycopg import sql
-    url = banco.url_do_banco()
+    url_app, url = banco.url_do_banco(), banco.url_do_dono()     # SE3: criar banco é coisa do dono
     nome = banco.nome_do_banco(url) + "_m21"
     admin = banco.trocar_nome_do_banco(url, "postgres")
     with psycopg.connect(admin, autocommit=True) as c:
@@ -444,6 +444,6 @@ def test_migracao_21_sobe_da_20_sem_apagar_dado(tmp_path, monkeypatch):
         assert banco.migrar() == []
     finally:
         banco.fechar_pools()
-        banco.apontar_para(url)
+        banco.apontar_para(url_app, dono=url)
         with psycopg.connect(admin, autocommit=True) as c:
             c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome)))

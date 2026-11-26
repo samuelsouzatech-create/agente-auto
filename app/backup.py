@@ -145,7 +145,9 @@ def guardar(nome: str, dados: bytes) -> str:
 
 def fazer_backup(url: str | None = None, agora: datetime | None = None) -> str:
     """Faz o backup cifrado. Devolve onde ficou."""
-    url = url or os.environ.get("BANCO_URL") or ""
+    if not url:
+        import banco
+        url = banco.url_do_dono()                  # SE3: o dono (o usuário do app passa pela tranca)
     if not url:
         raise ErroBackup("Falta a BANCO_URL.")
     _fernet()                                           # sem chave, nem começa

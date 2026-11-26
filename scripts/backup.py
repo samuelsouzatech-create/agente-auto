@@ -52,7 +52,7 @@ def main(argv=None) -> int:
     c = sub.add_parser("conferir")
     c.add_argument("arquivo")
     args = parser.parse_args(argv)
-    url = banco.url_do_banco()
+    url = banco.url_do_dono()            # SE3: o pg_dump lê tudo (o dono passa por cima da tranca)
     try:
         if args.acao == "nova-chave":
             print(backup.nova_chave())
@@ -76,4 +76,6 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    import banco as _banco                  # SE3: este programa vê todas as lojas (modo sistema)
+    _banco.declarar_sistema("scripts/backup.py")
     raise SystemExit(main())

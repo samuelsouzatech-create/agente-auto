@@ -18,6 +18,8 @@ from app import fotos as fotos_do_estoque
 from app.core.turno import executar_turno
 from app.demo import avisos_ao_vendedor, cabecalho_do_simulador, id_da_loja_demo, mensagens_do_vendedor
 
+banco.declarar_sistema("app.py (simulador da loja demo)")      # SE3: modo sistema da tranca por loja
+
 CANAL = "simulador"
 VERSAO_HISTORICO = 3          # Q2: (quem, texto, fotos, autor)
 VER_VENDEDOR_A_CADA = "4s"    # Q2: busca a resposta do vendedor (painel) sozinho

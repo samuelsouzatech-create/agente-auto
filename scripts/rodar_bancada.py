@@ -357,7 +357,7 @@ def apontar_banco_temporario(pasta: Path | None = None) -> str:
     esvaziado antes de cada roteiro: cada roteiro começa do zero. Nunca o banco real."""
     global _URL_DA_BANCADA
     if _URL_DA_BANCADA is None:
-        base = banco.url_do_banco()
+        base = banco.url_do_dono()            # SE3: criar banco é coisa do dono das tabelas
         nome = f"{banco.nome_do_banco(base)}_bancada"
         if nome == banco.nome_do_banco(os.getenv("BANCO_URL") or ""):
             raise RuntimeError("a bancada tentou usar o banco real")
@@ -1905,4 +1905,6 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    import banco as _banco                  # SE3: este programa vê todas as lojas (modo sistema)
+    _banco.declarar_sistema("scripts/rodar_bancada.py")
     sys.exit(main())

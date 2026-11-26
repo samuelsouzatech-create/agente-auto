@@ -46,6 +46,11 @@ _log = _logger("webhook")
 
 CANAL = "whatsapp"
 app = FastAPI(title="Agente Léo - Webhook WhatsApp")
+
+# SE3 (Maratona Segurança): o webhook atende TODAS as lojas (descobre a loja pelo canal de cada
+# mensagem), então o processo dele usa o modo sistema da tranca por loja do banco.
+import banco as _banco  # noqa: E402
+_banco.declarar_sistema("webhook (app/api/webhook.py)")
 canal_whatsapp = CanalWhatsApp()   # só lê o webhook; quem envia diz a loja a cada chamada
 
 # Última mensagem recebida de cada cliente (para marcar como lida antes de responder).
