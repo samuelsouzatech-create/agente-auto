@@ -136,3 +136,15 @@ def test_nenhuma_funcao_definida_duas_vezes_no_mesmo_arquivo():
                     repetidas.append(f"{arquivo.relative_to(raiz).as_posix()}: {no.name}")
                 vistos.add(no.name)
     assert not repetidas, "\n".join(repetidas)
+
+
+def test_chave_sem_o_igual_do_fim_tambem_vale(ambiente, monkeypatch):
+    """Achado no merge: ao copiar a chave para o .env, o "=" do fim se perdeu. A chave é a mesma."""
+    url, destino = ambiente
+    chave = backup.nova_chave()
+    assert chave.endswith("=")
+    monkeypatch.setenv("LEO_CHAVE_BACKUP", chave)
+    arquivo = backup.fazer_backup(url)
+    monkeypatch.setenv("LEO_CHAVE_BACKUP", chave.rstrip("="))
+    backup.restaurar(arquivo, destino)                 # abre com a mesma chave sem o "="
+    assert backup.contagens(destino)["lojas"] >= 1
