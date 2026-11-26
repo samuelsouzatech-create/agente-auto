@@ -4,7 +4,7 @@ SE0 (Maratona Segurança), item 4: todo arquivo de texto do repositório é UTF-
 Reprova:
 - arquivo que não decodifica como UTF-8 (ex.: gravado em Windows-1252 pelo PowerShell 5.1);
 - arquivo com "acento quebrado" (mojibake): o texto UTF-8 que foi lido como Windows-1252/1250 e
-  gravado de novo ("DecisÃ£o", "DecisĂµes"). Os pedaços procurados estão escritos com \\u para
+  gravado de novo (o "ã" de "Decisão" vira "A com til" seguido de "libra"; no Windows-1250, "A com breve" seguido de "micro"). Os pedaços procurados estão escritos com \\u para
   este próprio arquivo não reprovar.
 """
 import subprocess
@@ -16,10 +16,10 @@ EXTENSOES = (".md", ".py", ".sql", ".json", ".yaml", ".yml", ".txt", ".toml", ".
 NOMES = ("Caddyfile", "Dockerfile", ".gitignore", ".dockerignore", ".gitattributes")
 PASTAS_FORA = (".venv", ".venv-teste", "node_modules", ".git", "logs", "dados", "fotos", "__pycache__")
 
-# "Ã" + segundo byte de ç ã é á ê ó í õ ú à  (UTF-8 lido como Windows-1252)
-# "Ă" + o mesmo (UTF-8 lido como Windows-1250, o caso do "DecisĂµes")
-_SEGUNDOS = ("§", "£", "©", "¡", "ª", "³", "­", "µ", "º", " ")
-QUEBRADOS = tuple("Ã" + s for s in _SEGUNDOS) + tuple("Ă" + s for s in _SEGUNDOS) + ("�",)
+# A maiúsculo com til (U+00C3) + segundo byte de ç ã é á ê ó í õ ú à  (UTF-8 lido como Windows-1252)
+# A maiúsculo com breve (U+0102) + o mesmo (UTF-8 lido como Windows-1250)
+_SEGUNDOS = ("\u00a7", "\u00a3", "\u00a9", "\u00a1", "\u00aa", "\u00b3", "\u00ad", "\u00b5", "\u00ba", "\u00a0")
+QUEBRADOS = tuple("\u00c3" + s for s in _SEGUNDOS) + tuple("\u0102" + s for s in _SEGUNDOS) + ("\ufffd",)
 
 
 def arquivos_de_texto() -> list[Path]:

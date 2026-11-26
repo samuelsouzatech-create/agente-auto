@@ -79,12 +79,12 @@ Conferi os bytes do `docs/maratona4.md` **no repositório** (`git show HEAD:docs
 UTF-8 válido, "Decisões" está gravado certo (bytes `c3 b5`), sem nenhum acento quebrado. Varri todos
 os arquivos de texto do repositório (.md, .py, .sql, .json, .yaml, .txt, .toml, .sh, .ps1, Caddyfile,
 Dockerfile e outros): **nenhum** está fora do UTF-8 nem tem acento quebrado. Não precisei regravar nada.
-Por que aparece "DecisĂµes": é a **leitura**, não o arquivo. O arquivo é UTF-8 sem BOM, e um
+Por que aparece o "õ" de "Decisões" trocado por duas letras estranhas (um A com acento e um "µ"): é a **leitura**, não o arquivo. O arquivo é UTF-8 sem BOM, e um
 programa que lê como Windows-1250 (ex.: `Get-Content` do PowerShell 5.1 sem `-Encoding UTF8`, ou o
-console com página de código antiga) mostra "Ăµ" no lugar de "õ". **Não confirmado** qual programa
+console com página de código antiga) mostra essas duas letras no lugar de "õ". **Não confirmado** qual programa
 o Samuel usou. Para ler certo no PowerShell: `Get-Content docs\maratona4.md -Encoding UTF8`.
 Teste novo: `tests/test_se0_utf8.py` reprova arquivo de texto do Git que não seja UTF-8 válido ou que
-tenha acento quebrado ("Ã£", "Ăµ" e parecidos, ou o caractere de troca U+FFFD).
+tenha acento quebrado (o par de letras que aparece no lugar de cada acento, ou o caractere de troca U+FFFD).
 
 ### 5. "Transação só quando precisa" (banco.py, DK3), linha a linha
 A regra (`leitura_simples`) é uma **lista branca**: só fica sem transação o comando que (a) começa
