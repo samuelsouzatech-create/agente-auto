@@ -307,3 +307,6 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   **Para decidir:** o repositório agente-auto está PÚBLICO no GitHub.
 - 25/11/2026, SE2: **migração 22 usada** (cofre dos tokens, AES-256-GCM, chave só no .env; token_ref vira reserva;
   próxima livre: 23). Backup cifrado com restauração conferida. Link de senha por e-mail (provedor falso até o servidor).
+- 26/11/2026, SE3: **migrações 23 (tranca por loja, RLS) e 24 (chaves da loja) usadas; próxima livre: 25**. O app
+  conecta com o usuário `leo_app` (não é dono das tabelas); o painel só vê a loja da sessão até no banco. Nova
+  variável obrigatória no `.env`: `BANCO_APP_SENHA`.

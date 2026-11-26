@@ -321,3 +321,112 @@ no mesmo arquivo.
   (`test_c2f_senha.py`, agora e-mail) e os que fixavam a versão do esquema em 21 (agora "21 ou mais"
   e a contagem de migrações).
 - Branch `seguranca-2`, tag `se2`. Migração 22 usada (próxima livre: 23).
+
+---
+
+## SE3 — Tranca por loja dentro do banco (branch `seguranca-3`)
+
+### 1. Row Level Security (migração 23, `migracoes/023_tranca_por_loja.sql`)
+- Em **todas as tabelas que têm `loja_id`** (achadas na hora pela própria migração; hoje são mais de
+  30), a tranca do PostgreSQL fica ligada com a mesma regra: a linha só aparece, e só pode ser
+  gravada, se `loja_id` = a loja marcada na conexão **ou** se a conexão está no modo "sistema".
+  Conexão sem marca não vê nada dessas tabelas (nem as linhas "de ninguém", com `loja_id` vazio).
+- Catraca: `test_toda_tabela_com_loja_id_tem_a_tranca` reprova tabela nova com `loja_id` sem a tranca.
+- **Usuário do app (`leo_app`)**: o Léo passa a conectar com um usuário que NÃO é dono das tabelas,
+  não é superusuário e não passa por cima da tranca (NOBYPASSRLS). Ele só lê e grava. Quem é dono
+  (o `leo`, das migrações) passa por cima, de propósito: migrações, backup e limpeza dos testes.
+  O serviço `migrar` do Docker roda com o dono e cria/atualiza o `leo_app` com a senha
+  `BANCO_APP_SENHA` do `.env` (nova; sem ela o `docker compose` não sobe, avisa o nome da variável).
+  As outras peças usam `BANCO_URL` com o `leo_app`. Os scripts deste computador continuam com a
+  `BANCO_URL` do `.env` (o dono) e declaram o modo sistema.
+- Nos **testes**, o app conecta com o usuário `leo_app_teste` (só dos testes; nunca mexe no `leo_app`
+  de uso): a suíte inteira roda COM a tranca ligada.
+
+### 2. Quem marca a conexão (`banco.py`)
+- A marca é da **sessão** do PostgreSQL (`set_config(..., false)`), gravada quando a conexão sai do
+  pool. Por isso vale para **todas** as consultas da conexão, dentro e fora de transação: o "transação
+  só quando precisa" (DK3) não atrapalha. (Um `SET LOCAL` sumiria no fim de cada transação: não usei.)
+- **Volta ao pool sem marca:** o pool apaga a marca em toda conexão devolvida (`reset` do pool), e a
+  próxima que sai recebe a marca do novo dono. Teste dedicado pega TODAS as conexões direto do pool.
+- **API do painel:** todo pedido começa SEM marca (camada `MarcaDoPedido` em `app/api_painel/main.py`),
+  mesmo que o processo tenha declarado o modo sistema. Quando a sessão é lida
+  (`dependencias.usuario_logado`), a loja da sessão vale para o resto do pedido (inclusive nas linhas
+  do threadpool do FastAPI). **Nunca o modo sistema**, com uma exceção fechada, só onde ainda não
+  existe loja (lista conferida por teste):
+  1. `dependencias.py`: achar a sessão pelo token;
+  2. `rotas_auth.py`: login (achar a pessoa pelo e-mail e abrir a sessão);
+  3. `rotas_auth.py`: esqueci a senha (achar a pessoa pelo e-mail);
+  4. `rotas_auth.py`: criar senha (achar a pessoa pelo link; depois disso, a loja da pessoa);
+  5. `rotas_auth.py`: criar senha (anotar link errado);
+  6. `rotas_link.py`: link do vendedor (achar o link pelo token).
+- **Modo sistema declarado** (`banco.declarar_sistema("quem")`), um por programa que liga sozinho:
+  `app/api/webhook.py` (WhatsApp, Instagram e exclusão de dados), `app/jobs/runner.py` (relógio),
+  `app/jobs/remarketing.py`, `app/jobs/pos_venda.py`, `app/jobs/reativacao.py` (quando rodados
+  sozinhos), `app/api/telegram_bot.py`, `app/vigia.py`, `app/api_painel/exportar.py` (quando rodado
+  como script), `operador.py`, `app.py` (simulador), `ingestao_rag.py` e **todos** os `scripts/*.py`
+  que usam o banco (backup, cadastrar_canal, cofre, criar_loja_demo, criar_loja_teste,
+  criar_usuarios_demo, estado_loja, importar_sqlite, juiz_bancada, login, migrar_fotos,
+  reiniciar_demo, relatorio_sombra, rodar_bancada). Teste confere que cada um declara.
+  Programa que esquecer de declarar não vê nada (falha fechada), em vez de ver tudo.
+
+### 3. Testes (`tests/test_se3_tranca.py`)
+- rota do painel logada na loja A com uma consulta que **"esquece" o filtro de loja**: só vê a A (nem as
+  linhas sem loja), e a marca da conexão é "loja A", nunca o sistema; o mesmo para a B;
+- rota sem login não vê nada (mesmo com o processo em modo sistema);
+- conexão sem marca não vê e não grava; marca de loja não grava na outra loja e um UPDATE sem
+  filtro só mexe na própria loja; o modo sistema vê tudo e volta ao que era;
+- a marca vale fora de transação, dentro, depois do commit e do rollback, e na conexão só de leitura;
+- a conexão devolvida ao pool volta sem marca;
+- a catraca de `loja_id` (`tests/test_catraca_loja.py`) continua valendo e passando.
+
+### 4. Chaves estrangeiras (migração 24, `migracoes/024_chaves_da_loja.sql`)
+- **Ligadas:** em TODA tabela com `loja_id`, `loja_id` aponta para `lojas(id)`. Linha de uma loja
+  que não existe é recusada pelo próprio banco. São conferidas no **fim da transação**
+  (`DEFERRABLE INITIALLY DEFERRED`), porque o reinício da demo e a limpeza dos testes apagam e
+  regravam numa transação só. Sem `ON DELETE`: apagar uma loja que tem dados é **recusado**.
+- **Conferido:** o Léo nunca apaga loja (não existe essa função; procurei `DELETE FROM lojas` no
+  código: nada). O **reinício da demo** apaga e regrava os dados da loja demo, mas a linha da loja
+  fica: continua funcionando (teste). A migração confere antes se há linha de loja que não existe;
+  se houver, **para** com o nome da tabela e não muda nada (teste).
+- A limpeza dos testes (`banco.voltar_ao_estado_inicial`) passou a rodar numa transação só (antes
+  rodava comando a comando; com as chaves, a loja 1 precisava voltar antes das outras linhas).
+- **9 testes antigos** usavam uma "loja 2" ou "loja 42" que nunca foi criada (só gravavam linhas com
+  esse número). Agora a preparação deles cria a linha da loja antes (`garantir_lojas`); o que eles
+  conferem não mudou: `test_fase_3_handoff.py` (4), `test_m3_n2_cerebro.py`, `test_m3_n3_servidor.py`,
+  `test_m3_n5_fechamento.py`, `test_s1_guarda_preco.py`, `test_s3_troca.py`.
+- **Ficaram de fora (e por quê):**
+  - `lead_id` -> `leads`: as mensagens e outras tabelas gravam o cliente sem exigir a ficha
+    (`leads`); ligar obrigaria a criar a ficha antes de tudo e mudaria o caminho da conversa.
+    (Quando exatamente a ficha nasce em cada caminho: não confirmado linha a linha.)
+  - `vendas.veiculo_id`, `interesse_veiculo.veiculo_id`, `trocas` -> `estoque`: o reinício da demo
+    apaga o estoque (e o carro vendido pode sair do estoque um dia); ligar exigiria decidir o que
+    fazer com a venda de um carro apagado (decisão do analista).
+  - `sessoes`, `links_senha`, `links_vendedor`, `acessos` -> `usuarios`: a pessoa nunca é apagada
+    (é desativada), então a chave não protegeria nada hoje; fica para quando existir "apagar pessoa".
+  - `avisos.referencia` ("handoff:<id>") e `registro_acoes.alvo`: são texto, não número; não dá
+    para ser chave.
+  - `clientes_vinculados` (dois `lead_id`, mesma razão dos leads) e `regua_passos`/`regua_execucoes`
+    -> `reguas`: não conferi como as réguas são apagadas (**não confirmado**); fica para um bloco de
+    réguas. Sem ganho de segurança entre lojas (a chave da loja já vale nelas).
+
+### 5. A tranca quebrou algo?
+Não precisei do plano B ("só para a API do painel"): a tranca vale para **todas** as peças, e a
+suíte inteira roda com ela ligada. Duas falhas da 1ª rodada não eram da tranca de verdade:
+- `test_sg2_catalogo_e_ramo_de_teste.py` roda um programa separado (sem declarar o modo sistema):
+  a tranca barrou, como deve. Esse programa de teste agora declara o modo sistema, como os outros.
+- `test_ig3_instagram_whatsapp.py::test_atender_mostra_canal_e_como_chegou_sem_cartao_repetido`
+  (meu, da Maratona 4) **dependia da hora**: rodando logo depois da meia-noite, as mensagens de
+  "2 horas atrás" caíam em ontem. Agora usa relógio fixo (15h). Falhou também no GitHub pelo mesmo motivo.
+
+### Fim do SE3
+- Suíte local (3 partes seguidas, com a tranca e as chaves ligadas): 925 + 1248 + 1075 = **3248
+  passaram**, 0 falhas.
+- GitHub Actions: **verde** (run 45751302793). A 1ª rodada do bloco falhou nos 2 testes explicados acima.
+- Comportamento do Léo para o cliente: não mudou (prompt e guardas intocados). Testes antigos tocados
+  só na preparação ou na infraestrutura: os 9 da "loja que não existia", o do programa separado do
+  SG2, o que dependia da hora (IG3), os que conferem a versão do esquema e o do compose (DK1, que
+  agora espera o usuário do app na API).
+- **Migrações 23 e 24 usadas** (próxima livre: 25).
+- Depois do merge, ANTES de subir o Docker: pôr `BANCO_APP_SENHA=<senha forte>` no `.env` (ver o
+  resumo final). Sem ela, o `docker compose` não sobe e diz o nome da variável.
+- Branch `seguranca-3`, tag `se3`.
