@@ -213,3 +213,16 @@ o roteiro do vídeo.
 Fora da conta da bancada: a indexação da base da demo no `reiniciar_demo.py` (centavos; não medida).
 Fim da maratona: 27/11/2026, ~18:10 (Recife). Docker ligado a partir de `maratona5-ba3` e
 `painel-ajustes-demo`, com as 9 peças saudáveis.
+
+---
+
+## Merge da Maratona 5 e decisões do analista (27/11/2026)
+- Merge na `main` (commit `07642bb`), suíte 935 + 1263 + 1099 = **3297 passaram**; push e tag
+  `agente-maratona5`. Painel: merge (`bc4a5a0`), 95 testes e build ok; push e tag `painel-v1.5`.
+  Docker religado a partir da `main`: 9 peças saudáveis.
+- **Decisões do analista:**
+  - **Emoji:** fica a regra do L10 (no máximo 1 se o cliente usou; 0 em assunto sério).
+  - **Foto pelo Instagram:** vai para o bloco do servidor (testar com o R2, o depósito na nuvem).
+  - **Acabamentos** (frase repetida depois da guarda, "por aqui" junto com o link do WhatsApp,
+    reapresentação no WhatsApp): vão para a lista de polimento, depois do ensaio.
+  - **Vídeo de reserva:** o Samuel grava (roteiro no `docs/demo.md`, seção 6).
