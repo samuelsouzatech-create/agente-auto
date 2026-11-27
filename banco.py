@@ -674,6 +674,8 @@ def migrar() -> list[int]:
     """Aplica, em ordem, as migrações que ainda não rodaram. Cada uma é tudo ou nada.
     Devolve os números aplicados agora."""
     aplicadas_agora = []
+    if _tudo_aplicado_sem_ser_dono():
+        return aplicadas_agora
     with psycopg.connect(url_do_dono(), autocommit=True) as bruta:
         bruta.execute("SELECT pg_advisory_lock(%s)", (_TRAVA_MIGRACAO,))
         try:
@@ -693,6 +695,27 @@ def migrar() -> list[int]:
             bruta.execute("SELECT pg_advisory_unlock(%s)", (_TRAVA_MIGRACAO,))
     _tabelas_com_id.clear()
     return aplicadas_agora
+
+
+def _tudo_aplicado_sem_ser_dono() -> bool:
+    """Conserto do SE3: o relógio (e os scripts) chamam criar_tabelas() ao ligar. Com o usuário do
+    app (leo_app), que não pode criar tabela, isso quebrava. Agora: quem NÃO é dono das tabelas só
+    confere; se todas as migrações já estão aplicadas, segue (nada a fazer). Se falta alguma, para
+    com uma mensagem clara (quem migra é o serviço "migrar", com o dono)."""
+    with psycopg.connect(url_do_dono(), autocommit=True) as bruta:
+        dono = bruta.execute(
+            "SELECT rolsuper OR pg_has_role(current_user, (SELECT tableowner FROM pg_tables "
+            "WHERE schemaname = 'public' AND tablename = 'lojas'), 'USAGE') "
+            "FROM pg_roles WHERE rolname = current_user").fetchone()
+        if dono is None or dono[0] is None or dono[0]:
+            return False                 # banco novo (sem a tabela lojas) ou dono: migra como sempre
+        existe = bruta.execute("SELECT to_regclass('migracoes_aplicadas') IS NOT NULL").fetchone()[0]
+        feitas = {r[0] for r in bruta.execute("SELECT versao FROM migracoes_aplicadas")} if existe else set()
+    faltam = [n for n, _, _ in migracoes_disponiveis() if n not in feitas]
+    if faltam:
+        raise RuntimeError(f"Faltam as migrações {faltam} e este usuário não é dono das tabelas. "
+                           "Rode o serviço migrar (docker compose up -d) ou use o dono (BANCO_URL_DONO).")
+    return True
 
 
 def _preparar_tabelas_da_memoria(bruta: psycopg.Connection) -> None:

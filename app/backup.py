@@ -45,6 +45,7 @@ def _fernet():
     chave = (os.environ.get("LEO_CHAVE_BACKUP") or "").strip()
     if not chave:
         raise ErroBackup("Falta a LEO_CHAVE_BACKUP no .env (gere com: python scripts/backup.py nova-chave).")
+    chave += "=" * (-len(chave) % 4)        # o "=" do fim às vezes se perde ao copiar a chave
     try:
         return Fernet(chave.encode())
     except Exception:

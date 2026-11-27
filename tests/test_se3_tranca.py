@@ -399,3 +399,32 @@ def test_migracao_24_para_se_houver_linha_de_loja_que_nao_existe(tmp_path, monke
         banco.apontar_para(url_app, dono=url)
         with psycopg.connect(admin, autocommit=True) as c:
             c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome)))
+
+
+def test_usuario_do_app_ao_ligar_nao_tenta_migrar():
+    """Conserto do SE3 (achado ao subir o Docker depois do merge): o relógio chama criar_tabelas() ao
+    ligar e, com o leo_app, quebrava ("permission denied for schema public"). Agora só confere."""
+    url_app, dono = banco.url_do_banco(), banco.url_do_dono()
+    try:
+        banco.apontar_para(url_app)                     # como no Docker: o app só tem o leo_app
+        assert banco.url_do_dono() == url_app
+        assert banco.migrar() == []                     # tudo aplicado: segue sem criar nada
+        banco.criar_tabelas()
+    finally:
+        banco.apontar_para(url_app, dono=dono)
+
+
+def test_usuario_do_app_com_migracao_faltando_para_com_mensagem_clara(tmp_path, monkeypatch):
+    url_app, dono = banco.url_do_banco(), banco.url_do_dono()
+    extra = tmp_path / "migracoes"
+    extra.mkdir()
+    for arquivo in banco.PASTA_MIGRACOES.glob("*.sql"):
+        (extra / arquivo.name).write_text(arquivo.read_text(encoding="utf-8"), encoding="utf-8")
+    (extra / "999_futura.sql").write_text("SELECT 1;", encoding="utf-8")
+    monkeypatch.setattr(banco, "PASTA_MIGRACOES", extra)
+    try:
+        banco.apontar_para(url_app)
+        with pytest.raises(RuntimeError, match="migrar"):
+            banco.migrar()
+    finally:
+        banco.apontar_para(url_app, dono=dono)
