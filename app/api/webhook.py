@@ -266,6 +266,12 @@ async def receber_mensagem(request: Request, tarefas: BackgroundTasks):
         except Exception:
             _log.exception("[WhatsApp] Não consegui conferir o mesmo cliente do Instagram.")
         anotar_recebida(loja_id, CANAL, entrada.lead_id, entrada.id_externo)   # N3: antes do 200
+        if entrada.nome_perfil:                # RG1: nome do perfil, só se a ficha está sem nome
+            try:
+                from app.nome_do_perfil import gravar_nome_do_perfil
+                gravar_nome_do_perfil(loja_id, entrada.lead_id, entrada.nome_perfil)
+            except Exception:
+                _log.exception("[WhatsApp] Não consegui gravar o nome do perfil.")
         if entrada.tipo == "texto":
             tarefas.add_task(processar_mensagem, entrada.lead_id, entrada.texto, None, loja_id)
         elif entrada.tipo == "audio":

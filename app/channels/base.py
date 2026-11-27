@@ -35,6 +35,7 @@ class MensagemEntrada:
     conteudo: bytes = b""    # L5, só no simulador: a imagem já vem junto (nunca é guardada)
     tamanho: int = 0         # N2: bytes da mídia, quando o canal informa (checa o limite antes de baixar)
     duracao: int = 0         # N2: segundos do áudio, quando o canal informa
+    nome_perfil: str = ""    # RG1: nome do perfil do WhatsApp (contacts[].profile.name), se veio
 
 
 class Canal(ABC):

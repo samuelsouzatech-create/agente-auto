@@ -57,3 +57,34 @@ async def liberar_lock(lead_id: str, token: str | None = None, *,
         await redis_cliente.eval(_LIBERAR_SE_DONO, 1, chave, token)
     except Exception as erro:
         print(f"[Lock] ERRO ao liberar o lock de {chave}: {erro!r}")
+
+
+# ------------------------------------------------------------ RG1: o mesmo lock, para os jobs (síncronos)
+
+def _cliente_sincrono():
+    from app.jobs.trava import cliente_redis_sincrono
+    return cliente_redis_sincrono()
+
+
+def adquirir_lock_sincrono(lead_id: str, *, loja_id: int, cliente=None) -> str | None:
+    """RG1: o remarketing pega a MESMA trava do atendimento (lock:{loja}:{lead}), uma vez só, sem
+    esperar. None = o cliente está sendo atendido agora. Sem Redis: segue sem a trava (o relógio
+    nem liga sem Redis; isto é só para rodar fora dele) e devolve um token vazio."""
+    chave = chave_redis("lock", loja_id, lead_id)
+    token = uuid.uuid4().hex
+    try:
+        criou = (cliente or _cliente_sincrono()).set(chave, token, nx=True, ex=TTL_LOCK)
+    except Exception as erro:
+        print(f"[Lock] Aviso: sem Redis para a trava do cliente ({type(erro).__name__}); seguindo sem ela.")
+        return ""
+    return token if criou else None
+
+
+def liberar_lock_sincrono(lead_id: str, token: str | None, *, loja_id: int, cliente=None) -> None:
+    if not token:
+        return
+    chave = chave_redis("lock", loja_id, lead_id)
+    try:
+        (cliente or _cliente_sincrono()).eval(_LIBERAR_SE_DONO, 1, chave, token)
+    except Exception as erro:
+        print(f"[Lock] ERRO ao liberar o lock de {chave}: {erro!r}")

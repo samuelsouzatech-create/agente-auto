@@ -54,3 +54,11 @@ def ler(cliente) -> dict | None:
         return {"estado": dados.get("estado"), "quando": quando}
     except (TypeError, ValueError, KeyError):
         return None
+
+
+def avisar_que_esta_vivo(vivo) -> None:
+    """RG1: os jobs chamam isto a cada loja e a cada cliente processado. 'vivo' é a função do
+    runner que renova a trava e marca o giro (None = rodando fora do runner: nada a fazer).
+    Se a trava foi perdida, o erro sobe e o job para (outro runner assumiu)."""
+    if vivo is not None:
+        vivo()

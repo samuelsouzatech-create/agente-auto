@@ -106,9 +106,10 @@ def _handoff(motivo, lead_id="111"):
 def test_regua_proxima_tem_seis_passos_com_prazos():
     proxima = regua.modelos_de_regua(lojas.carregar_loja(1))["proxima"]
     nomes = [p["nome"] for p in proxima["passos"]]
-    assert nomes == ["agradecimento", "acompanhamento", "avaliacao", "revisao",
+    # RG1 (Maratona 5): avaliação em 15 dias e o passo novo "conferir_transferencia" (aviso ao vendedor, 20 dias)
+    assert nomes == ["agradecimento", "acompanhamento", "avaliacao", "conferir_transferencia", "revisao",
                      "troca_avista", "troca_financiado"]
-    assert [p["deslocamento_dias"] for p in proxima["passos"]] == [1, 7, 30, 183, 365, -365]
+    assert [p["deslocamento_dias"] for p in proxima["passos"]] == [1, 7, 15, 20, 183, 365, -365]
 
 
 def test_copia_usa_os_prazos_da_configuracao_da_loja():
@@ -165,14 +166,16 @@ def test_somar_meses_respeita_o_fim_do_mes():
 def test_venda_a_vista_agenda_passos_1_a_5():
     _ligar()
     _vender()
-    assert _agendados() == {"agradecimento", "acompanhamento", "avaliacao", "revisao", "troca_avista"}
+    assert _agendados() == {"agradecimento", "acompanhamento", "avaliacao", "conferir_transferencia", "revisao",
+                            "troca_avista"}                                    # RG1: + conferir_transferencia
     assert "troca_financiado" not in _execucoes()
 
 
 def test_venda_financiada_com_prazo_agenda_1_a_4_e_6():
     _ligar()
     _vender(forma="financiado", meses=48)
-    assert _agendados() == {"agradecimento", "acompanhamento", "avaliacao", "revisao", "troca_financiado"}
+    assert _agendados() == {"agradecimento", "acompanhamento", "avaliacao", "conferir_transferencia", "revisao",
+                            "troca_financiado"}                                # RG1: + conferir_transferencia
     assert "troca_avista" not in _execucoes()
     # fim em 02/11/2030, menos 12 meses = 02/11/2029, 10:00 em Recife
     assert _execucoes()["troca_financiado"]["agendado_para"] == "2029-11-02 13:00:00"
@@ -181,7 +184,7 @@ def test_venda_financiada_com_prazo_agenda_1_a_4_e_6():
 def test_venda_financiada_sem_prazo_registra_o_motivo():
     _ligar()
     _vender(forma="financiado", meses=None)
-    assert _agendados() == {"agradecimento", "acompanhamento", "avaliacao", "revisao"}
+    assert _agendados() == {"agradecimento", "acompanhamento", "avaliacao", "conferir_transferencia", "revisao"}   # RG1
     e = _execucoes()["troca_financiado"]
     assert (e["estado"], e["motivo"]) == ("cancelado", "sem_data_fim_financiamento")
 
@@ -363,7 +366,7 @@ def test_venda_de_uma_loja_nao_aparece_na_outra():
     _ligar(loja2)
     _vender(loja_id=loja2)
     assert regua.execucoes_do_lead(1, "111") == []
-    assert len(regua.execucoes_do_lead(loja2, "111")) == 5
+    assert len(regua.execucoes_do_lead(loja2, "111")) == 6          # RG1: + conferir_transferencia
 
 
 def test_reconhece_motivo_de_pos_venda():

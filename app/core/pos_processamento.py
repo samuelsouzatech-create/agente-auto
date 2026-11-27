@@ -258,6 +258,20 @@ def palavra_de_tempo(c: Contexto) -> None:
         c.ferramentas.append("guarda_tempo")
 
 
+def endereco_da_loja(c: Contexto) -> None:
+    """RG1: a resposta cita a rua da loja com bairro, cidade ou número errado: vira o endereço do cadastro."""
+    from app.guarda_endereco import corrigir_endereco
+    from app.lojas import carregar_loja
+    try:
+        loja = carregar_loja(c.loja_id)
+    except Exception:
+        return
+    c.resposta, trocou = corrigir_endereco(c.resposta, loja.get("endereco"), loja.get("cidade"))
+    if trocou:
+        c.avisar("GUARDA: endereço da loja trocado pelo do cadastro.")
+        c.ferramentas.append("guarda_endereco")
+
+
 def repeticoes(c: Contexto) -> None:
     c.guarda_mexeu = c.resposta != c.resposta_inicial
     c.resposta = _t().limpar_repeticoes(c.resposta, guarda_mexeu=c.guarda_mexeu, pergunta=c.texto)
@@ -288,6 +302,7 @@ PASSOS = (
     palavra_de_tempo,
     dia_de_reabertura,
     fragmentos,
+    endereco_da_loja,            # RG1: depois dos cortes, antes da limpeza de repetição
     repeticoes,
     frase_de_oferta,
 )

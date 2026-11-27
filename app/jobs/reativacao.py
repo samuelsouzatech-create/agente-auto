@@ -171,7 +171,10 @@ def processar(loja: Loja, linha: dict, agora: datetime, foto: rv.Fotografia, *,
 
 def rodar_reativacao(agora: datetime | None = None, *, envio_real: bool | None = None,
                      enviador=None, pausa_s: float | None = None,
-                     max_por_loja: int = MAX_POR_RODADA, lojas: list[int] | None = None) -> dict:
+                     max_por_loja: int = MAX_POR_RODADA, lojas: list[int] | None = None,
+                     vivo=None) -> dict:
+    """RG1: 'vivo' (do runner) renova a trava e marca o sinal de vida a cada loja e a cada contato."""
+    from app.jobs.batimento import avisar_que_esta_vivo
     agora = _utc(agora or agora_utc())
     enviador = enviador or EnviadorReal()
     pausa = PAUSA_ENTRE_ENVIOS_S if pausa_s is None else pausa_s
@@ -196,6 +199,7 @@ def rodar_reativacao(agora: datetime | None = None, *, envio_real: bool | None =
         except Exception as erro:          # uma loja com problema não trava as outras
             print(f"[Reativação] Erro na loja {loja_id}: {erro!r}")
             continue
+        avisar_que_esta_vivo(vivo)
         feitos = 0
         for linha in fila:
             if feitos >= vagas:
@@ -210,6 +214,7 @@ def rodar_reativacao(agora: datetime | None = None, *, envio_real: bool | None =
                 feitos += 1
             if estado == "enviado" and pausa:
                 time.sleep(pausa)
+            avisar_que_esta_vivo(vivo)
     return totais
 
 
