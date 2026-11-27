@@ -1,11 +1,11 @@
 nome: ig_vendedor_assume_pelo_app
 descricao: >
-  IG1 (I3). Um vendedor responde pelo app do Instagram (eco). O Léo fica em silêncio nas falas
-  seguintes do cliente.
-canal: instagram
+  IG1 (I3). Depois da 1ª fala, um vendedor responde pelo app do Instagram (o eco chega com um id que
+  não é do Léo). O Léo fica em silêncio nas falas seguintes do cliente.
 acoes:
   - {depois_da_fala: 1, tipo: vendedor_assumiu}
 falas:
   - "oi, tem SUV até 100 mil?"
   - "beleza, me liga então"
-nao_contem: ["Oi! Aqui é"]
+confere: {silencio_depois_de: 1}
+nao_pode: [preco_inventado]

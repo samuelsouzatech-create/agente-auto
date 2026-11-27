@@ -316,3 +316,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   confere) e chave do backup sem o `=` do fim aceita. Nada mudou nas decisões.
 - 27/11/2026, BA1 (Maratona 5): bancada com o Gemini real 3 vezes na main atual, sem GRAVE: **a ressalva da
   Fase Cérebro sai**. 2 roteiros novos de loja fechada (itens 8 e 9 do N5b). Diário: `docs/maratona5.md`.
+- 27/11/2026, BA2: bancada pelo Instagram pelo caminho do webhook (Meta falsa, Gemini real), 3 rodadas sem GRAVE:
+  1 privada por comentário, até 1.000 bytes, Opção B sem preço, mesmo cliente nos dois canais. Nada mudou nas decisões.

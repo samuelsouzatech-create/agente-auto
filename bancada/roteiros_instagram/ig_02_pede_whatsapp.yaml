@@ -1,10 +1,10 @@
 nome: ig_pede_whatsapp
 descricao: >
-  IG3. O cliente pede para continuar no WhatsApp. O Léo pede o telefone e manda o link wa.me da
-  loja (a frase vem do código). Sem emoji, sem prometer contato sem chamado.
-canal: instagram
+  IG3. No direct, o cliente pede para continuar no WhatsApp. O Léo manda o link wa.me da loja (a frase
+  vem do código). Sem emoji, sem prometer contato sem chamado.
 falas:
   - "tem Corolla automático?"
   - "pode me chamar no zap?"
-contem_algum: ["wa.me", "telefone"]
+confere: {link_whatsapp: sim}
 nao_contem: ["já já", "em breve"]
+nao_pode: [preco_inventado]

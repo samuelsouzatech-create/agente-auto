@@ -80,3 +80,67 @@ Com 3 rodadas completas sem GRAVE (58 roteiros), **a ressalva da Fase Cérebro s
 - Mudou no código: nada no Léo. Só os 2 roteiros novos da bancada (`57_loja_fechada_reabertura.yaml` e
   `58_loja_fechada_pedacos.yaml`) e os diários.
 - Branch `maratona5-ba1`, tag `m5ba1`. Custo do bloco: **US$ 0,6402** (acumulado: US$ 0,6402).
+
+---
+
+## BA2 — Bancada pelo Instagram (branch `maratona5-ba2`)
+
+### Como a bancada fala pelo Instagram (`scripts/bancada_instagram.py`)
+Pelo **mesmo caminho do webhook**: cada fala do roteiro vira um pedido HTTP **assinado** (o mesmo
+`X-Hub-Signature-256`) para `POST /webhook/instagram` do app de verdade (`app/api/webhook.py`); o
+comentário vira o evento de comentário; o vendedor que responde pelo app vira o eco com um id que não
+é do Léo; a passagem para o WhatsApp vira `POST /webhook` assinado, do telefone que o cliente passou.
+O Léo responde pelo `CanalInstagram` de verdade, que manda para o **servidor falso da Meta**
+(`tests/meta_falsa.py`, HTTP de verdade em 127.0.0.1, já usado no IG3). O Gemini é o real.
+Trocados por falsos (só o que não dá para usar fora do servidor): o Redis do debounce, da trava e das
+mensagens repetidas (em memória, como nos testes do IG1/IG3), a espera do eco (0 s) e o envio do
+WhatsApp (gravado, nunca enviado). O bloqueio da bancada continua: pedido para facebook.com,
+instagram.com, whatsapp.com ou telegram.org aborta a rodada.
+Checagens do Instagram em todo roteiro, além das da bancada de sempre: cada mensagem com até 1.000
+bytes; no máximo uma mensagem privada por comentário e nada mais antes de a pessoa responder; nenhum
+preço na mensagem privada. Por roteiro: a privada cita o carro do post; post sem carro recebe o texto
+fixo da loja; link do WhatsApp da loja; silêncio depois do vendedor; o painel junta o mesmo cliente.
+Teste offline do caminho (grafo falso, Meta falsa): `tests/test_ba2_bancada_instagram.py` (10).
+
+### Roteiros (`bancada/roteiros_instagram/`)
+| Roteiro | O que confere |
+|---|---|
+| `ig_comentario_vira_conversa` | comentário "Qual o valor?" no post do Civic: UMA privada citando o Civic, sem preço; no direct, preço só do estoque; não pergunta de novo qual carro |
+| `ig_pede_whatsapp` | "pode me chamar no zap?": link wa.me da loja (frase do código), sem "já já/em breve" |
+| `ig_vendedor_assume_pelo_app` | o vendedor responde pelo app: o Léo fica em silêncio |
+| `ig_post_sem_carro` | comentário num post sem carro na legenda: privada = texto fixo da loja |
+| `ig_mesmo_cliente_nos_dois_canais` (novo) | direct -> passa o telefone -> escreve no WhatsApp: o painel mostra UM cliente, Instagram e WhatsApp |
+| `ig_legenda_com_preco_diferente` (novo) | legenda "Civic por R$ 89.900" (estoque: R$ 98.000): privada sem preço; no direct, só o preço do estoque |
+
+### Rodadas
+| Rodada | Relatório (logs/bancada/) | Resultado | Custo |
+|---|---|---|---|
+| 1 | `instagram_2026-11-27_170155.md` | 5 PASSOU, 1 AVISO | US$ 0,0299 |
+| 2 | `instagram_2026-11-27_170456.md` | 5 PASSOU, 1 AVISO | US$ 0,0283 |
+| 3 | `instagram_2026-11-27_170650.md` | 5 PASSOU, 1 AVISO | US$ 0,0298 |
+**Custo do BA2: US$ 0,0880.** **Nenhum GRAVE, nenhum FALHOU.**
+- 1.000 bytes: todas as mensagens bem abaixo (a privada tem 107 bytes); o canal divide resposta longa
+  em bolhas de até 1.000 (teste offline com uma resposta de 1.400 bytes).
+- Uma privada só por comentário, e nada mais até a pessoa escrever: nas 3 rodadas.
+- Opção B: a privada cita "Honda Civic 2019" (do estoque, achado pela legenda), **sem preço**; com a
+  legenda de R$ 89.900 o Léo respondeu R$ 98.000 (estoque) nas 3. Post sem carro: texto fixo nas 3.
+- Mesmo cliente: o painel mostrou `ig:...` com canais `['Instagram', 'WhatsApp']` nas 3.
+- O AVISO é o mesmo nas 3 (`ig_comentario_vira_conversa`): o Léo tentou mandar as fotos do Civic pelo
+  Instagram; na bancada o depósito de fotos é a pasta local, sem endereço público, e a foto não sai
+  (o Instagram só manda foto por link público). **A trava das fotos fez o certo**: tirou o "Acabei de
+  enviar as fotos" que o modelo escreveu, disse "Vou pedir para a equipe te mandar as fotos" e abriu
+  o chamado ("As fotos do carro não chegaram ao cliente"). O aviso é só "a resposta não toca no
+  assunto". No servidor, com o depósito na nuvem (S3/R2), a foto sai (não confirmado aqui).
+
+### Acabamento (não é GRAVE; para o analista)
+- A mensagem privada oferece "Quer que eu te mande mais fotos?": sem depósito na nuvem a foto não sai
+  pelo Instagram (ver acima). Com a nuvem, ok.
+- No pedido do WhatsApp o Léo diz "o pessoal da equipe vai falar com você **por aqui**" e logo depois a
+  frase do código oferece o WhatsApp: as duas juntas soam um pouco desencontradas.
+- Na 1ª mensagem pelo WhatsApp do mesmo cliente o Léo se apresenta de novo ("Oi! Aqui é Léo...").
+
+### Fim do BA2
+- Suíte offline (3 partes seguidas): 935 + 1261 + 1099 = **3295 passaram**, 0 falhas (+10 do caminho do Instagram).
+- Mudou: `scripts/bancada_instagram.py` (novo), os 6 roteiros de `bancada/roteiros_instagram/`, o teste
+  novo. Nada no Léo.
+- Branch `maratona5-ba2`, tag `m5ba2`. Custo do bloco: **US$ 0,0880** (acumulado: US$ 0,7282).

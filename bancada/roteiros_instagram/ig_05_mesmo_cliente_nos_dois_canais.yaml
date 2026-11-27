@@ -1,0 +1,12 @@
+nome: ig_mesmo_cliente_nos_dois_canais
+descricao: >
+  IG3. O cliente começa no direct, pede o WhatsApp e passa o telefone; depois escreve no WhatsApp da
+  loja desse telefone (contato NOVO, regra do SE0). O painel mostra UM cliente com os dois canais.
+falas:
+  - "tem Onix?"
+  - "prefiro o zap, meu número é (81) 99999-8888"
+whatsapp:
+  - "oi, sou eu do instagram, o Onix ainda tá disponível?"
+confere: {mesmo_cliente: sim, link_whatsapp: sim}
+contem_algum: ["Onix"]
+nao_pode: [preco_inventado]

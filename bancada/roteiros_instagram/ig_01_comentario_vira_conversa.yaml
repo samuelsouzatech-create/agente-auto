@@ -1,11 +1,13 @@
 nome: ig_comentario_vira_conversa
 descricao: >
-  IG2/IG3. Comentou no post do Civic, recebeu a mensagem privada citando o carro e responde no
-  direct. O Léo continua no carro do post, sem perguntar de novo qual é, e sem preço inventado.
-canal: instagram
-contexto_inicial: "Oi! Vi seu comentário no post do Honda Civic 2019. Ele está disponível. Quer que eu te mande mais fotos?"
+  IG2/IG3. Comentou "Qual o valor?" no post do Civic: recebe UMA mensagem privada citando o carro (sem
+  preço) e responde no direct. O Léo continua no carro do post, sem perguntar de novo qual é, e o
+  preço só vem do estoque.
+comentario: {texto: "Qual o valor?", legenda: "Honda Civic 2019 automático, revisado. Chama no direct!"}
 falas:
   - "quero sim, e quanto tá?"
   - "aceita troca?"
 contem_algum: ["Civic"]
-nao_contem: ["qual carro", "qual modelo", "R$ 1"]
+confere: {privada_cita: "Civic"}
+nao_contem: ["qual carro", "qual modelo"]
+nao_pode: [preco_inventado]
