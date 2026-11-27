@@ -117,29 +117,50 @@ _CORES = {"Prata": (190, 190, 195), "Preto": (40, 40, 45), "Branco": (235, 235, 
           "Marrom": (110, 80, 50)}
 
 
+TAMANHO_DA_FOTO = (800, 600)        # BA3: 4:3, como o cartão do estoque
+MARGEM_DO_TEXTO = 110               # o texto fica longe das pontas (cabe mesmo num corte quadrado)
+
+
 def desenhar_foto_ilustrativa(marca: str, modelo: str, ano: int, cor: str) -> bytes:
     """Desenha uma silhueta simples do carro (Pillow), com modelo, cor e a faixa FOTO ILUSTRATIVA.
-    Devolve os bytes (PNG). Nunca baixa nada da internet."""
+    Devolve os bytes (PNG). Nunca baixa nada da internet.
+    BA3 (Maratona 5): a foto é 4:3 (800 x 600), o mesmo formato do cartão do estoque no painel, e o
+    nome vai CENTRALIZADO em duas linhas. Antes era 16:9 com o nome colado na esquerda, e o cartão
+    (4:3) cortava as pontas: "Toyota Corolla" virava "ota Corolla"."""
     import io
     from PIL import Image, ImageDraw, ImageFont
-    img = Image.new("RGB", (800, 450), (225, 235, 245))
+    largura, altura = TAMANHO_DA_FOTO
+    img = Image.new("RGB", (largura, altura), (225, 235, 245))
     d = ImageDraw.Draw(img)
     corpo = _CORES.get(cor, (150, 150, 150))
-    d.rectangle((0, 330, 800, 450), fill=(90, 95, 100))                       # chão
-    d.rounded_rectangle((120, 200, 680, 310), radius=30, fill=corpo)          # carroceria
-    d.polygon([(230, 200), (300, 130), (520, 130), (600, 200)], fill=corpo)   # cabine
-    d.polygon([(250, 198), (310, 145), (400, 145), (400, 198)], fill=(170, 200, 225))
-    d.polygon([(410, 198), (410, 145), (510, 145), (580, 198)], fill=(170, 200, 225))
+    y = 110                                                                   # o carro desce um pouco
+    d.rectangle((0, 330 + y, 800, altura), fill=(90, 95, 100))                # chão
+    d.rounded_rectangle((120, 200 + y, 680, 310 + y), radius=30, fill=corpo)  # carroceria
+    d.polygon([(230, 200 + y), (300, 130 + y), (520, 130 + y), (600, 200 + y)], fill=corpo)   # cabine
+    d.polygon([(250, 198 + y), (310, 145 + y), (400, 145 + y), (400, 198 + y)], fill=(170, 200, 225))
+    d.polygon([(410, 198 + y), (410, 145 + y), (510, 145 + y), (580, 198 + y)], fill=(170, 200, 225))
     for x in (220, 580):
-        d.ellipse((x - 45, 265, x + 45, 355), fill=(30, 30, 30))
-        d.ellipse((x - 20, 290, x + 20, 330), fill=(160, 160, 160))
-    try:
-        grande, pequena = ImageFont.load_default(size=34), ImageFont.load_default(size=24)
-    except TypeError:
-        grande = pequena = ImageFont.load_default()
-    d.text((30, 25), f"{marca} {modelo} {ano} - {cor}", fill=(20, 20, 20), font=grande)
-    d.rectangle((0, 395, 800, 450), fill=(200, 30, 30))
-    d.text((250, 405), "FOTO ILUSTRATIVA", fill=(255, 255, 255), font=pequena)
+        d.ellipse((x - 45, 265 + y, x + 45, 355 + y), fill=(30, 30, 30))
+        d.ellipse((x - 20, 290 + y, x + 20, 330 + y), fill=(160, 160, 160))
+
+    def _fonte(tamanho):
+        try:
+            return ImageFont.load_default(size=tamanho)
+        except TypeError:
+            return ImageFont.load_default()
+
+    def _centralizado(texto, topo, tamanho, cor_do_texto):
+        fonte = _fonte(tamanho)
+        while tamanho > 14 and d.textlength(texto, font=fonte) > largura - 2 * MARGEM_DO_TEXTO:
+            tamanho -= 2
+            fonte = _fonte(tamanho)
+        x = (largura - d.textlength(texto, font=fonte)) / 2
+        d.text((x, topo), texto, fill=cor_do_texto, font=fonte)
+
+    _centralizado(f"{marca} {modelo}", 30, 44, (20, 20, 20))
+    _centralizado(f"{ano} - {cor}", 88, 32, (60, 60, 60))
+    d.rectangle((0, altura - 60, largura, altura), fill=(200, 30, 30))
+    _centralizado("FOTO ILUSTRATIVA", altura - 48, 26, (255, 255, 255))
     saida = io.BytesIO()
     img.save(saida, format="PNG")
     return saida.getvalue()

@@ -144,3 +144,72 @@ Teste offline do caminho (grafo falso, Meta falsa): `tests/test_ba2_bancada_inst
 - Mudou: `scripts/bancada_instagram.py` (novo), os 6 roteiros de `bancada/roteiros_instagram/`, o teste
   novo. Nada no Léo.
 - Branch `maratona5-ba2`, tag `m5ba2`. Custo do bloco: **US$ 0,0880** (acumulado: US$ 0,7282).
+
+---
+
+## BA3 — Demo pronta para mostrar (branch `maratona5-ba3`; painel: `painel-ajustes-demo`)
+
+### Os 3 detalhes vistos pelo analista
+1. **Preço no Estoque (painel).** A lista já mostrava certo (a API manda o texto pronto "R$ 94.900,00").
+   O problema era o **formulário de edição**: o campo vinha com "94900" e a tela só trocava a vírgula por
+   ponto. Quem digitava do jeito brasileiro mandava "94.900,00" (número inválido) ou "94.900" (virava
+   **R$ 94,90**). Conserto (`leo-painel-web`, `src/modulos/estoque/preco.ts`): o campo já vem como
+   "94.900,00" e aceita "94.900,00", "R$ 94.900", "94.900", "94900", "94900,5"; quem confere se o preço
+   vale continua sendo a API. Testes: `src/testes/p9-ajustes-demo.test.tsx` (4).
+2. **"Esperando vendedor" aparecendo como "Com vendedor".** Na tela Leads (e na ficha da conversa), a
+   etapa `com_vendedor` junta o chamado esperando e o já assumido, e o rótulo era sempre "Com vendedor".
+   A etapa fica como está (aba, contagem e funil usam ela; o contrato não muda). Agora o **rótulo** do
+   cartão e da ficha diz "Esperando vendedor" enquanto ninguém assumiu, e o próximo passo diz "Em
+   silêncio, esperando o vendedor" (`app/painel_leitura.py`, `rotulo_da_etapa`). Teste novo em
+   `tests/test_p4_painel_leitura.py`; o teste antigo do próximo passo com chamado esperando passou a
+   esperar o texto novo (é o conserto pedido).
+3. **Nome cortado na foto ilustrativa ("ota Corolla").** A foto era 800 x 450 (16:9) com o nome colado
+   na esquerda; o cartão do Estoque mostra 4:3 e corta as pontas. Agora a foto é **800 x 600 (4:3)** e o
+   nome vai centralizado, em duas linhas ("Toyota Corolla" / "2021 - Prata"), longe das pontas
+   (`app/demo.py`). Teste novo em `tests/test_m2_demo.py` (o nome fica entre as margens e centralizado);
+   o teste antigo que fixava 800 x 450 passou a esperar 800 x 600.
+**Conferido na demo de verdade** (Docker desta branch, pelo porteiro HTTPS, logado como Dono Demo):
+preço "R$ 129.900,00" na lista, 1 cliente "Esperando vendedor" e 3 "Com vendedor" na tela Leads, foto
+com 800 x 600.
+
+### Demo reiniciada e ensaio
+- `docker compose exec -T api-painel python scripts/reiniciar_demo.py` **com** a indexação pelo Gemini
+  (caminho normal). Loja demo número 4. As senhas novas das pessoas de teste ficaram em
+  `logs/demo/senhas_demo_2026-11-27.txt` (fora do Git; conferido com `git check-ignore`). Custo da
+  indexação: pequeno, não medido pela bancada (**não confirmado** o valor exato).
+- Ensaio da demo 3 vezes, como no M2 (`rodar_bancada.py --loja-demo`: os 7 roteiros `demo_*` contra a
+  loja de demonstração, pelo motor do simulador, Gemini real):
+| Ensaio | Relatório (logs/bancada/) | Resultado | Custo |
+|---|---|---|---|
+| 1 | `rodada_2026-11-27_173512.md` | 7 PASSOU | US$ 0,0216 |
+| 2 | `rodada_2026-11-27_173645.md` | 6 PASSOU, 1 CORRIGIDO (pós-venda: "É um excelente carro." cortado pela guarda) | US$ 0,0215 |
+| 3 | `rodada_2026-11-27_173816.md` | 7 PASSOU | US$ 0,0216 |
+**Nenhum GRAVE.** Custo do BA3: **US$ 0,0647**.
+
+### Vídeo de reserva
+**Não gravado.** Nesta sessão não há ferramenta de navegador ligada, e controlar o navegador do Samuel
+com ele fora não é seguro. No lugar: roteiro de 2 minutos no `docs/demo.md` (seção 6), com o que fazer
+e o que falar em cada trecho, para o Samuel gravar.
+
+### docs/demo.md
+Atualizado: Docker e HTTPS local (como já estava), as variáveis novas do `.env` (pelos NOMES), demo
+com indexação pelo Gemini (e `--sem-indexar` sem crédito), senhas pelo script num arquivo fora do Git,
+o roteiro do vídeo.
+
+### Fim do BA3
+- Suíte offline (3 partes seguidas): 935 + 1263 + 1099 = **3297 passaram**, 0 falhas (+2 testes novos).
+- Painel: 95 testes e build ok (branch `painel-ajustes-demo`, tag `painel-m5`).
+- Branch `maratona5-ba3`, tag `m5ba3`. Custo do bloco: **US$ 0,0647**.
+
+---
+
+## Custo da maratona
+| Bloco | Custo |
+|---|---|
+| BA1 (3 rodadas + 4 avulsas) | US$ 0,6402 |
+| BA2 (3 rodadas do Instagram) | US$ 0,0880 |
+| BA3 (3 ensaios da demo) | US$ 0,0647 |
+| **Total** | **US$ 0,7929** (teto US$ 4,00) |
+Fora da conta da bancada: a indexação da base da demo no `reiniciar_demo.py` (centavos; não medida).
+Fim da maratona: 27/11/2026, ~18:10 (Recife). Docker ligado a partir de `maratona5-ba3` e
+`painel-ajustes-demo`, com as 9 peças saudáveis.

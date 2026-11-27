@@ -181,7 +181,7 @@ def test_respondeu_depois_da_ultima_retomada_continua_em_conversa():
 @pytest.mark.parametrize("conversa, fatos, passo", [
     ("novo", [], "Atendendo"),
     ("conversa", ["pediu_tempo"], "Volta a procurar em 03/12/2026"),
-    ("conversa", ["vendedor"], "Em silêncio, com o vendedor"),
+    ("conversa", ["vendedor"], "Em silêncio, esperando o vendedor"),     # BA3: chamado ainda sem vendedor
     ("conversa", ["visita"], "Aguardando a visita"),
     ("conversa", ["venda"], "Venda concluída"),      # pós-venda desligado por padrão
     ("sumiu", [], "Não procura mais"),
@@ -425,3 +425,16 @@ def test_troca_nao_repete_o_ano():
          "VALUES (1, ?, 'Gol 2015', 2015, 90000, 'bom')", (LEAD,))
     _msg(1, LEAD, "cliente", _antes(hours=1))
     assert cartao_do_lead(1, LEAD, agora=AGORA)["troca"] == "Gol 2015 · 90.000 km"
+
+
+# ------------------------------------------------------------ BA3 (Maratona 5)
+def test_chamado_esperando_mostra_esperando_vendedor_e_assumido_mostra_com_vendedor():
+    """O analista viu "Com vendedor" num cliente que ainda esperava. A etapa (aba e funil) continua
+    com_vendedor nos dois casos; o rótulo do cartão diz qual é."""
+    _msg(1, LEAD, "cliente", _antes(hours=2))
+    _handoff(1, LEAD, _antes(hours=1))
+    linha = _linha()
+    assert (linha["etapa"], linha["etapa_rotulo"]) == ("com_vendedor", "Esperando vendedor")
+    _sql("UPDATE handoffs SET estado = 'humano_assumiu', assumido_em = ? WHERE lead_id = ?", (_antes(minutes=30), LEAD))
+    linha = _linha()
+    assert (linha["etapa"], linha["etapa_rotulo"], linha["proximo_passo"]) ==         ("com_vendedor", "Com vendedor", "Em silêncio, com o vendedor")

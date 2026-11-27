@@ -61,6 +61,18 @@ ROTULOS_ETAPA = {
     "venda_registrada": "Venda registrada",
     "nao_seguiu": "Não seguiu",
 }
+# BA3 (Maratona 5): a etapa "com_vendedor" (aba e funil) junta o chamado esperando e o assumido. No
+# cartão e na ficha, o rótulo diz qual dos dois é: "Esperando vendedor" até alguém assumir.
+ESPERANDO_VENDEDOR = "aguardando_humano"
+ROTULO_ESPERANDO_VENDEDOR = "Esperando vendedor"
+
+
+def rotulo_da_etapa(etapa: str, f) -> str:
+    if etapa == "com_vendedor" and (f.get("handoff") or {}).get("estado") == ESPERANDO_VENDEDOR:
+        return ROTULO_ESPERANDO_VENDEDOR
+    return ROTULOS_ETAPA[etapa]
+
+
 TIPOS_DE_AGENDAMENTO = {"visita": "Visita", "test-drive": "Test-drive", "ligacao": "Ligação"}
 ROTULOS_FUNIL = {
     "conversas": "Conversas",
@@ -254,6 +266,8 @@ def _etapa(f, loja, agora) -> tuple[str, str]:
         return "visita_marcada", "Aguardando a visita"
 
     if f["handoff"]:
+        if (f["handoff"] or {}).get("estado") == ESPERANDO_VENDEDOR:     # BA3: ninguém assumiu ainda
+            return "com_vendedor", "Em silêncio, esperando o vendedor"
         return "com_vendedor", "Em silêncio, com o vendedor"
 
     if f["situacao"] == "pediu_tempo":
@@ -312,7 +326,7 @@ def etapas_dos_leads(loja_id, desde_dias, busca=None, *, agora: datetime | None 
             "ultimo_contato": horario_para_tela(loja, f["ultima_mensagem"], agora=agora),
             "ultimo_contato_iso": horario_iso_local(loja, f["ultima_mensagem"]),
             "etapa": etapa,
-            "etapa_rotulo": ROTULOS_ETAPA[etapa],
+            "etapa_rotulo": rotulo_da_etapa(etapa, f),
             "proximo_passo": passo,
         })
     saida.sort(key=lambda l: fatos[l["lead_id"]]["ultima_mensagem"] or "", reverse=True)
@@ -490,7 +504,7 @@ def cartao_do_lead(loja_id, lead_id, *, agora: datetime | None = None) -> dict:
         "motivo_do_chamado": ((f["handoff"] or {}).get("motivo") or "").strip(),
         "etiqueta": etiqueta,
         "etapa": etapa,
-        "etapa_rotulo": ROTULOS_ETAPA[etapa],
+        "etapa_rotulo": rotulo_da_etapa(etapa, f),
         "proximo_passo": passo,
         "ultimo_contato": horario_para_tela(loja, f["ultima_mensagem"], agora=agora),
     }

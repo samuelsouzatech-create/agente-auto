@@ -318,3 +318,5 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   Fase Cérebro sai**. 2 roteiros novos de loja fechada (itens 8 e 9 do N5b). Diário: `docs/maratona5.md`.
 - 27/11/2026, BA2: bancada pelo Instagram pelo caminho do webhook (Meta falsa, Gemini real), 3 rodadas sem GRAVE:
   1 privada por comentário, até 1.000 bytes, Opção B sem preço, mesmo cliente nos dois canais. Nada mudou nas decisões.
+- 27/11/2026, BA3: demo pronta (preço no jeito brasileiro no formulário, "Esperando vendedor" no cartão, foto 4:3
+  com o nome inteiro); ensaio 3x sem GRAVE; vídeo não gravado (roteiro no docs/demo.md). Nada mudou nas decisões.

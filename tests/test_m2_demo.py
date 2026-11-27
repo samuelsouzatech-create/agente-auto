@@ -82,7 +82,7 @@ def test_fotos_ilustrativas_geradas_localmente(loja_demo, fotos):
     assert refs and all(deposito_de_fotos.chave_da_ref(loja_demo, r) for r in refs)
     from PIL import Image
     imagem = Image.open(io.BytesIO(deposito_de_fotos.ler(loja_demo, refs[0])))
-    assert imagem.format == "JPEG" and imagem.size == (800, 450)
+    assert imagem.format == "JPEG" and imagem.size == (800, 600)      # BA3: 4:3, como o cartão do estoque
 
 
 def test_politicas_na_base(loja_demo):
@@ -193,3 +193,18 @@ def test_mudar_config_no_meio_do_roteiro(bancada, monkeypatch):
     [roteiro] = [r for r in rb.carregar_roteiros(demo=True) if r["nome"] == "demo_tom_trocado"]
     asyncio.run(rb.rodar([roteiro], GrafoTom(), teto=1.0))
     assert tons[0] == demo.CONFIG_DEMO["tom"] and tons[-1].startswith("formal")
+
+
+def test_nome_da_foto_ilustrativa_fica_inteiro_no_cartao_do_estoque():
+    """BA3: o cartão do estoque mostra a foto em 4:3 e corta o que passa; o nome tem de caber no meio,
+    longe das pontas (antes: "ota Corolla")."""
+    import io
+    from PIL import Image
+    from app.demo import MARGEM_DO_TEXTO, desenhar_foto_ilustrativa
+    imagem = Image.open(io.BytesIO(desenhar_foto_ilustrativa("Volkswagen", "Nivus Highline", 2023, "Prata")))
+    largura, altura = imagem.size
+    assert largura * 3 == altura * 4                                   # 4:3
+    faixa = imagem.convert("L").crop((0, 20, largura, 140))            # onde fica o nome
+    escuros = [x for x in range(largura) if any(faixa.getpixel((x, y)) < 100 for y in range(faixa.height))]
+    assert escuros and min(escuros) >= MARGEM_DO_TEXTO - 5 and max(escuros) <= largura - MARGEM_DO_TEXTO + 5
+    assert abs((min(escuros) + max(escuros)) / 2 - largura / 2) < 40   # centralizado
