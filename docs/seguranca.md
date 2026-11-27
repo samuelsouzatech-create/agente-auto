@@ -536,3 +536,40 @@ Guia: OWASP Top 10 (2021) e OWASP API Security Top 10 (2023). Cada ataque virou 
 - Comportamento do Léo para o cliente: não mudou (prompt e guardas intocados; a única mudança de
   código do bloco é na foto do estoque, no porteiro e nos testes).
 - Branch `seguranca-4`, tag `se4`. Fim da Maratona Segurança: 26/11/2026, ~01:30 (Recife).
+
+---
+
+## Fechamento (depois do merge, 26 e 27/11/2026)
+
+### O relógio não ligava no Docker (erro do SE3)
+- **O que aconteceu:** depois do merge da Maratona Segurança, no `docker compose up -d --build`, o
+  relógio ficou reiniciando sem parar com `permission denied for schema public`. As outras 8 peças
+  ficaram saudáveis.
+- **Por quê:** o relógio (e alguns scripts) chama `banco.criar_tabelas()` ao ligar. Desde o SE3 o app
+  conecta com o `leo_app`, que não é dono das tabelas e não pode criar nada (é o certo). A migração
+  tentava criar a tabela de controle mesmo com tudo já aplicado. Os testes não pegaram porque testam
+  o relógio sem essa chamada de partida, e o Docker não foi ligado durante a maratona.
+- **Conserto** (branch `conserto-relogio-migrar`): quem NÃO é dono das tabelas só confere. Com todas
+  as migrações aplicadas, segue sem criar nada; se falta alguma, para com uma mensagem clara ("rode
+  o serviço migrar"). Quem migra continua sendo o serviço `migrar`, com o dono. Testes novos:
+  `test_usuario_do_app_ao_ligar_nao_tenta_migrar` e
+  `test_usuario_do_app_com_migracao_faltando_para_com_mensagem_clara`.
+- **Lição:** bloco que muda o usuário do banco precisa de um "subir o Docker e olhar o `ps`" antes de
+  ser dado como pronto (no SE3 eu não subi o Docker).
+
+### A chave do backup com 43 caracteres
+- **O que aconteceu:** o `scripts/backup.py fazer` respondeu "A LEO_CHAVE_BACKUP do .env não é uma
+  chave válida". Conferi só o TAMANHO da variável (sem mostrar o valor): 43 caracteres. A chave que o
+  `nova-chave` gera tem 44: o último é um `=`, que provavelmente se perdeu ao copiar.
+- **Conserto:** o backup aceita a chave sem o `=` do fim (o cofre já aceitava). É a mesma chave: o
+  `=` é só um enchimento do formato. Teste: `test_chave_sem_o_igual_do_fim_tambem_vale` (faz o backup
+  com a chave inteira e restaura com a chave sem o `=`).
+- **Resultado:** backup feito e conferido (restaurado num banco temporário: as 50 tabelas com as
+  mesmas contagens do banco de uso).
+
+### Também conferido no fechamento
+- O `leo_app` entra no banco com a senha do `.env` (não precisei mudar senha nenhuma) e passa pela
+  tranca: sem marca não vê nada; no modo sistema vê as lojas.
+- Pelo porteiro: a tela abre, `/webhook/instagram` recusa sem o token de verificação (403),
+  código inventado em `/dados/excluir` dá 404, o cabeçalho `Permissions-Policy` sai e um pedido de
+  2 MB ao webhook é barrado (413).
