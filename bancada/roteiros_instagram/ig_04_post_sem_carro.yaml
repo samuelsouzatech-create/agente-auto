@@ -1,0 +1,10 @@
+nome: ig_post_sem_carro
+descricao: >
+  IG2 (Opção B). Comentário "quanto?" num post SEM carro na legenda: a mensagem privada é o texto fixo
+  da loja (nunca preço). No direct, o preço só sai da ferramenta de estoque.
+comentario: {texto: "quanto?", legenda: "Promoção de fim de mês! Vem conhecer a loja. Chama no direct."}
+falas:
+  - "quanto tá o carro do anúncio?"
+confere: {privada_texto_fixo: sim}
+nao_contem: ["R$ 9", "mil reais"]
+nao_pode: [preco_inventado]

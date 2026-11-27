@@ -1,6 +1,13 @@
-# Roteiros de bancada do Instagram (IG3, Maratona 4) — NÃO RODADOS
+# Roteiros de bancada do Instagram (BA2, Maratona 5)
 
-Escritos no formato da bancada (`bancada/roteiros/`), mas **não rodados**: a bancada usa o Gemini
-real e esta maratona não tinha crédito nem autorização. Ficam FORA da pasta que a bancada lê, para
-não entrarem numa rodada sem querer. Para rodar quando houver crédito: copiar para
-`bancada/roteiros/` (e conferir se a bancada já sabe o canal "instagram" e o "contexto_inicial").
+Rodam pelo **webhook de verdade** (`POST /webhook/instagram`, e `POST /webhook` na passagem para o
+WhatsApp), com o Gemini real e o **servidor falso da Meta** (`tests/meta_falsa.py`) no lugar da Meta:
+
+    .venv-teste\Scripts\python scripts\bancada_instagram.py
+    .venv-teste\Scripts\python scripts\bancada_instagram.py --roteiro ig_pede_whatsapp
+
+Ficam FORA de `bancada/roteiros/` de propósito: a bancada de sempre roda pelo canal simulador e não
+sabe fazer comentário, eco de vendedor nem passagem para o WhatsApp. Relatório:
+`logs/bancada/instagram_<data>.md`. O formato está no topo de `scripts/bancada_instagram.py`.
+Escritos no IG3 (Maratona 4, não rodados) e refeitos no BA2: `ig_01` a `ig_04` vêm de lá; `ig_05`
+(mesmo cliente nos dois canais) e `ig_06` (legenda com preço diferente do estoque) são novos.

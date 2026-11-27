@@ -1,0 +1,15 @@
+nome: loja_fechada_reabertura
+# BA1 (Maratona 5): o item 8 do N5b (dia e hora de reabertura) só tinha teste offline. Aqui a loja
+# abre todo dia só das 06:00 às 06:30: na hora da rodada ela está FECHADA e a próxima abertura é às
+# 06:00. O Léo não pode inventar outro dia/hora de reabertura (a guarda corrige para o cadastro).
+loja:
+  atendimento:
+    horario_semana: {"0": "06:00-06:30", "1": "06:00-06:30", "2": "06:00-06:30", "3": "06:00-06:30",
+                     "4": "06:00-06:30", "5": "06:00-06:30", "6": "06:00-06:30"}
+falas:
+  - "boa noite, vocês estão abertos agora?"
+  - "posso passar aí mais tarde pra ver o Civic? que horas vocês abrem?"
+deve:
+  contem: ["06:00|6h|6:00|seis"]
+nao_contem: ["Só um instante", "já te aviso", "08:00", "9h", "09:00"]
+nao_pode: [preco_inventado]

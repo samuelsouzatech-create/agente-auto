@@ -1,0 +1,17 @@
+nome: loja_fechada_pedacos
+# BA1 (Maratona 5): o item 9 do N5b (pedaços soltos; "Só um instante" com a loja fechada) só tinha
+# teste offline. Loja FECHADA (abre só das 06:00 às 06:30): o cliente pergunta o preço e depois pede
+# um vendedor (nessa ordem: com o chamado aberto, o preço passa a ser com o vendedor). Nada de "Só
+# um instante"/"já te aviso" (ninguém vai responder agora) e nada de pedaço solto na resposta.
+loja:
+  atendimento:
+    horario_semana: {"0": "06:00-06:30", "1": "06:00-06:30", "2": "06:00-06:30", "3": "06:00-06:30",
+                     "4": "06:00-06:30", "5": "06:00-06:30", "6": "06:00-06:30"}
+falas:
+  - "quanto tá o Corolla?"
+  - "quero falar com um vendedor sobre ele"
+deve:
+  handoff: sim
+  tools: [consultar_estoque]
+nao_contem: ["Só um instante", "já te aviso", "já já", "em breve"]
+nao_pode: [preco_inventado]

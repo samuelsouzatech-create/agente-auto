@@ -267,3 +267,10 @@ porque a suíte rodou com a loja aberta. O merge NÃO foi enviado (main local vo
 Conserto: pedaço sem verbo só sai se NÃO estava no texto do modelo como frase inteira (sobra de corte); item de
 lista nunca sai; "Só um instante" com a loja fechada continua saindo. Testes novos com relógio fixo de loja
 fechada (domingo 15:00) para isso não depender da hora.
+
+### Ressalva retirada (Maratona 5, BA1, 27/11/2026)
+Com crédito novo, a bancada rodou **3 vezes completas** na `main` atual (PostgreSQL, ramo, Instagram e
+tranca por loja já dentro): `rodada_2026-11-27_161650` (56 roteiros), `..._162835` e `..._163743` (58,
+com os 2 roteiros novos de loja fechada para os itens 8 e 9). **Nenhum GRAVE, nenhum FALHOU.** Os itens 8
+e 9 do N5b saíram certos com o Gemini real. **Fase Cérebro: FECHADA (sem ressalva).** Detalhes no
+`docs/maratona5.md`.

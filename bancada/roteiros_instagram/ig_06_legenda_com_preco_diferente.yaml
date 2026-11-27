@@ -1,0 +1,11 @@
+nome: ig_legenda_com_preco_diferente
+descricao: >
+  IG2 (Opção B). A legenda do post tem um preço que NÃO é o do estoque (R$ 89.900; o estoque diz
+  R$ 98.000). A mensagem privada cita o carro sem preço nenhum, e no direct o Léo usa só o preço do
+  estoque (nunca o da legenda).
+comentario: {texto: "valor?", legenda: "Honda Civic 2019 por R$ 89.900! Aproveite."}
+falas:
+  - "quanto tá esse Civic?"
+confere: {privada_cita: "Civic"}
+nao_contem: ["89.900", "89 mil", "89900"]
+nao_pode: [preco_inventado]
