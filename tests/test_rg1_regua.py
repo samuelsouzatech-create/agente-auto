@@ -329,15 +329,22 @@ def test_cliente_sendo_atendido_fica_para_a_proxima_rodada():
 
 
 def test_a_trava_e_a_mesma_do_atendimento():
-    import asyncio
-    from app.redis_lock import adquirir_lock, adquirir_lock_sincrono, liberar_lock
-    token = adquirir_lock_sincrono("5581988880009", loja_id=1)
+    """A chave é a mesma do atendimento (lock:{loja}:{cliente}, a de app/redis_lock.adquirir_lock).
+    Conferido pelo cliente síncrono: o assíncrono fica preso ao 1º laço de eventos (falhou no GitHub)."""
+    import inspect
+    from app import redis_lock
+    from app.chaves import chave_redis
+    from app.jobs.trava import cliente_redis_sincrono
+    assert 'chave_redis("lock", loja_id, lead_id)' in inspect.getsource(redis_lock.adquirir_lock)
+    token = redis_lock.adquirir_lock_sincrono("5581988880009", loja_id=1)
     try:
-        assert asyncio.run(adquirir_lock("5581988880009", loja_id=1)) is None
+        assert cliente_redis_sincrono().get(chave_redis("lock", 1, "5581988880009")) == token
+        assert redis_lock.adquirir_lock_sincrono("5581988880009", loja_id=1) is None    # ocupada
     finally:
-        from app.redis_lock import liberar_lock_sincrono
-        liberar_lock_sincrono("5581988880009", token, loja_id=1)
-    assert adquirir_lock_sincrono("5581988880009", loja_id=2)            # outra loja: outra trava
+        redis_lock.liberar_lock_sincrono("5581988880009", token, loja_id=1)
+    outro = redis_lock.adquirir_lock_sincrono("5581988880009", loja_id=2)              # outra loja: outra trava
+    assert outro
+    redis_lock.liberar_lock_sincrono("5581988880009", outro, loja_id=2)
 
 
 # ================================================================== 6. régua de veículos e o aviso ao vendedor da venda

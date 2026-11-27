@@ -370,3 +370,7 @@ acompanhamento de 7 dias está como marketing "a confirmar". A Meta decide a cat
   existem; (2) o remarketing não tem limite por dia (só por mês e por rodada); (3) a categoria do
   `pos_venda_acompanhamento` ("a confirmar"); (4) a regra de 3 dias de atraso vale só para o remarketing
   (o pós-venda já tinha a sua, na hora de agendar: passo que já passou de 3 dias não é agendado).
+- GitHub Actions da 1ª versão: 1 falha (`test_a_trava_e_a_mesma_do_atendimento`, "Event loop is closed"):
+  o teste usava o Redis assíncrono, que fica preso ao 1º laço de eventos (problema já conhecido do IG1); no
+  computador passou pela ordem dos testes. O teste agora confere a mesma chave pelo cliente síncrono. Suíte
+  inteira de novo: mesmo resultado (3331 passaram). A tag `rg1` foi movida para o commit do conserto.
