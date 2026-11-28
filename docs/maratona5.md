@@ -226,3 +226,151 @@ Fim da maratona: 27/11/2026, ~18:10 (Recife). Docker ligado a partir de `maraton
   - **Acabamentos** (frase repetida depois da guarda, "por aqui" junto com o link do WhatsApp,
     reapresentação no WhatsApp): vão para a lista de polimento, depois do ensaio.
   - **Vídeo de reserva:** o Samuel grava (roteiro no `docs/demo.md`, seção 6).
+
+---
+
+## RG1 — Revisão da régua: remarketing e pós-venda (branch `regua-1`, saiu da `main` 589ff28)
+
+Sem Gemini, sem canal real. O prompt do Léo e o do redator de remarketing NÃO mudaram. Sem migração.
+
+### PASSO 0 — Levantamento (como está HOJE, antes dos consertos)
+
+**a) Remarketing (a "retomada" de quem conversou e sumiu)** — `app/elegibilidade.py` e `app/jobs/remarketing.py`
+- **Quando sai cada toque** (padrão da loja, `remarketing.*`):
+  - 1º toque: **48 h** depois da última mensagem da conversa (de qualquer lado);
+  - 2º toque: **120 h (5 dias)** depois do 1º; 3º toque: **288 h (12 dias)** depois do 2º;
+  - nunca antes de **24 h** da última fala do cliente; no máximo **3 toques** por cliente e canal.
+  - Detalhe para o analista: a lista `intervalos_h` é `[48, 120, 288]`, mas o 1º valor (48) não é
+    usado (o 1º toque usa `primeiro_toque_h`, que também é 48). O 2º usa o 120 e o 3º o 288.
+- **Horário em que pode sair:** das **09:00 às 19:00**, de **segunda a sábado** (domingo não), no fuso
+  da loja. Fora disso, espera a próxima abertura.
+- **Limites:** por **mês**: `remarketing.limite_mensal` (do contrato; vazio = nada sai). Por **dia**: o
+  remarketing **não tem** limite diário (só a reativação tem: 30 por dia). Por **rodada**: no máximo
+  10 por loja a cada 5 minutos, com 3 s de pausa entre envios (na prática, até ~120 por hora por loja
+  se houver fila; o freio de verdade é o limite do mês).
+- **Fica de fora:** quem pediu para não ser procurado ou disse que não tem interesse; quem pediu um
+  tempo (volta na data pedida); **quem já comprou**; quem a loja marcou "não enviar"; **conversa com
+  vendedor** (chamado aberto); a **carência** de 7 dias depois que um vendedor atendeu ou uma visita foi
+  marcada; quem respondeu depois do último toque (aí para de vez).
+- **"Idade" da conversa:** **não havia limite.** Uma conversa de meses atrás ficava elegível na hora
+  (o 1º toque "devia" ter saído há meses e saía agora). Conserto 4 abaixo.
+- Canais: WhatsApp (janela de 24 h aberta: texto do redator; fechada: modelo aprovado pela Meta),
+  Telegram (modo de testes) e Instagram (só com a janela aberta; fora dela não sai nada).
+
+**b) Pós-venda: valores padrão** (`app/lojas.py`, `PADROES`)
+- `pos_venda.revisao_meses` = **6**; `pos_venda.troca_avista_meses` = **12**;
+  `pos_venda.troca_financiado_meses_restantes` = **12** (e `pos_venda.revisao_km` = 10000, que não entra
+  na data).
+
+**c) Modelos de mensagem (`segmentos/veiculos/modelos.json`) — texto COMPLETO e categoria que o
+sistema supõe** (a categoria vale para o custo e para a aprovação na Meta):
+| Modelo | Categoria | Para quê | Texto |
+|---|---|---|---|
+| `retomada_interesse` | marketing | retomada com o carro de interesse | Oi, {nome}! Aqui é o {agente}, da {loja}. O {carro} que você viu com a gente continua disponível. Quer que eu te passe mais detalhes ou prefere marcar uma visita? |
+| `retomada_alternativa` | marketing | o carro foi vendido; oferece um parecido | Oi, {nome}! Aqui é o {agente}, da {loja}. Aquele carro que você viu já foi vendido, mas chegou um {carro} bem parecido. Quer dar uma olhada? |
+| `retomada_geral` | marketing | retomada sem carro definido | Oi, {nome}! Aqui é o {agente}, da {loja}. Passando para saber se você ainda está procurando carro. Chegaram opções novas por aqui, quer que eu te mostre? |
+| `pos_venda_agradecimento` | utilidade | dia seguinte à compra | Oi, {nome}! Aqui é o {agente}, da {loja}. Obrigado pela confiança na compra do {carro}. Se surgir qualquer dúvida sobre a documentação ou o carro, é só me chamar por aqui. |
+| `pos_venda_acompanhamento` | marketing (o arquivo diz "categoria a confirmar") | 7 dias depois | Oi, {nome}! Aqui é o {agente}, da {loja}. Já faz uma semana com o {carro}. Está tudo certo com ele? Qualquer coisa, me conta. |
+| `pos_venda_avaliacao` | utilidade | avaliação da compra | Oi, {nome}! Aqui é o {agente}, da {loja}. Como foi sua experiência na compra do {carro}? Sua opinião ajuda muito a gente a melhorar. |
+| `pos_venda_revisao` | marketing | revisão pela loja | Oi, {nome}! Aqui é o {agente}, da {loja}. Está chegando a hora da revisão do {carro}. Quer que eu veja um horário para você? |
+| `pos_venda_revisao_oficina` | marketing | revisão na oficina parceira | Oi, {nome}! Aqui é o {agente}, da {loja}. Está chegando a hora da revisão do {carro}, e a {oficina}, nossa parceira, pode cuidar disso para você. Quer que eu veja um horário? |
+| `pos_venda_troca` | marketing | oferta de troca | Oi, {nome}! Aqui é o {agente}, da {loja}. Já pensou em trocar o {carro}? Temos boas condições para quem já é cliente. Quer que eu te mostre algumas opções? |
+| `reativacao_contato` | marketing | contato antigo da base, sem compra | Oi, {nome}! Aqui é o {agente}, da {loja}. Faz um tempo que a gente não conversa. Chegaram carros novos por aqui; se estiver pensando em comprar ou trocar, quer que eu te mostre algumas opções? |
+| `reativacao_cliente` | marketing | cliente que comprou há tempo | Oi, {nome}! Aqui é o {agente}, da {loja}. Faz um tempo desde a compra do {carro}. Como ele está? Se pensar em trocar, temos boas condições para quem já é cliente da casa. |
+Para o analista: só `pos_venda_agradecimento` e `pos_venda_avaliacao` estão como **utilidade**; o
+acompanhamento de 7 dias está como marketing "a confirmar". A Meta decide a categoria na aprovação
+(**não confirmado** com a Meta).
+
+**d) Nome do cliente**
+- Vem da ficha (`leads.nome`), que a ferramenta `registrar_lead` preenche quando o cliente diz o nome
+  na conversa (e troca se ele disser outro). No pós-venda da base importada, se a ficha não tem nome,
+  usa o nome do contato importado (`contatos.nome`). Sem nome, o modelo sai como "Oi! Aqui é o Léo...".
+- O **nome do perfil do WhatsApp NÃO era gravado** (a Meta manda em `contacts[].profile.name`; o Léo
+  ignorava). Conserto 3 abaixo.
+
+**e) `app/jobs/pos_venda.py`, na hora de enviar**
+- **Passo ligado:** confere (passo desligado = "cancelado", "passo_desligado"). Já funcionava.
+- **Régua ativa:** **NÃO conferia.** Quando a loja trocava de régua (`copiar_regua_modelo`, que desliga a
+  antiga), os passos já agendados da régua antiga continuavam saindo. Conserto 2.
+- **`avisar_vendedor`:** **já existia** (estado "avisado"), mas mandava para TODOS os vendedores (e só
+  sem vendedor, para os gestores), com um emoji no texto. Conserto 6: vai ao vendedor DA VENDA.
+- **Venda desfeita:** o Léo **não tem** "desfazer venda" (só existe `registrar_venda`, regra 5 do
+  CLAUDE.md). Se a linha da venda sumisse (reinício da demo, conserto à mão no banco), o pós-venda dela
+  continuava saindo. Conserto 2.
+
+**f) A trava do relógio e o tempo de uma rodada**
+- A trava do relógio (`app/jobs/trava.py`) vale **90 s** (`TTL_S`; o runner usa o maior entre 90 s e 3
+  vezes o ciclo de 30 s) e era renovada **só entre os trabalhos** (uma vez por volta do laço).
+- Uma rodada de remarketing com **10 lojas e fila cheia**, só de **pausas**: 10 lojas x 10 envios x 3 s
+  = **300 s** (teste `test_tempo_de_uma_rodada_cheia_com_10_lojas_so_de_pausas`). Com o redator (IA) de
+  ~2 s por mensagem: **~500 s**. Ou seja: a trava de 90 s **vencia no meio da rodada** (outro relógio
+  poderia ligar e mandar em dobro) e o sinal de vida parava: a Visão geral e o vigia mostram "relógio
+  parado" depois de 120 s, e a saúde do Docker marca o relógio "sem saúde" depois de 180 s (o vigia avisa
+  "peça sem saúde"; o Docker não reinicia por isso, porque o `restart` só age quando o programa sai).
+  Conserto 1.
+
+### Consertos (cada um com teste em `tests/test_rg1_regua.py`, 33 testes)
+1. **Relógio vivo no meio da rodada.** O runner passa aos três trabalhos (remarketing, pós-venda,
+   reativação) uma função `vivo` que renova a trava e marca o sinal de vida; cada trabalho chama a cada
+   **loja** e a cada **cliente** processado. Se a trava foi perdida (outro relógio assumiu), o trabalho
+   para. Teste: rodada de ~500 s (10 lojas, fila cheia, redator lento) sem a trava vencer, com o sinal
+   marcado junto de cada renovação. (Rodando fora do runner, sem trava, os trabalhos funcionam como antes.)
+2. **Régua trocada, passo desligado e venda desfeita.** Na hora de enviar: régua que não é mais a ativa
+   -> "cancelado", motivo **`regua_trocada`** (novo); passo desligado -> **`passo_desligado`** (já
+   existia; agora com teste); venda que não existe mais -> TODOS os passos daquela venda cancelados,
+   motivo **`venda_desfeita`** (novo). Outra loja não é tocada (teste).
+3. **Nome do perfil do WhatsApp.** O canal lê `contacts[].profile.name`; o webhook grava na ficha **só se
+   ela está sem nome** (nunca sobrescreve o que o cliente, o Léo ou o vendedor já anotaram). Perfil que
+   não parece nome (só emoji, número de telefone) não entra; emoji e "~" saem (`app/nome_do_perfil.py`).
+   Efeito: o pós-venda e a retomada passam a dizer "Oi, Maria!" em vez de "Oi!" para quem não disse o
+   nome (e o Léo vê o nome na ficha).
+4. **Retomada atrasada.** Toque que passou **mais de 3 dias** da hora em que deveria sair não sai mais:
+   motivo **`atrasado`** ("Passou mais de 3 dias da hora do contato: não sai mais"). "A hora em que
+   deveria sair" é a primeira hora de envio permitida **depois do intervalo E da carência**: esperar a
+   carência de 7 dias ou o fim de semana não conta como atraso (2 testes antigos me avisaram disso; a
+   1ª versão do conserto cortava esses casos). Se o cliente volta a falar, a conta recomeça.
+   Testes antigos ajustados SEM mudar o que conferem: `test_domingo_pula_para_segunda` (a conversa agora
+   termina 49 h antes do domingo, e não 5 dias antes) e o catálogo de motivos do S6 ganhou o cenário
+   "atrasado".
+5. **Trava por cliente no remarketing.** Cada envio pega a **mesma** trava do atendimento
+   (`lock:{loja}:{cliente}` no Redis, a do `app/redis_lock.py`, agora também em versão síncrona para os
+   trabalhos). Ocupada (o cliente está conversando agora) = pula nesta rodada, **sem ocupar vaga e sem
+   contar falha**; sai na rodada seguinte (teste). Sem Redis, segue sem a trava (o relógio nem liga sem
+   Redis).
+6. **Régua de veículos** (`segmentos/veiculos/reguas.json`): na "proxima", avaliação de **30 para 15
+   dias** e passo novo **`conferir_transferencia`** (gatilho venda, **20 dias**, ação `avisar_vendedor`:
+   nada vai ao cliente); na "essencial", avaliação também em 15 dias. O `avisar_vendedor` já existia no
+   motor; mudou para avisar o **vendedor da venda** (o nome gravado na venda, se ele tem Telegram) e, sem
+   ele, os **gestores**; o texto diz "nada foi enviado ao cliente" e saiu o emoji. Neutro ao segmento.
+   **Atenção:** a régua de cada loja é uma CÓPIA feita quando ela foi criada; lojas que já existem
+   continuam com a régua antiga (30 dias, sem a transferência) até alguém trocar de régua (copiar de
+   novo). **Decisão para o analista:** copiar a régua nova nas lojas que já existem?
+7. **Endereço da loja** (achado na Maratona 5: "Boa Vista" no lugar de "Boa Viagem"): guarda no código
+   (`app/guarda_endereco.py`, passo `endereco_da_loja` da lista de guardas, depois dos cortes e antes da
+   limpeza de repetição). Quando a resposta cita a RUA do cadastro, o trecho (rua, número e os nomes que
+   vêm logo depois) é conferido: número diferente ou lugar que não está no cadastro (nem é a cidade da
+   loja) -> o trecho vira o endereço do cadastro, exatamente como está. Endereço certo, mesmo escrito de
+   outro jeito ("em Boa Viagem", "Boa Viagem, Recife", só rua e número), **não muda nada**. Testes com o
+   texto real da rodada 2 e com 5 textos certos; um teste roda a guarda dentro do turno (IA falsa).
+   O prompt não mudou. O teste antigo da ordem das guardas (`test_m3_n4_ordem.py`) ganhou o passo novo.
+
+### O que já funcionava (só ganhou teste)
+- Passo desligado cancela na hora de enviar ("passo_desligado").
+- A ação `avisar_vendedor` existia (só o destino e o texto mudaram).
+
+### Fim do RG1
+- Suíte offline (3 partes seguidas): 935 + 1263 + 1133 = **3331 passaram**, 0 falhas (+34: os 33 do RG1 e
+  o cenário "atrasado" do S6). A 1ª rodada teve 6 falhas, todas de testes que fixavam o que o RG1 mudou de
+  propósito: a régua antiga (5 em `test_etapa2_bloco5.py`: 6 passos e avaliação em 30 dias) e a lista de
+  guardas (`test_sg1_pacote_de_ramo.py::test_ordem_n4_nao_mudou`). Atualizei esses testes para a régua e a
+  lista novas (o que mais conferem não mudou) e rodei a suíte inteira de novo.
+- Sem Gemini, sem canal real, sem migração. O prompt do Léo e o do redator não mudaram.
+- Branch `regua-1`, tag `rg1`.
+- **Para o analista decidir:** (1) copiar a régua nova (15 dias, conferir a transferência) nas lojas que já
+  existem; (2) o remarketing não tem limite por dia (só por mês e por rodada); (3) a categoria do
+  `pos_venda_acompanhamento` ("a confirmar"); (4) a regra de 3 dias de atraso vale só para o remarketing
+  (o pós-venda já tinha a sua, na hora de agendar: passo que já passou de 3 dias não é agendado).
+- GitHub Actions da 1ª versão: 1 falha (`test_a_trava_e_a_mesma_do_atendimento`, "Event loop is closed"):
+  o teste usava o Redis assíncrono, que fica preso ao 1º laço de eventos (problema já conhecido do IG1); no
+  computador passou pela ordem dos testes. O teste agora confere a mesma chave pelo cliente síncrono. Suíte
+  inteira de novo: mesmo resultado (3331 passaram). A tag `rg1` foi movida para o commit do conserto.

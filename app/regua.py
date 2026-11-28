@@ -38,6 +38,8 @@ MOTIVOS = {
     "sem_data_fim_financiamento": "Venda financiada sem o prazo em meses",
     "problema": "O cliente relatou um problema e foi passado ao vendedor",
     "passo_desligado": "Passo desligado na régua da loja",
+    "regua_trocada": "A loja trocou de régua depois que este passo foi agendado",      # RG1
+    "venda_desfeita": "A venda deste pós-venda não existe mais",                        # RG1
     "nao_contatar": "Pediu para não ser procurado",
     "sem_interesse": "Disse que não tem interesse",
 }
@@ -279,8 +281,25 @@ def cancelar_futuros(loja_id, lead_id: str, motivo: str) -> int:
     return n
 
 
-_SELECT = ("SELECT e.*, p.nome AS passo_nome, p.acao, p.ativo AS passo_ativo "
-           "FROM regua_execucoes e JOIN regua_passos p ON p.id = e.passo_id ")
+# RG1: a régua também vem junto (r.ativa): passo agendado de uma régua que foi trocada não sai mais.
+def cancelar_do_evento(loja_id, evento_tipo: str, evento_id: int, motivo: str) -> int:
+    """RG1: cancela tudo o que ainda está agendado para UM acontecimento (ex.: uma venda)."""
+    loja_id = exigir_loja(loja_id)
+    conexao = conectar()
+    try:
+        n = conexao.execute(
+            "UPDATE regua_execucoes SET estado = 'cancelado', motivo = ?, executado_em = CURRENT_TIMESTAMP "
+            "WHERE loja_id = ? AND evento_tipo = ? AND evento_id = ? AND estado = 'agendado'",
+            (motivo, loja_id, evento_tipo, evento_id)).rowcount
+        conexao.commit()
+    finally:
+        conexao.close()
+    return n
+
+
+_SELECT = ("SELECT e.*, p.nome AS passo_nome, p.acao, p.ativo AS passo_ativo, r.ativa AS regua_ativa "
+           "FROM regua_execucoes e JOIN regua_passos p ON p.id = e.passo_id "
+           "JOIN reguas r ON r.id = e.regua_id ")
 
 
 def _consultar(sql: str, parametros: tuple) -> list[dict]:

@@ -50,9 +50,13 @@ class CanalWhatsApp(Canal):
                     continue
                 metadata = valor.get("metadata") if isinstance(valor.get("metadata"), dict) else {}
                 id_canal = metadata.get("phone_number_id") or ""
+                nomes = {str(c.get("wa_id") or ""): str((c.get("profile") or {}).get("name") or "")
+                         for c in _dicts(valor.get("contacts")) if isinstance(c.get("profile"), dict)}
                 for msg in _dicts(valor.get("messages")):
                     entrada = self._converter(msg, id_canal)
                     if entrada:
+                        from dataclasses import replace as _replace
+                        entrada = _replace(entrada, nome_perfil=nomes.get(entrada.lead_id, ""))   # RG1
                         entradas.append(entrada)
         return entradas
 

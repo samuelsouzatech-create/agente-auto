@@ -195,20 +195,45 @@ def _texto_livre(modelo, valores: dict) -> str:
 
 # ------------------------------------------------------------ um passo
 
+def _normal(texto) -> str:
+    t = unicodedata.normalize("NFD", str(texto or "")).lower()
+    return " ".join("".join(c for c in t if unicodedata.category(c) != "Mn").split())
+
+
+def destinos_do_aviso(loja: Loja, e: dict) -> list[str]:
+    """RG1: o aviso de um passo vai ao vendedor DA VENDA (o nome gravado na venda, se ele tem
+    Telegram); sem ele, aos gestores. Neutro ao segmento: só usa a venda e a equipe da loja."""
+    from app.usuarios import contatos_para_aviso
+    if e.get("evento_tipo") == vendas.EVENTO:
+        venda = _um("SELECT vendedor FROM vendas WHERE loja_id = ? AND id = ?", (loja.id, e["evento_id"]))
+        nome = _normal(venda["vendedor"] if venda else "")
+        if nome:
+            do_vendedor = [u["contato_telegram"] for u in contatos_para_aviso(loja.id, "vendedor")
+                           if _normal(u.get("nome")) == nome]
+            if do_vendedor:
+                return do_vendedor
+    return [u["contato_telegram"] for u in contatos_para_aviso(loja.id, "gestor")]
+
+
 def _avisar_vendedor(loja: Loja, e: dict, valores: dict, *, real: bool, registrar) -> str:
-    texto = (f"📅 {loja.nome}: hora do passo '{e['passo_nome']}' do pós-venda.\n"
+    passo = str(e["passo_nome"]).replace("_", " ")
+    texto = (f"{loja.nome}: hora do passo '{passo}' do pós-venda (nada foi enviado ao cliente).\n"
              f"Cliente: {valores.get('nome') or e['lead_id']}"
              + (f" ({valores['carro']})" if valores.get("carro") else ""))
     if not real:
         return registrar("simulado", texto=texto)
     from app import avisos
-    from app.usuarios import contatos_para_aviso
-    chats = ([u["contato_telegram"] for u in contatos_para_aviso(loja.id, "vendedor")]
-             or [u["contato_telegram"] for u in contatos_para_aviso(loja.id, "gestor")])
+    chats = destinos_do_aviso(loja, e)
     r = avisos.avisar_uma_vez(loja.id, "pos_venda", f"regua:{e['id']}", chats, texto)
     if r.get("concluido"):
         return registrar("avisado", contexto={"texto": texto})
     return registrar("falhou", "erro_no_envio", contexto={"texto": texto})
+
+
+def _venda_existe(loja_id: int, venda_id) -> bool:
+    """RG1: o Léo não tem "desfazer venda", mas a linha da venda pode sumir (ex.: reinício da demo,
+    conserto feito à mão no banco). Sem a venda, o pós-venda dela não faz sentido."""
+    return _um("SELECT 1 AS x FROM vendas WHERE loja_id = ? AND id = ?", (loja_id, venda_id)) is not None
 
 
 def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> str:
@@ -235,6 +260,12 @@ def processar(loja: Loja, e: dict, agora: datetime, *, real: bool, enviador) -> 
 
     if not e["passo_ativo"]:
         return registrar("cancelado", "passo_desligado")
+    if not e.get("regua_ativa", 1):                       # RG1: a loja trocou de régua
+        return registrar("cancelado", "regua_trocada")
+    if e["evento_tipo"] == vendas.EVENTO and not _venda_existe(loja.id, e["evento_id"]):   # RG1
+        n = regua.cancelar_do_evento(loja.id, vendas.EVENTO, e["evento_id"], "venda_desfeita")
+        print(f"[Pós-venda][loja {loja.id}] Venda {e['evento_id']} não existe mais: {n} passo(s) cancelado(s).")
+        return "cancelado"
     if e["evento_tipo"] == base_pos_venda.EVENTO:          # Bloco 6B: autorização conferida de novo
         barrado = base_pos_venda.motivo_para_nao_enviar(loja.id, e["evento_id"])
         if barrado:
@@ -319,7 +350,9 @@ def _ids_lojas_ativas() -> list[int]:
 
 def rodar_pos_venda(agora: datetime | None = None, *, envio_real: bool | None = None,
                     enviador=None, lojas: list[int] | None = None,
-                    max_por_loja: int = MAX_POR_RODADA) -> dict:
+                    max_por_loja: int = MAX_POR_RODADA, vivo=None) -> dict:
+    """RG1: 'vivo' (do runner) renova a trava e marca o sinal de vida a cada loja e a cada passo."""
+    from app.jobs.batimento import avisar_que_esta_vivo
     agora = _utc(agora or agora_utc())
     if enviador is None:
         from app.jobs.remarketing import EnviadorReal
@@ -337,6 +370,7 @@ def rodar_pos_venda(agora: datetime | None = None, *, envio_real: bool | None = 
         except Exception as erro:          # uma loja com problema não trava as outras
             print(f"[Pós-venda] Erro na loja {loja_id}: {sem_emoji(repr(erro))}")
             continue
+        avisar_que_esta_vivo(vivo)
         for e in fila:
             try:
                 estado = processar(loja, e, agora, real=real, enviador=enviador)
@@ -344,6 +378,7 @@ def rodar_pos_venda(agora: datetime | None = None, *, envio_real: bool | None = 
                 print(f"[Pós-venda][loja {loja_id}] Erro com {e['lead_id']}: {sem_emoji(repr(erro))}")
                 estado = "erro"
             totais[estado] += 1
+            avisar_que_esta_vivo(vivo)
     return totais
 
 

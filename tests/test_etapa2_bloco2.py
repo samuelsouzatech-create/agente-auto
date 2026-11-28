@@ -215,8 +215,10 @@ def test_de_noite_espera_a_abertura(ligada):
 
 
 def test_domingo_pula_para_segunda(ligada):
-    _conversa(horas=49)
     domingo = datetime(2026, 11, 8, 15, 0, tzinfo=timezone.utc)
+    # RG1: a conversa terminou 49 h antes do DOMINGO (antes: 49 h antes de terça, e no domingo o
+    # toque já estaria 5 dias atrasado; agora toque atrasado mais de 3 dias não sai).
+    _conversa(horas=49 - int((domingo - AGORA).total_seconds() // 3600))
     d = avaliar(1, LEAD, "whatsapp", domingo)
     assert d.motivo == "fora_do_horario"
     assert d.proximo_em == datetime(2026, 11, 9, 12, 0, tzinfo=timezone.utc)

@@ -29,6 +29,9 @@ Intervalos: o 1º toque usa remarketing.primeiro_toque_h, contado da última
 mensagem da conversa (de qualquer lado); o toque N usa intervalos_h[N-1],
 contado do toque anterior. Nunca antes de 24 h da última fala do cliente.
 
+Atraso (RG1): passou mais de ATRASO_MAXIMO (3 dias) da hora em que o toque deveria sair: "atrasado",
+não sai mais (a conversa nova do cliente recomeça a conta do 1º toque).
+
 Carência (P5): sem retomada por remarketing.carencia_dias depois que um
 vendedor atendeu ou uma visita foi marcada (a visita conta do dia em que
 foi marcada: a data combinada é texto livre; decisão A7). 0 = desligada.
@@ -59,6 +62,9 @@ DIAS_ENVIO_PADRAO = (0, 1, 2, 3, 4, 5)
 PRIMEIRO_TOQUE_PADRAO_H = 48
 INTERVALOS_PADRAO_H = (48, 120, 288)
 CARENCIA_PADRAO_DIAS = 7
+# RG1 (Maratona 5): toque que passou mais que isto da hora em que deveria sair não sai mais (não
+# manda "ainda tem interesse?" semanas depois, ex.: relógio parado ou módulo ligado tarde).
+ATRASO_MAXIMO = timedelta(days=3)
 
 ROTULOS = {
     "elegivel": "Pode receber agora",
@@ -79,6 +85,7 @@ ROTULOS = {
     "aguardando_intervalo": "Ainda não deu o tempo do próximo contato",
     "limite_mensal": "Limite de contatos do mês atingido",
     "fora_do_horario": "Fora do horário de envio",
+    "atrasado": "Passou mais de 3 dias da hora do contato: não sai mais",      # RG1
 }
 
 
@@ -496,6 +503,7 @@ def _decidir(loja, loja_id: int, lead_id: str, canal: str, agora: datetime, font
         return nao("com_vendedor", toque=toque)
     dias = _dias_de_carencia(loja)
     marco = fonte.marco_carencia() if dias > 0 else None
+    fim_carencia = None
     if marco is not None:
         fim_carencia = marco + timedelta(days=dias)
         if agora < fim_carencia:
@@ -513,6 +521,11 @@ def _decidir(loja, loja_id: int, lead_id: str, canal: str, agora: datetime, font
         base = fonte.ultima_atividade() or ultima_cliente
         alvo = base + timedelta(hours=_horas_ate_o_toque(loja, 1))
     alvo = max(alvo, ultima_cliente + timedelta(hours=MIN_HORAS_SEM_RESPOSTA))
+    # RG1: retomada atrasada é cancelada. "A hora em que deveria sair" é a primeira hora de envio
+    # permitida depois do intervalo E da carência (esperar a carência ou o fim de semana não é atraso).
+    devido = proxima_abertura(loja, max(alvo, fim_carencia) if fim_carencia else alvo)
+    if agora > devido + ATRASO_MAXIMO:
+        return nao("atrasado", toque=toque)
     if agora < alvo:
         return nao("aguardando_intervalo", proxima_abertura(loja, alvo), toque)
     if fonte.enviados_no_mes() >= int(limite):

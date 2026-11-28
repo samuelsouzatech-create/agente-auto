@@ -59,7 +59,7 @@ def test_ordem_n4_nao_mudou():
         "texto_interno", "preco_inventado", "frases_proibidas", "regra_de_entrada", "risco_e_politica",
         "promessa_de_foto", "elogio_da_foto", "estado_sem_ficha", "agendamento", "chamado_pelo_codigo",
         "pos_venda_e_urgencia", "aviso_de_chamado", "falso_dono", "emoji", "palavra_de_tempo",
-        "dia_de_reabertura", "fragmentos", "repeticoes", "frase_de_oferta"]
+        "dia_de_reabertura", "fragmentos", "endereco_da_loja", "repeticoes", "frase_de_oferta"]   # RG1: + endereço
 
 
 def test_nomes_de_ferramenta_do_ramo_carregado():

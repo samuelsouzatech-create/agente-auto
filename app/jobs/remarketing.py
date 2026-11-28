@@ -570,7 +570,12 @@ def _ids_lojas_ativas() -> list[int]:
 
 def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None = None,
                       redator=None, enviador=None, pausa_s: float | None = None,
-                      max_por_loja: int = MAX_POR_RODADA, lojas: list[int] | None = None) -> dict:
+                      max_por_loja: int = MAX_POR_RODADA, lojas: list[int] | None = None,
+                      vivo=None) -> dict:
+    """RG1: 'vivo' (do runner) renova a trava e marca o sinal de vida a cada loja e a cada cliente,
+    porque uma rodada cheia (10 lojas x 10 envios x 3 s de pausa) passa do tempo da trava.
+    RG1: cada envio pega a MESMA trava por cliente do atendimento; ocupada = pula nesta rodada."""
+    from app.jobs.batimento import avisar_que_esta_vivo
     agora = _utc(agora or agora_utc())
     redator = redator or escrever_com_ia
     enviador = enviador or EnviadorReal()
@@ -593,21 +598,30 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
             avisar_limite(loja, agora, real=real)
         except Exception as erro:        # o aviso nunca trava os envios
             print(f"[Remarketing] Erro no aviso de limite da loja {loja_id}: {sem_emoji(repr(erro))}")
+        avisar_que_esta_vivo(vivo)
         processados = 0
         for decisao in fila:
             if processados >= max_por_loja:
                 break
+            from app.redis_lock import adquirir_lock_sincrono, liberar_lock_sincrono
+            token = adquirir_lock_sincrono(decisao.lead_id, loja_id=loja_id)
+            if token is None:            # o cliente está sendo atendido agora: fica para a próxima
+                totais["pulado"] += 1
+                continue
             try:
                 estado = processar_lead(loja, decisao, agora, real=real,
                                         redator=redator, enviador=enviador)
             except Exception as erro:
                 print(f"[Remarketing][loja {loja_id}] Erro com {id_no_console(decisao.lead_id, decisao.canal)}: {sem_emoji(repr(erro))}")
                 estado = "erro"
+            finally:
+                liberar_lock_sincrono(decisao.lead_id, token, loja_id=loja_id)
             totais[estado] += 1
             if estado != "pulado":       # pulado não ocupa vaga da rodada
                 processados += 1
             if estado == "enviado" and pausa:
                 time.sleep(pausa)
+            avisar_que_esta_vivo(vivo)
     return totais
 
 

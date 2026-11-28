@@ -64,6 +64,29 @@ def _parar_com_sigterm() -> None:
         pass
 
 
+class TravaPerdida(RuntimeError):
+    """Outro runner assumiu a trava no meio de uma rodada: este para de enviar."""
+
+
+def manter_vivo(trava):
+    """RG1: a função que os jobs chamam a cada loja e a cada cliente. Renova a trava (90 s) e marca o
+    giro. Antes só acontecia entre os trabalhos, e uma rodada cheia de remarketing (10 lojas x 10
+    envios x 3 s) passava de 90 s: a trava vencia e o sinal de vida parava no meio. None = sem trava."""
+    if trava is None:
+        return None
+
+    def vivo() -> None:
+        if not trava.renovar():
+            raise TravaPerdida("perdi a trava do relógio no meio da rodada")
+        batimento.marcar_giro(trava.cliente)
+    return vivo
+
+
+def _com_vivo(vivo) -> dict:
+    """Sem trava (--sem-trava), os jobs são chamados como antes (sem o parâmetro)."""
+    return {"vivo": vivo} if vivo is not None else {}
+
+
 def _na_vez(ultimo, intervalo) -> bool:
     return ultimo is None or time.monotonic() - ultimo >= intervalo
 
@@ -123,6 +146,7 @@ def main(argv=None) -> int:
     ultimo_remarketing = None
     ultimo_pos_venda = None
     ultimo_reativacao = None
+    vivo = manter_vivo(trava)          # RG1: os jobs renovam a trava e o sinal no meio da rodada
     try:
         while True:
             if trava is not None:
@@ -145,7 +169,7 @@ def main(argv=None) -> int:
             if not args.sem_remarketing and _na_vez(ultimo_remarketing, INTERVALO_REMARKETING_S):
                 ultimo_remarketing = time.monotonic()
                 try:
-                    t = rodar_remarketing()
+                    t = rodar_remarketing(**_com_vivo(vivo))
                     feitos = {k: v for k, v in t.items() if v and k != "pulado"}
                     if feitos:
                         print(f"[Runner] {datetime.now():%H:%M:%S} remarketing: {feitos}")
@@ -155,7 +179,7 @@ def main(argv=None) -> int:
             if not args.sem_pos_venda and _na_vez(ultimo_pos_venda, INTERVALO_POS_VENDA_S):
                 ultimo_pos_venda = time.monotonic()
                 try:
-                    t = rodar_pos_venda()
+                    t = rodar_pos_venda(**_com_vivo(vivo))
                     feitos = {k: v for k, v in t.items() if v and k != "adiado"}
                     if feitos:
                         print(f"[Runner] {datetime.now():%H:%M:%S} pós-venda: {feitos}")
@@ -165,7 +189,7 @@ def main(argv=None) -> int:
             if not args.sem_reativacao and _na_vez(ultimo_reativacao, INTERVALO_REATIVACAO_S):
                 ultimo_reativacao = time.monotonic()
                 try:
-                    t = rodar_reativacao()
+                    t = rodar_reativacao(**_com_vivo(vivo))
                     feitos = {k: v for k, v in t.items() if v and k != "adiado"}
                     if feitos:
                         print(f"[Runner] {datetime.now():%H:%M:%S} reativação: {feitos}")

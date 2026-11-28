@@ -320,3 +320,7 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   1 privada por comentário, até 1.000 bytes, Opção B sem preço, mesmo cliente nos dois canais. Nada mudou nas decisões.
 - 27/11/2026, BA3: demo pronta (preço no jeito brasileiro no formulário, "Esperando vendedor" no cartão, foto 4:3
   com o nome inteiro); ensaio 3x sem GRAVE; vídeo não gravado (roteiro no docs/demo.md). Nada mudou nas decisões.
+- 27/11/2026, RG1: revisão da régua. Relógio renova a trava no meio da rodada; régua trocada e venda desfeita
+  cancelam o pós-venda; nome do perfil do WhatsApp entra na ficha vazia; retomada com mais de 3 dias de atraso não
+  sai; trava por cliente no remarketing; régua de veículos com avaliação em 15 dias e "conferir a transferência"
+  (aviso ao vendedor da venda); guarda do endereço da loja. Sem migração (próxima livre continua 25).

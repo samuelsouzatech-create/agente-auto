@@ -202,6 +202,11 @@ def _c_fora_do_horario(lj):
     return lj, L, "whatsapp", NOITE
 
 
+def _c_atrasado(lj):                       # RG1: o 1º toque deveria ter saído 6 dias atrás
+    _conversa(lj, horas=48 + 24 * 6)
+    return lj, L, "whatsapp", AGORA
+
+
 CENARIOS = {
     "elegivel": ("elegivel", _c_elegivel),
     "elegivel_telegram": ("elegivel", _c_elegivel_telegram),
@@ -223,6 +228,7 @@ CENARIOS = {
     "aguardando_intervalo": ("aguardando_intervalo", _c_aguardando_intervalo),
     "limite_mensal": ("limite_mensal", _c_limite_mensal),
     "fora_do_horario": ("fora_do_horario", _c_fora_do_horario),
+    "atrasado": ("atrasado", _c_atrasado),                      # RG1
 }
 
 
