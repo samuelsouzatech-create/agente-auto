@@ -150,19 +150,67 @@ def modelos_de_regua(loja) -> dict[str, dict]:
 
 # ------------------------------------------------------------ régua da loja
 
-def copiar_regua_modelo(loja_id, nome_modelo: str | None = None) -> int:
-    """Dá à loja uma cópia da régua-modelo (a anterior fica de histórico)."""
-    loja_id = exigir_loja(loja_id)
-    loja = carregar_loja(loja_id)
+class ConfirmacaoNecessaria(RuntimeError):
+    """RG2: copiar a régua cancela os passos já agendados: só com confirmação explícita."""
+
+
+def _modelo_escolhido(loja, nome_modelo):
     modelos = modelos_de_regua(loja)
     if not modelos:
         raise ReguaInexistente(f"O segmento {loja.segmento} não tem réguas de pós-venda.")
     nome_modelo = nome_modelo or _ler(loja.segmento).get("padrao") or next(iter(modelos))
     if nome_modelo not in modelos:
         raise ReguaInexistente(f"O segmento {loja.segmento} não tem a régua '{nome_modelo}'.")
-    passos = modelos[nome_modelo]["passos"]
+    return nome_modelo, modelos[nome_modelo]
+
+
+def modelo_em_uso(loja_id) -> str | None:
+    """RG2: de qual régua-modelo veio a régua ativa da loja (None = a loja ainda não tem régua)."""
+    loja_id = exigir_loja(loja_id)
     conexao = conectar()
     try:
+        linha = conexao.execute("SELECT modelo_origem FROM reguas WHERE loja_id = ? AND tipo = ? AND ativa = 1 "
+                                "ORDER BY id DESC LIMIT 1", (loja_id, TIPO)).fetchone()
+    finally:
+        conexao.close()
+    return linha["modelo_origem"] if linha else None
+
+
+def previa_da_copia(loja_id, nome_modelo: str | None = None) -> dict:
+    """RG2: o que a cópia vai fazer, ANTES de fazer: {modelo, agendados (que serão cancelados, motivo
+    regua_trocada), passos (da régua nova)}."""
+    loja_id = exigir_loja(loja_id)
+    loja = carregar_loja(loja_id)
+    nome, modelo = _modelo_escolhido(loja, nome_modelo)
+    conexao = conectar()
+    try:
+        agendados = conexao.execute(
+            "SELECT COUNT(*) AS n FROM regua_execucoes e JOIN reguas r ON r.id = e.regua_id "
+            "WHERE e.loja_id = ? AND e.estado = 'agendado' AND r.tipo = ?", (loja_id, TIPO)).fetchone()["n"]
+    finally:
+        conexao.close()
+    return {"modelo": nome, "agendados": int(agendados), "passos": [p["nome"] for p in modelo["passos"]]}
+
+
+def copiar_regua_modelo(loja_id, nome_modelo: str | None = None, *, confirmar: bool = False) -> int:
+    """Dá à loja uma cópia da régua-modelo (a anterior fica de histórico).
+    RG2: os passos AGENDADOS da régua anterior são cancelados (motivo regua_trocada) na mesma hora,
+    por isso a cópia só acontece com confirmar=True (veja previa_da_copia). A loja nova (sem régua)
+    também passa confirmar=True (garantir_regua): não há nada agendado para cancelar."""
+    loja_id = exigir_loja(loja_id)
+    loja = carregar_loja(loja_id)
+    nome_modelo, modelo = _modelo_escolhido(loja, nome_modelo)
+    if not confirmar:
+        previa = previa_da_copia(loja_id, nome_modelo)
+        raise ConfirmacaoNecessaria(f"Copiar a régua '{nome_modelo}' cancela {previa['agendados']} passo(s) "
+                                    "agendado(s). Confirme para seguir.")
+    passos = modelo["passos"]
+    conexao = conectar()
+    try:
+        conexao.execute(
+            "UPDATE regua_execucoes SET estado = 'cancelado', motivo = 'regua_trocada', executado_em = CURRENT_TIMESTAMP "
+            "WHERE loja_id = ? AND estado = 'agendado' AND regua_id IN "
+            "(SELECT id FROM reguas WHERE loja_id = ? AND tipo = ?)", (loja_id, loja_id, TIPO))
         conexao.execute(
             "UPDATE reguas SET ativa = 0, atualizado_em = CURRENT_TIMESTAMP "
             "WHERE loja_id = ? AND tipo = ? AND ativa = 1", (loja_id, TIPO))
@@ -203,7 +251,7 @@ def garantir_regua(loja_id) -> dict:
     atual = regua_ativa(loja_id)
     if atual:
         return atual
-    copiar_regua_modelo(loja_id)
+    copiar_regua_modelo(loja_id, confirmar=True)          # loja sem régua: nada agendado
     return regua_ativa(loja_id)
 
 

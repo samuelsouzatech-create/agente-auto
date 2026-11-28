@@ -52,7 +52,7 @@ def test_todo_campo_tem_um_destino_so():
     destinos = {c.chave: destino_do_campo(c.chave) for c in CAMPOS}
     assert set(destinos.values()) <= set(ASSUNTOS_COM_CAMPOS) | {MENSAGENS_AUTOMATICAS, A_DECIDIR}
     mostrados = [c.chave for a in ASSUNTOS_COM_CAMPOS for c in campos_do_assunto(a)]
-    assert len(mostrados) == len(set(mostrados)) == 25   # E2-1: + limite_diario_reativacao; C2a: + modulos.estoque; H13: + atendimento.horario_semana; L2: + endereco; L5c: + aceita_troca
+    assert len(mostrados) == len(set(mostrados)) == 26   # RG2: + remarketing.max_por_dia; E2-1: + limite_diario_reativacao; C2a: + modulos.estoque; H13: + atendimento.horario_semana; L2: + endereco; L5c: + aceita_troca
     assert set(mostrados) == {k for k, d in destinos.items() if d in ASSUNTOS_COM_CAMPOS}
 
 
@@ -67,6 +67,7 @@ def test_plano_e_limites_tem_modulos_e_limites():
     chaves = {c.chave for c in campos_do_assunto(PLANO_E_LIMITES)}
     assert chaves == {*(f"modulos.{m}" for m in MODULOS), "custos.teto_diario_llm",
                       "remarketing.limite_mensal", "remarketing.limite_diario_reativacao",
+                      "remarketing.max_por_dia",                    # RG2
                       "instagram.limite_private_replies_h"}
 
 

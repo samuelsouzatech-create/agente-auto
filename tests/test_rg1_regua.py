@@ -182,7 +182,7 @@ def test_regua_trocada_cancela_o_que_ja_estava_agendado():
     _ligar_pos_venda()
     _venda()
     assert _execucoes()["agradecimento"][0] == "agendado"
-    regua.copiar_regua_modelo(1, "essencial")                         # a loja trocou de régua
+    regua.copiar_regua_modelo(1, "essencial", confirmar=True)         # a loja trocou de régua
     pv.rodar_pos_venda(datetime(2026, 11, 3, 13, 0, tzinfo=timezone.utc), lojas=[1], envio_real=True, enviador=Enviador())
     assert _execucoes()["agradecimento"] == ("cancelado", "regua_trocada")
 

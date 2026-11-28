@@ -58,6 +58,7 @@ CHAVES_DO_OPERADOR = frozenset({
     "custos.teto_diario_llm",
     "remarketing.limite_mensal", "remarketing.carencia_dias",
     "remarketing.limite_diario_reativacao",
+    "remarketing.max_por_dia",                    # RG2: só o operador (o lojista não aumenta o próprio limite)
     "instagram.limite_private_replies_h",
     "modo_sombra",                                   # L9: só o operador liga/desliga
 })
@@ -94,6 +95,7 @@ PADROES: dict = {
         "dias_envio": [0, 1, 2, 3, 4, 5],
         "carencia_dias": 7, "limite_mensal": None,                # definido no contrato
         "limite_diario_reativacao": 30,           # E2-1: valor inicial baixo (decisão A8 fecha o número)
+        "max_por_dia": 50,                        # RG2: toques de remarketing por dia (dia da loja)
     },
     "pos_venda": {
         "revisao_meses": 6, "revisao_km": 10000,
@@ -307,6 +309,7 @@ EDITAVEIS: dict[str, Callable] = {
     "remarketing.limite_mensal": _opcional(_int(0, 100_000)),
     "remarketing.carencia_dias": _int(0, 90),
     "remarketing.limite_diario_reativacao": _int(0, 5_000),
+    "remarketing.max_por_dia": _int(0, 5_000),                     # RG2
     "pos_venda.revisao_meses": _int(1, 24),
     "pos_venda.revisao_km": _int(1000, 50_000),
     "pos_venda.troca_avista_meses": _int(3, 60),

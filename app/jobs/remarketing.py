@@ -56,7 +56,7 @@ from app.filtro_remarketing import (acao_inventada, fato_inventado, preco_fora,
                                     precos_da_conversa, precos_do_estoque, repete_toque)
 from app.elegibilidade import Decisao, avaliar, candidatos, elegiveis
 from app.lojas import PADROES, TETO_TOQUES_REMARKETING, Loja, carregar_loja, modulo_ativo
-from app.relogio import agora_utc, do_banco, para_banco
+from app.relogio import agora_utc, do_banco, hora_local, para_banco
 from app.resultado_envio import ResultadoEnvio
 from app.templates import (
     ModeloInexistente, ModeloInvalido, ValoresFaltando, categoria_para_custo,
@@ -563,6 +563,32 @@ def processar_lead(loja: Loja, decisao: Decisao, agora: datetime, *, real: bool,
 
 # ------------------------------------------------------------ rodada
 
+LIMITE_DIARIO_PADRAO = 50
+
+
+def enviados_hoje(loja: Loja, agora: datetime, *, real: bool) -> int:
+    """RG2: toques de remarketing que já saíram HOJE (dia no fuso da loja). No modo simulação contam
+    também os simulados (para a simulação mostrar o mesmo freio que o envio real teria)."""
+    from app.relogio import limites_do_dia_em_utc
+    inicio, fim = limites_do_dia_em_utc(loja.get("fuso"), hora_local(loja, agora).date())
+    estados = ("enviado",) if real else ("enviado", "simulado")
+    marcas = ", ".join("?" * len(estados))
+    conexao = conectar()
+    try:
+        linha = conexao.execute(
+            f"SELECT COUNT(*) AS n FROM remarketing_envios WHERE loja_id = ? AND estado IN ({marcas}) "
+            "AND COALESCE(enviado_em, criado_em) >= ? AND COALESCE(enviado_em, criado_em) < ?",
+            (loja.id, *estados, inicio, fim)).fetchone()
+    finally:
+        conexao.close()
+    return int(linha["n"])
+
+
+def limite_do_dia(loja: Loja) -> int:
+    valor = loja.get("remarketing.max_por_dia")
+    return LIMITE_DIARIO_PADRAO if valor is None else int(valor)
+
+
 def _ids_lojas_ativas() -> list[int]:
     from app.lojas_admin import listar_lojas
     return [l["id"] for l in listar_lojas() if l["ativo"]]
@@ -600,8 +626,17 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
             print(f"[Remarketing] Erro no aviso de limite da loja {loja_id}: {sem_emoji(repr(erro))}")
         avisar_que_esta_vivo(vivo)
         processados = 0
+        try:                             # RG2: limite do DIA (dia da loja), além do mês e da rodada
+            no_dia = enviados_hoje(loja, agora, real=real)
+        except Exception as erro:
+            print(f"[Remarketing] Erro ao contar os envios do dia da loja {loja_id}: {sem_emoji(repr(erro))}")
+            continue
+        limite_dia = limite_do_dia(loja)
         for decisao in fila:
             if processados >= max_por_loja:
+                break
+            if no_dia >= limite_dia:     # chegou no limite do dia: o resto fica para amanhã (não é falha)
+                print(f"[Remarketing][loja {loja_id}] Limite do dia atingido ({limite_dia}). O resto fica para amanhã.")
                 break
             from app.redis_lock import adquirir_lock_sincrono, liberar_lock_sincrono
             token = adquirir_lock_sincrono(decisao.lead_id, loja_id=loja_id)
@@ -619,6 +654,8 @@ def rodar_remarketing(agora: datetime | None = None, *, envio_real: bool | None 
             totais[estado] += 1
             if estado != "pulado":       # pulado não ocupa vaga da rodada
                 processados += 1
+            if estado in (("enviado",) if real else ("enviado", "simulado")):
+                no_dia += 1
             if estado == "enviado" and pausa:
                 time.sleep(pausa)
             avisar_que_esta_vivo(vivo)

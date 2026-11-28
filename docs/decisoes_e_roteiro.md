@@ -324,3 +324,6 @@ Cada bloco anota aqui, em 1 ou 2 linhas, o que mudou nas decisões (ou "nada mud
   cancelam o pós-venda; nome do perfil do WhatsApp entra na ficha vazia; retomada com mais de 3 dias de atraso não
   sai; trava por cliente no remarketing; régua de veículos com avaliação em 15 dias e "conferir a transferência"
   (aviso ao vendedor da venda); guarda do endereço da loja. Sem migração (próxima livre continua 25).
+- 27/11/2026, RG2: limite diário do remarketing (`remarketing.max_por_dia`, padrão 50, dia da loja); copiar a régua
+  só com confirmação (cancela os agendados com `regua_trocada`); régua nova copiada para as 4 lojas fictícias.
+  Acompanhamento de 7 dias fica "marketing" até a Meta decidir (o sistema guarda a categoria da Meta, mas nada a grava sozinho ainda).

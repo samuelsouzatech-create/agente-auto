@@ -374,3 +374,74 @@ acompanhamento de 7 dias está como marketing "a confirmar". A Meta decide a cat
   o teste usava o Redis assíncrono, que fica preso ao 1º laço de eventos (problema já conhecido do IG1); no
   computador passou pela ordem dos testes. O teste agora confere a mesma chave pelo cliente síncrono. Suíte
   inteira de novo: mesmo resultado (3331 passaram). A tag `rg1` foi movida para o commit do conserto.
+
+---
+
+## Merge do RG1 (27/11/2026)
+Merge na `main` (commit `f92e4c6`), suíte 935 + 1263 + 1133 = **3331 passaram**; push e tag `agente-rg1`.
+Docker religado a partir da `main`: 9 peças saudáveis.
+
+## RG2 — Limite diário, cópia da régua com confirmação (branch `regua-2`, saiu da `main` f92e4c6)
+
+Sem Gemini, sem canal real, sem migração. Prompts do Léo e do redator intocados.
+
+### 1. Limite diário do remarketing
+- Configuração nova da loja **`remarketing.max_por_dia`**, padrão **50**, dono: operador (0 a 5.000; 0 = não
+  envia). Aparece em **Plano e limites**, junto do limite mensal e do diário da reativação
+  (`app/config_tela.py`).
+- Conta os toques **enviados** no dia (no modo simulação, também os **simulados**), no **dia da loja**
+  (fuso da loja: 22:30 de terça em Recife é terça, mesmo já sendo quarta em UTC).
+- Ao atingir, o remarketing **para nesta loja até o dia seguinte**; os que ficaram não contam como falha
+  nem erro. Os outros limites continuam: 10 por rodada e o limite do mês.
+- Testes: `tests/test_rg2_regua.py` (padrão e campo; para no limite; volta no dia seguinte; dia da loja;
+  simulação; duas lojas; zero).
+
+### 2. Copiar a régua só com confirmação
+- `regua.previa_da_copia(loja, modelo)` diz **antes** quantos passos agendados serão cancelados.
+- `regua.copiar_regua_modelo(...)` agora **cancela na hora** os agendados da régua anterior (motivo
+  **`regua_trocada`**, o mesmo do RG1) e **só copia com `confirmar=True`**; sem isso, recusa com a mensagem
+  "Copiar a régua 'X' cancela N passo(s) agendado(s). Confirme para seguir." e nada muda. A criação da
+  régua de uma loja nova (`garantir_regua`) passa `confirmar=True` (não há nada agendado).
+- Script novo **`scripts/copiar_regua.py`**: `--loja N` ou `--todas`, `--modelo` (sem ele: a régua que a
+  loja já usa, ou a padrão), `--confirmar`. Sem `--confirmar`, mostra a prévia e pergunta (só copia com
+  "SIM").
+- **Tela do operador:** não existe tela de copiar régua (procurei nas páginas do operador: só a criação
+  da loja copia, por dentro). Fica só o script.
+- Testes: prévia sem confirmar não muda nada; com confirmação cancela com `regua_trocada`; loja B
+  intacta; o script pergunta e só copia com SIM; `--todas --confirmar` usa a régua de cada loja; a régua
+  nova tem os passos do RG1; **o reinício da demo cria a régua nova** (o reinício apaga a régua da demo e
+  a cria de novo a partir do `reguas.json`).
+- Teste antigo ajustado: o do RG1 que copiava a régua sem confirmar agora passa `confirmar=True`.
+
+### 3. A régua nova em TODAS as lojas existentes (todas fictícias, banco deste computador)
+Rodado: `python scripts/copiar_regua.py --todas --confirmar` (código desta branch, banco de uso local).
+| Loja | Nome | Régua antes | Régua copiada | Agendados cancelados (regua_trocada) |
+|---|---|---|---|---|
+| 1 | Loja 1 | proxima (6 passos, versão antiga) | proxima (7 passos) | 0 |
+| 2 | Auto Center Teste | nenhuma | proxima (7 passos) | 0 |
+| 3 | Loja Prática | nenhuma | proxima (7 passos) | 0 |
+| 4 | Recife Seminovos Demo | proxima (6 passos, versão antiga) | proxima (7 passos) | **20** |
+Conferido depois: as 4 lojas com a "proxima" de 7 passos (avaliação em 15 dias, conferir a transferência)
+e nenhum agendado da régua antiga. **A demo ficou sem pós-venda agendado** até o próximo reinício
+(`docker compose exec -T api-painel python scripts/reiniciar_demo.py`; com o Gemini, ou com
+`--sem-indexar`), que cria tudo de novo já com a régua nova (teste acima). Não reiniciei a demo agora
+porque o reinício normal indexa com o Gemini (proibido neste bloco).
+
+### 4. Categoria do acompanhamento de 7 dias
+- **Decisão do analista:** `pos_venda_acompanhamento` fica **"marketing"** até a Meta aprovar; depois, vale
+  a categoria que a Meta der.
+- **O sistema já guarda a categoria que a Meta der?** Em parte. A tabela `modelos_loja` tem a coluna
+  `categoria_efetiva` e o custo já usa ela no lugar da do arquivo (`app/templates.categoria_para_custo`).
+  Mas **nada grava essa coluna sozinho**: não há tela, script nem aviso da Meta (webhook de status de
+  modelo) que a preencha; a função `templates.registrar_status(..., categoria_efetiva=...)` existe e só os
+  testes a chamam. **Pendência para o bloco da Meta:** receber o status/categoria do modelo (webhook
+  `message_template_status_update`) ou dar ao operador um jeito de registrar.
+
+### Fim do RG2
+- Suíte offline (3 partes seguidas): 935 + 1263 + 1148 = **3346 passaram**, 0 falhas (+15 do RG2).
+- A 1ª rodada da suíte teve 1 falha que era **erro meu**, e o teste acertou: o campo novo estava na tela
+  como "do operador", mas faltava na regra do SERVIDOR (`app/lojas.CHAVES_DO_OPERADOR`); sem isso, o
+  lojista poderia aumentar o próprio limite pela API. Consertado (e um teste do RG2 confere).
+- Testes antigos ajustados: `test_s4a_configuracao.py` (a lista de campos do Plano e limites ganhou o
+  limite diário: 25 -> 26) e o do RG1 que copiava a régua sem confirmar.
+- Branch `regua-2`, tag `rg2`.
